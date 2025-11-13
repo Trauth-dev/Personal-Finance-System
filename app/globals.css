@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tema futurista con azules profundos y morados */
+    --background: 220 20% 8%;
+    --foreground: 220 10% 98%;
+    --card: 220 18% 12%;
+    --card-foreground: 220 10% 98%;
+    --popover: 220 20% 10%;
+    --popover-foreground: 220 10% 98%;
+    --primary: 275 70% 55%;
+    --primary-foreground: 220 10% 98%;
+    --secondary: 220 15% 20%;
+    --secondary-foreground: 220 10% 98%;
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 10% 60%;
+    --accent: 200 80% 50%;
+    --accent-foreground: 220 10% 98%;
+    --destructive: 25 70% 55%;
+    --destructive-foreground: 220 10% 98%;
+    --border: 220 15% 25%;
+    --input: 220 15% 20%;
+    --ring: 275 70% 55%;
+    --chart-1: 275 70% 55%;
+    --chart-2: 200 80% 50%;
+    --chart-3: 310 65% 60%;
+    --chart-4: 180 60% 45%;
+    --chart-5: 240 70% 65%;
+    --radius: 0.75rem;
+    --sidebar: 220 20% 10%;
+    --sidebar-foreground: 220 10% 98%;
+    --sidebar-primary: 275 70% 55%;
+    --sidebar-primary-foreground: 220 10% 98%;
+    --sidebar-accent: 220 15% 20%;
+    --sidebar-accent-foreground: 220 10% 98%;
+    --sidebar-border: 220 15% 25%;
+    --sidebar-ring: 275 70% 55%;
+  }
+
+  /* Removido @apply border-border que no es compatible con Tailwind v3 */
+  * {
+    border-color: hsl(var(--border));
+    outline-color: hsl(var(--ring) / 0.5);
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer utilities {
+  .glass-effect {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .glow-effect {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+  }
+}

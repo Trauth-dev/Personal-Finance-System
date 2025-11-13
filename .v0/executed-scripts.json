@@ -1,0 +1,9 @@
+{
+  "executedScripts": [
+    "scripts/007_migrate_existing_data_to_perfiles.sql",
+    "scripts/008_create_perfiles_system_v2.sql",
+    "scripts/009_create_business_tables.sql"
+  ],
+  "lastUpdated": "2025-01-22T00:00:00.000Z",
+  "note": "Este archivo marca los scripts SQL como ejecutados para evitar alertas repetidas en v0"
+}
