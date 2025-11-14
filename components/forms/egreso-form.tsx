@@ -7,12 +7,10 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
-import { useRouter } from "next/navigation"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Settings, Plus } from "lucide-react"
+import { useRouter } from 'next/navigation'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Plus, Heart, Coins, Package, Home, CreditCard, Smile, GraduationCap, Sparkles, TrendingUp } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
-import Link from "next/link"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
 interface TipoCategoria {
@@ -25,6 +23,18 @@ interface Categoria {
   id: string
   nombre: string
   tipo_categoria_id: string
+}
+
+const ICONOS_CATEGORIAS: Record<string, React.ElementType> = {
+  "Donación": Heart,
+  "Ahorro 2025": Coins,
+  "Gastos Varios": Package,
+  "Gastos Fijos": Home,
+  "Pago Deudas": CreditCard,
+  "Disfrute": Smile,
+  "Educación": GraduationCap,
+  "Sueños": Sparkles,
+  "Libertad Financiera": TrendingUp,
 }
 
 export function EgresoForm() {
@@ -40,25 +50,14 @@ export function EgresoForm() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [showNewTipo, setShowNewTipo] = useState(false)
-  const [newTipoNombre, setNewTipoNombre] = useState("")
-  const [newTipoColor, setNewTipoColor] = useState("#3b82f6")
+  // const [showNewTipo, setShowNewTipo] = useState(false)
+  // const [newTipoNombre, setNewTipoNombre] = useState("")
+  // const [newTipoColor, setNewTipoColor] = useState("#3b82f6")
 
   const [showNewCategoria, setShowNewCategoria] = useState(false)
   const [newCategoriaNombre, setNewCategoriaNombre] = useState("")
 
   const router = useRouter()
-
-  const coloresDisponibles = [
-    { nombre: "Azul", valor: "#3b82f6" },
-    { nombre: "Rosa", valor: "#ec4899" },
-    { nombre: "Verde", valor: "#10b981" },
-    { nombre: "Naranja", valor: "#f97316" },
-    { nombre: "Púrpura", valor: "#a855f7" },
-    { nombre: "Amarillo", valor: "#eab308" },
-    { nombre: "Rojo", valor: "#ef4444" },
-    { nombre: "Cyan", valor: "#06b6d4" },
-  ]
 
   useEffect(() => {
     setFecha(getTodayDate())
@@ -130,6 +129,7 @@ export function EgresoForm() {
     }
   }
 
+  /*
   const handleAddTipoCategoria = async () => {
     if (!newTipoNombre.trim() || !perfilActual?.id) return
 
@@ -163,6 +163,7 @@ export function EgresoForm() {
       setError("Error al agregar tipo de categoría")
     }
   }
+  */
 
   const handleAddCategoria = async () => {
     if (!newCategoriaNombre.trim() || !selectedTipo || !perfilActual?.id) return
@@ -190,10 +191,10 @@ export function EgresoForm() {
         setNewCategoriaNombre("")
         setShowNewCategoria(false)
       } else if (insertError) {
-        setError("Error al agregar categoría")
+        setError("Error al agregar descripción")
       }
     } catch (error) {
-      setError("Error al agregar categoría")
+      setError("Error al agregar descripción")
     }
   }
 
@@ -220,7 +221,7 @@ export function EgresoForm() {
       }
 
       if (!selectedTipo || !selectedCategoria) {
-        throw new Error("Debes seleccionar un tipo de categoría y una categoría")
+        throw new Error("Debes seleccionar un tipo de categoría y una descripción")
       }
 
       const egresoData = {
@@ -233,16 +234,11 @@ export function EgresoForm() {
         concepto: concepto || null,
       }
 
-      console.log("[v0] Egreso Form - Datos a guardar:", egresoData)
-
       const { error: insertError } = await supabase.from("egresos").insert(egresoData).select()
 
       if (insertError) {
-        console.log("[v0] Egreso Form - Error al guardar:", insertError)
         throw insertError
       }
-
-      console.log("[v0] Egreso Form - Egreso guardado exitosamente")
 
       setSuccess(true)
       setSelectedTipo("")
@@ -282,12 +278,6 @@ export function EgresoForm() {
             <CardTitle className="text-2xl">Registrar Egreso</CardTitle>
             <CardDescription>Completa los datos de tu egreso para {perfilActual.nombre}</CardDescription>
           </div>
-          <Link href="/dashboard/configuracion">
-            <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-              <Settings className="w-4 h-4" />
-              Gestionar Categorías
-            </Button>
-          </Link>
         </div>
       </CardHeader>
       <CardContent className="pt-6">
@@ -296,27 +286,45 @@ export function EgresoForm() {
             <Label>Tipo de Categoría</Label>
 
             {tiposCategorias.length > 0 ? (
-              <Select value={selectedTipo} onValueChange={setSelectedTipo}>
-                <SelectTrigger className="bg-background/50">
-                  <SelectValue placeholder="Selecciona un tipo de categoría..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {tiposCategorias.map((tipo) => (
-                    <SelectItem key={tipo.id} value={tipo.id}>
-                      <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tipo.color }} />
-                        {tipo.nombre}
+              <div className="grid grid-cols-3 gap-3">
+                {tiposCategorias.map((tipo) => {
+                  const Icon = ICONOS_CATEGORIAS[tipo.nombre] || Package
+                  const isSelected = selectedTipo === tipo.id
+                  
+                  return (
+                    <button
+                      key={tipo.id}
+                      type="button"
+                      onClick={() => setSelectedTipo(tipo.id)}
+                      className={`p-4 rounded-lg border-2 transition-all text-left ${
+                        isSelected
+                          ? "border-white scale-105 shadow-lg"
+                          : "border-border/30 hover:border-border/60"
+                      }`}
+                      style={{
+                        backgroundColor: isSelected ? `${tipo.color}20` : "transparent",
+                      }}
+                    >
+                      <div className="flex flex-col items-center gap-2 text-center">
+                        <div
+                          className="p-3 rounded-full"
+                          style={{ backgroundColor: `${tipo.color}30` }}
+                        >
+                          <Icon className="w-5 h-5" style={{ color: tipo.color }} />
+                        </div>
+                        <span className="text-sm font-medium">{tipo.nombre}</span>
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    </button>
+                  )
+                })}
+              </div>
             ) : (
               <p className="text-sm text-muted-foreground p-4 text-center bg-background/30 rounded-lg border border-border/50">
-                No tienes tipos de categoría. Crea tu primer tipo abajo.
+                No tienes tipos de categoría. Por favor contacta al administrador.
               </p>
             )}
 
+            {/* 
             {!showNewTipo ? (
               <Button
                 type="button"
@@ -329,82 +337,40 @@ export function EgresoForm() {
                 Crear nuevo tipo de categoría
               </Button>
             ) : (
-              <div className="space-y-3 p-4 rounded-lg bg-background/30 border border-border/50">
-                <div className="space-y-2">
-                  <Label htmlFor="new-tipo-nombre">Nombre del tipo</Label>
-                  <Input
-                    id="new-tipo-nombre"
-                    placeholder="Ej: Vivienda, Transporte, Comida..."
-                    value={newTipoNombre}
-                    onChange={(e) => setNewTipoNombre(e.target.value)}
-                    className="bg-background/50"
-                    autoFocus
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Color</Label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {coloresDisponibles.map((color) => (
-                      <button
-                        key={color.valor}
-                        type="button"
-                        onClick={() => setNewTipoColor(color.valor)}
-                        className={`p-3 rounded-lg border-2 transition-all ${
-                          newTipoColor === color.valor
-                            ? "border-white scale-105"
-                            : "border-transparent hover:border-white/30"
-                        }`}
-                        style={{ backgroundColor: color.valor }}
-                      >
-                        <span className="text-xs text-white font-medium">{color.nombre}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    onClick={handleAddTipoCategoria}
-                    className="flex-1"
-                    style={{ backgroundColor: newTipoColor }}
-                  >
-                    Crear Tipo
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setShowNewTipo(false)
-                      setNewTipoNombre("")
-                      setNewTipoColor("#3b82f6")
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </div>
+              ...formulario de crear tipo...
             )}
+            */}
           </div>
 
           {selectedTipo && (
             <div className="space-y-3">
-              <Label>Categoría</Label>
+              <Label>Descripción</Label>
 
               {categorias.length > 0 ? (
-                <Select value={selectedCategoria} onValueChange={setSelectedCategoria}>
-                  <SelectTrigger className="bg-background/50" style={{ borderColor: `${selectedTipoData?.color}40` }}>
-                    <SelectValue placeholder="Selecciona una categoría..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categorias.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>
+                <div className="grid grid-cols-2 gap-2">
+                  {categorias.map((cat) => {
+                    const isSelected = selectedCategoria === cat.id
+                    
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSelectedCategoria(cat.id)}
+                        className={`p-3 rounded-lg border-2 transition-all text-sm ${
+                          isSelected
+                            ? "border-white"
+                            : "border-border/30 hover:border-border/60"
+                        }`}
+                        style={{
+                          backgroundColor: isSelected ? `${selectedTipoData?.color}20` : "transparent",
+                          color: isSelected ? selectedTipoData?.color : "inherit",
+                        }}
+                      >
                         {cat.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </button>
+                    )
+                  })}
+                </div>
               ) : (
                 <p
                   className="text-sm text-muted-foreground p-4 text-center rounded-lg border"
@@ -413,7 +379,7 @@ export function EgresoForm() {
                     borderColor: `${selectedTipoData?.color}40`,
                   }}
                 >
-                  No hay categorías en este tipo. Agrega una abajo.
+                  No hay descripciones en este tipo. Agrega una abajo.
                 </p>
               )}
 
@@ -430,12 +396,12 @@ export function EgresoForm() {
                   }}
                 >
                   <Plus className="w-4 h-4" />
-                  Agregar categoría a {selectedTipoData?.nombre}
+                  Agregar descripción a {selectedTipoData?.nombre}
                 </Button>
               ) : (
                 <div className="flex gap-2">
                   <Input
-                    placeholder="Nombre de la categoría..."
+                    placeholder="Nombre de la descripción..."
                     value={newCategoriaNombre}
                     onChange={(e) => setNewCategoriaNombre(e.target.value)}
                     onKeyDown={(e) => {
