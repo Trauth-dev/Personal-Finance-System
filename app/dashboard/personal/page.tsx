@@ -1,14 +1,15 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, Wallet, Target, ArrowUpRight, ArrowDownRight } from "lucide-react"
+import { TrendingUp, TrendingDown, Wallet, Target, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+import { redirect } from 'next/navigation'
 import { formatGuaranies } from "@/lib/utils"
 import { AlertasFinancieras } from "@/components/personal/alertas-financieras"
 import { LogrosFinancieros } from "@/components/personal/logros-financieros"
 import { TasaAhorroDonut } from "@/components/charts/tasa-ahorro-donut"
 import { GastosCategoriaBars } from "@/components/charts/gastos-categoria-bars"
 import { SuperavitCard } from "@/components/charts/superavit-card"
+import { ReportesExpandibles } from "@/components/personal/reportes-expandibles"
 
 export const revalidate = 0 // Desactivar caché para que siempre muestre datos actualizados
 
@@ -214,6 +215,8 @@ export default async function DashboardPersonalPage() {
           <TasaAhorroDonut perfilId={perfilPersonal.id} />
           <GastosCategoriaBars perfilId={perfilPersonal.id} />
         </div>
+
+        <ReportesExpandibles perfilId={perfilPersonal.id} />
 
         <LogrosFinancieros />
       </div>
