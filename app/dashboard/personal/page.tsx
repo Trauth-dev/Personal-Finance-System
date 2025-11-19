@@ -10,8 +10,9 @@ import { TasaAhorroDonut } from "@/components/charts/tasa-ahorro-donut"
 import { GastosCategoriaBars } from "@/components/charts/gastos-categoria-bars"
 import { SuperavitCard } from "@/components/charts/superavit-card"
 import { ReportesExpandibles } from "@/components/personal/reportes-expandibles"
+import { PresupuestoCategoriasComparativo } from "@/components/charts/presupuesto-categoria-comparativo"
 
-export const revalidate = 0 // Desactivar caché para que siempre muestre datos actualizados
+export const revalidate = 0
 
 export default async function DashboardPersonalPage() {
   const supabase = await createClient()
@@ -195,7 +196,7 @@ export default async function DashboardPersonalPage() {
           <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-2 border-purple-200">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-slate-700">Meta Mensual</CardTitle>
+                <CardTitle className="text-sm font-semibold text-slate-700">Presupuesto</CardTitle>
                 <div className="w-9 h-9 rounded-lg bg-purple-500 flex items-center justify-center shadow-md">
                   <Target className="w-5 h-5 text-white" />
                 </div>
@@ -209,6 +210,8 @@ export default async function DashboardPersonalPage() {
             </CardContent>
           </Card>
         </div>
+
+        <PresupuestoCategoriasComparativo perfilId={perfilPersonal.id} />
 
         <div className="grid gap-4 md:gap-6 grid-cols-1 lg:grid-cols-3">
           <SuperavitCard perfilId={perfilPersonal.id} />

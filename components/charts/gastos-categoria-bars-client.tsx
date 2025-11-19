@@ -1,9 +1,8 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from "recharts"
 import { formatGuaranies } from "@/lib/utils"
-import { TrendingDown, AlertTriangle } from "lucide-react"
+import { TrendingDown, AlertTriangle } from 'lucide-react'
 
 interface Categoria {
   nombre: string
@@ -18,60 +17,41 @@ interface GastosCategoriaBarsClientProps {
 }
 
 export function GastosCategoriaBarsClient({ categorias, mayorGasto, total }: GastosCategoriaBarsClientProps) {
-  const COLORS = ["#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16"]
-
   return (
-    <Card className="bg-white border-2 border-slate-200 shadow-xl">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-slate-800">
+    <Card className="bg-white border-2 border-slate-200 shadow-lg">
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-slate-800 text-lg">
           <TrendingDown className="w-5 h-5 text-red-500" />
           Detalle por Categoría
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Mayor Gasto Card */}
-        <div className="bg-gradient-to-r from-emerald-50 to-green-50 border-2 border-emerald-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Mayor Gasto</p>
-              <p className="text-2xl font-bold text-emerald-900 mt-1">{mayorGasto.nombre}</p>
-              <p className="text-sm text-emerald-600 mt-1">{mayorGasto.porcentaje.toFixed(1)}% del total</p>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-emerald-900">{formatGuaranies(mayorGasto.monto)}</p>
-            </div>
+      <CardContent className="space-y-4">
+        {/* Mayor Gasto Card - Compacto */}
+        <div className="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-200 rounded-xl p-4">
+          <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Mayor Gasto</p>
+          <div className="flex items-baseline justify-between">
+            <p className="text-xl font-bold text-emerald-900">{mayorGasto.nombre}</p>
+            <p className="text-xl font-bold text-emerald-900">{formatGuaranies(mayorGasto.monto)}</p>
           </div>
+          <p className="text-xs text-emerald-600 mt-1">{mayorGasto.porcentaje.toFixed(1)}% del total</p>
         </div>
 
-        {/* Bar Chart */}
+        {/* Compact List View */}
         {categorias.length > 0 ? (
-          <div className="space-y-4">
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={categorias} layout="vertical" margin={{ top: 5, right: 30, left: 100, bottom: 5 }}>
-                <XAxis type="number" hide />
-                <YAxis
-                  type="category"
-                  dataKey="nombre"
-                  tick={{ fill: "#475569", fontSize: 12, fontWeight: 500 }}
-                  width={90}
-                />
-                <Bar dataKey="monto" radius={[0, 8, 8, 0]}>
-                  {categorias.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-
-            {/* Detailed List */}
-            <div className="space-y-2">
-              {categorias.map((cat, index) => (
+          <div className="space-y-2">
+            {categorias.map((cat, index) => {
+              const colorIntensity = 1 - (index / (categorias.length - 1))
+              const bgColor = `rgba(239, 68, 68, ${0.1 + colorIntensity * 0.15})`
+              const dotColor = index === 0 ? '#ef4444' : index === 1 ? '#f97316' : index === 2 ? '#f59e0b' : '#3b82f6'
+              
+              return (
                 <div
                   key={cat.nombre}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                  className="flex items-center justify-between p-3 rounded-lg hover:shadow-md transition-all border border-slate-200"
+                  style={{ backgroundColor: bgColor }}
                 >
                   <div className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
                     <span className="text-sm font-medium text-slate-700">{cat.nombre}</span>
                   </div>
                   <div className="text-right">
@@ -79,19 +59,20 @@ export function GastosCategoriaBarsClient({ categorias, mayorGasto, total }: Gas
                     <p className="text-xs text-slate-500">{cat.porcentaje.toFixed(1)}%</p>
                   </div>
                 </div>
-              ))}
-            </div>
-
-            <div className="pt-3 border-t border-slate-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-slate-700">Total Egresos</span>
+              )
+            })}
+            
+            {/* Total Compacto */}
+            <div className="pt-3 mt-2 border-t-2 border-slate-300">
+              <div className="flex items-center justify-between px-2">
+                <span className="text-sm font-bold text-slate-700">Total Egresos</span>
                 <span className="text-lg font-bold text-slate-900">{formatGuaranies(total)}</span>
               </div>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-8 text-slate-400">
-            <AlertTriangle className="w-12 h-12 mb-3" />
+            <AlertTriangle className="w-10 h-10 mb-2" />
             <p className="text-sm font-medium">No hay egresos registrados este mes</p>
           </div>
         )}

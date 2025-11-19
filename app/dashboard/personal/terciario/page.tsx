@@ -1,10 +1,11 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, Wallet, DollarSign, Calendar, CheckCircle2, Clock, Tag } from "lucide-react"
+import { TrendingUp, TrendingDown, Wallet, DollarSign, Calendar, CheckCircle2, Clock, Tag } from 'lucide-react'
 import { createClient } from "@/lib/supabase/server"
-import { redirect } from "next/navigation"
+import { redirect } from 'next/navigation'
 import { Progress } from "@/components/ui/progress"
 import { formatGuaranies } from "@/lib/utils"
+import { PresupuestoDetalladoTerciario } from "@/components/personal/presupuesto-detallado-terciario"
 
 export default async function PersonalTerciarioPage() {
   const supabase = await createClient()
@@ -15,6 +16,33 @@ export default async function PersonalTerciarioPage() {
 
   if (!user) {
     redirect("/auth/login")
+  }
+
+  const { data: perfilPersonal } = await supabase
+    .from("perfiles")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("tipo", "personal")
+    .single()
+
+  if (!perfilPersonal) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+        <DashboardHeader
+          title="Dashboard Terciario"
+          description="Análisis detallado de ingresos, egresos y patrones de consumo"
+        />
+        <div className="p-6">
+          <Card className="border-2 border-amber-200 bg-amber-50">
+            <CardContent className="p-6">
+              <p className="text-amber-800">
+                Por favor, ejecuta los scripts de migración para activar el sistema de perfiles.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
   }
 
   const now = new Date()
@@ -133,6 +161,10 @@ export default async function PersonalTerciarioPage() {
       />
 
       <div className="p-4 md:p-6">
+        <div className="mb-6">
+          <PresupuestoDetalladoTerciario perfilId={perfilPersonal.id} />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
           {/* Sidebar Izquierdo - Filtros y Resumen */}
           <div className="lg:col-span-3 space-y-4">

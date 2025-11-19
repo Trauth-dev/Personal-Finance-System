@@ -31,6 +31,8 @@ export function ReportesExpandiblesClient({
   top5GastosGenerales,
 }: ReportesExpandiblesClientProps) {
   const categoriasOrdenadas = Object.values(gastosPorCategoria).sort((a, b) => b.total - a.total)
+  
+  const totalTop5 = top5GastosGenerales.reduce((sum, gasto) => sum + gasto.monto, 0)
 
   return (
     <div className="space-y-6">
@@ -59,15 +61,14 @@ export function ReportesExpandiblesClient({
                     {index + 1}
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-slate-800">{gasto.concepto}</p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span
                         className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
                         style={{ backgroundColor: gasto.color }}
                       >
                         {gasto.categoria}
                       </span>
-                      <span className="text-xs text-slate-500">{gasto.descripcion}</span>
+                      <span className="font-semibold text-slate-800">{gasto.descripcion}</span>
                       <span className="text-xs text-slate-400">• {formatDateWithoutTimezone(gasto.fecha)}</span>
                     </div>
                   </div>
@@ -77,6 +78,18 @@ export function ReportesExpandiblesClient({
                 </div>
               </div>
             ))}
+            
+            {top5GastosGenerales.length > 0 && (
+              <div className="flex items-center justify-between p-4 bg-purple-100 rounded-xl border-2 border-purple-300 mt-4">
+                <div className="flex items-center gap-3">
+                  <Medal className="w-5 h-5 text-purple-700" />
+                  <span className="font-bold text-purple-900">Total 5 Gastos del Mes</span>
+                </div>
+                <div className="text-right">
+                  <p className="text-xl font-bold text-purple-900">{formatGuaranies(totalTop5)}</p>
+                </div>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
