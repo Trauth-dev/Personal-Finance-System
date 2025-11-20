@@ -6,6 +6,8 @@ import { redirect } from 'next/navigation'
 import { Progress } from "@/components/ui/progress"
 import { formatGuaranies } from "@/lib/utils"
 import { PresupuestoDetalladoTerciario } from "@/components/personal/presupuesto-detallado-terciario"
+import { ComparativoMesAnterior } from "@/components/personal/comparativo-mes-anterior"
+import { HistoricoPresupuestos } from "@/components/personal/historico-presupuestos"
 
 export default async function PersonalTerciarioPage() {
   const supabase = await createClient()
@@ -161,8 +163,10 @@ export default async function PersonalTerciarioPage() {
       />
 
       <div className="p-4 md:p-6">
-        <div className="mb-6">
+        <div className="mb-6 space-y-6">
           <PresupuestoDetalladoTerciario perfilId={perfilPersonal.id} />
+          <ComparativoMesAnterior perfilId={perfilPersonal.id} />
+          <HistoricoPresupuestos perfilId={perfilPersonal.id} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">

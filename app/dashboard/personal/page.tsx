@@ -1,6 +1,6 @@
 import { DashboardHeader } from "@/components/dashboard-header"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, Wallet, Target, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { TrendingUp, TrendingDown, Wallet, Target, ArrowUpRight, ArrowDownRight, CheckCircle2, AlertTriangle } from 'lucide-react'
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from 'next/navigation'
 import { formatGuaranies } from "@/lib/utils"
@@ -196,7 +196,7 @@ export default async function DashboardPersonalPage() {
           <Card className="bg-gradient-to-br from-purple-50 to-violet-50 border-2 border-purple-200">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-slate-700">Presupuesto</CardTitle>
+                <CardTitle className="text-sm font-semibold text-slate-700">Presupuesto vs Gasto</CardTitle>
                 <div className="w-9 h-9 rounded-lg bg-purple-500 flex items-center justify-center shadow-md">
                   <Target className="w-5 h-5 text-white" />
                 </div>
@@ -206,7 +206,16 @@ export default async function DashboardPersonalPage() {
               <div className="text-xl md:text-2xl font-bold text-purple-600">
                 {formatGuaranies(Number(metaSalario))}
               </div>
-              <p className="text-xs text-slate-600 mt-1 font-medium">{porcentajeCompletado.toFixed(1)}% completado</p>
+              <div className="flex items-center gap-1 mt-1">
+                {totalEgresos / Number(metaSalario) <= 1 ? (
+                  <CheckCircle2 className="w-3 h-3 text-green-600" />
+                ) : (
+                  <AlertTriangle className="w-3 h-3 text-red-600" />
+                )}
+                <p className={`text-xs font-medium ${totalEgresos / Number(metaSalario) <= 1 ? "text-green-600" : "text-red-600"}`}>
+                  {Number(metaSalario) > 0 ? ((totalEgresos / Number(metaSalario)) * 100).toFixed(1) : 0}% gastado
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
