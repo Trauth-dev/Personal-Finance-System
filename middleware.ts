@@ -1,8 +1,10 @@
-import { updateSession } from "@/lib/supabase/middleware"
 import type { NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 
 export async function middleware(request: NextRequest) {
-  return await updateSession(request)
+  // El edge runtime de v0 no tiene acceso consistente a NEXT_PUBLIC_ vars
+  // La autenticación se maneja en los componentes del servidor
+  return NextResponse.next()
 }
 
 export const config = {

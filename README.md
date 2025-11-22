@@ -331,52 +331,110 @@ Este usuario incluye:
 - Presupuestos mensuales establecidos
 - Metas financieras activas
 - Historial de transacciones de los últimos meses
+- Deudas y cajas de ahorro de ejemplo
+- Patrimonio con activos y pasivos
+- Alertas y logros financieros
 
-**Nota**: El usuario demo se crea ejecutando el script `scripts/018_create_demo_user.sql` en tu base de datos de Supabase.
+**Nota**: El usuario demo se crea ejecutando el script `scripts/018_create_demo_user.sql` en tu base de datos de Supabase después de que el usuario se haya registrado en la aplicación con esas credenciales.
 
-## Uso del Sistema
+**Pasos para configurar el usuario demo**:
+1. Registra el usuario `demo@gmail.com` con contraseña `demo123` en tu aplicación
+2. Verifica el email (revisa la bandeja de entrada)
+3. Ejecuta el script `scripts/018_create_demo_user.sql` en el SQL Editor de Supabase
+4. Inicia sesión y explora todas las funcionalidades
 
-### Primeros Pasos
+## Roadmap y Mejoras Futuras
 
-1. **Registro**: Crea tu cuenta en `/auth/registro`
-2. **Verificación**: Confirma tu email (revisa spam/promociones)
-3. **Inicio de Sesión**: Accede con tus credenciales en `/auth/login`
-4. **Crear Perfil**: El sistema crea automáticamente un perfil "Personal" por defecto
-5. **Configurar Categorías**: Ve a "Categorías" y crea tus tipos y subcategorías de gasto
-6. **Establecer Presupuesto**: Define tu meta de ingreso mensual en "Presupuesto"
-7. **Registrar Transacciones**: Comienza a cargar tus ingresos y egresos
+### Funcionalidades Planeadas
 
-### Flujo de Trabajo Recomendado
+#### Análisis Avanzado
+- **Análisis Predictivo con IA**: Predicciones de gastos futuros basadas en patrones históricos
+- **Detección de Anomalías**: Alertas automáticas sobre gastos inusuales o fuera de patrón
+- **Recomendaciones Inteligentes**: Sugerencias personalizadas para optimizar finanzas
+- **Análisis de Tendencias**: Visualización de tendencias a largo plazo (anual, trimestral)
 
-#### Configuración Inicial (Una vez)
-1. Crear categorías personalizadas de ingresos y egresos
-2. Establecer presupuesto mensual base
-3. Registrar deudas existentes (si aplica)
-4. Crear cajas de ahorro para metas específicas
-5. Registrar patrimonio inicial
+#### Integraciones Bancarias
+- **Open Banking**: Sincronización automática con cuentas bancarias
+- **Importación de Transacciones**: Lectura automática de extractos bancarios (PDF/CSV)
+- **Conciliación Bancaria**: Comparación automática de registros vs movimientos reales
+- **Multi-moneda**: Soporte para múltiples monedas con conversión automática
 
-#### Uso Diario
-1. Registrar ingresos cuando ocurran
-2. Registrar egresos inmediatamente después de gastar
-3. Revisar dashboard para ver balance actual
-4. Verificar alertas y notificaciones
+#### Automatización
+- **Transacciones Recurrentes**: Registro automático de ingresos/egresos fijos
+- **Pagos Programados**: Recordatorios y ejecución de pagos automáticos
+- **Reglas de Categorización**: Auto-clasificación de transacciones según patrones
+- **Alertas Proactivas**: Notificaciones push y email personalizables
 
-#### Revisión Mensual
-1. Analizar distribución de gastos por categoría
-2. Comparar ingresos/egresos vs presupuesto
-3. Evaluar cumplimiento de metas
-4. Ajustar presupuestos para el próximo mes
-5. Exportar datos para análisis externo
+#### Colaboración
+- **Perfiles Compartidos**: Gestión financiera familiar o con socios
+- **Múltiples Usuarios**: Roles y permisos diferenciados (admin, visualizador, editor)
+- **Comentarios**: Anotaciones colaborativas en transacciones
+- **Aprobaciones**: Flujo de aprobación para gastos importantes
 
-### Módulo Empresarial
+#### Reportes Avanzados
+- **Reportes Personalizados**: Constructor de reportes con filtros avanzados
+- **Exportación Mejorada**: PDF, Excel, Google Sheets con formato profesional
+- **Dashboards Personalizables**: Widgets arrastrables y configurables
+- **Comparativas Multi-periodo**: Análisis comparativo de múltiples períodos
 
-Para negocios, activa el perfil empresarial y:
-1. Registrar inventario de productos
-2. Agregar proveedores de materias primas
-3. Configurar materias primas con costos
-4. Registrar ventas diarias
-5. Registrar compras de insumos
-6. Generar reportes de rentabilidad
+#### Inversiones y Patrimonio
+- **Tracking de Inversiones**: Seguimiento de acciones, bonos, criptomonedas
+- **Cálculo de ROI**: Retorno sobre inversión automatizado
+- **Rebalanceo de Portfolio**: Sugerencias de rebalanceo de cartera
+- **Valuación Automática**: Actualización de valores de mercado en tiempo real
+
+#### Gamificación
+- **Sistema de Logros Ampliado**: Más de 50 logros desbloqueables
+- **Rankings**: Comparación anónima con otros usuarios (opcional)
+- **Desafíos Mensuales**: Retos de ahorro y reducción de gastos
+- **Niveles de Usuario**: Progresión basada en buenos hábitos financieros
+
+#### Educación Financiera
+- **Tutoriales Interactivos**: Guías paso a paso para cada funcionalidad
+- **Biblioteca de Recursos**: Artículos y videos sobre educación financiera
+- **Calculadoras Financieras**: Intereses, amortizaciones, jubilación, etc.
+- **Glosario Financiero**: Términos y conceptos explicados de forma simple
+
+#### Mobile
+- **Aplicación Móvil Nativa**: Apps iOS y Android con React Native
+- **Modo Offline**: Registro de transacciones sin conexión
+- **Widgets**: Widgets de home screen para acceso rápido
+- **Escaneo de Recibos**: OCR para captura automática de gastos
+
+### Mejoras Técnicas
+
+#### Performance
+- **Optimización de Queries**: Índices y vistas materializadas en PostgreSQL
+- **Caching Avanzado**: Redis para datos frecuentemente consultados
+- **Lazy Loading**: Carga diferida de componentes pesados
+- **Web Workers**: Procesamiento de cálculos complejos en background
+
+#### Seguridad
+- **2FA (Autenticación de Dos Factores)**: Capa adicional de seguridad
+- **Auditoría Completa**: Log de todas las acciones sensibles
+- **Cifrado de Datos Sensibles**: Encriptación E2E de información crítica
+- **Rate Limiting**: Protección contra ataques de fuerza bruta
+
+#### UX/UI
+- **Temas Personalizables**: Más opciones de colores y estilos
+- **Accesibilidad Mejorada**: Cumplimiento WCAG 2.1 AAA
+- **Internacionalización**: Soporte para múltiples idiomas
+- **Modo Compacto**: Vista densa para usuarios avanzados
+
+#### DevOps
+- **Tests Automatizados**: Cobertura completa con Jest y Playwright
+- **CI/CD**: Pipeline de integración y deployment continuo
+- **Monitoreo**: Sentry, LogRocket para tracking de errores
+- **A/B Testing**: Experimentación de nuevas features
+
+### Contribuciones
+
+Si deseas contribuir al desarrollo de alguna de estas funcionalidades, por favor:
+1. Revisa el roadmap actualizado
+2. Crea un issue describiendo tu propuesta
+3. Espera feedback antes de implementar
+4. Sigue las guías de estilo del proyecto
+5. Incluye tests para tu código
 
 ## Características de Diseño
 
