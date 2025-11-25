@@ -316,32 +316,102 @@ pnpm build
 pnpm start
 \`\`\`
 
-## Usuario Demo
+## 👤 Usuario Demo
 
-Para facilitar las pruebas y demostraciones, se ha creado un usuario demo con datos precargados:
+### 🚨 ATENCIÓN: Configuración Obligatoria Antes de Usar
 
+Las credenciales del usuario demo **NO funcionarán** hasta que completes estos pasos. El usuario debe ser creado primero.
+
+### Credenciales Demo
 \`\`\`
 Email: demo@gmail.com
 Contraseña: demo123
 \`\`\`
 
-Este usuario incluye:
-- Perfil Personal con transacciones de ejemplo
-- Categorías de ingresos y egresos configuradas
-- Presupuestos mensuales establecidos
-- Metas financieras activas
-- Historial de transacciones de los últimos meses
-- Deudas y cajas de ahorro de ejemplo
-- Patrimonio con activos y pasivos
-- Alertas y logros financieros
+### Configuración Requerida (Elige UN método)
 
-**Nota**: El usuario demo se crea ejecutando el script `scripts/018_create_demo_user.sql` en tu base de datos de Supabase después de que el usuario se haya registrado en la aplicación con esas credenciales.
+#### Método 1: Creación Automática con API (Recomendado) ⚡
 
-**Pasos para configurar el usuario demo**:
-1. Registra el usuario `demo@gmail.com` con contraseña `demo123` en tu aplicación
-2. Verifica el email (revisa la bandeja de entrada)
-3. Ejecuta el script `scripts/018_create_demo_user.sql` en el SQL Editor de Supabase
-4. Inicia sesión y explora todas las funcionalidades
+**Paso 1:** Ejecuta el endpoint de creación
+
+Desde tu terminal o navegador:
+\`\`\`bash
+# Con curl
+curl -X POST https://tu-dominio.vercel.app/api/create-demo-user
+
+# O abre en navegador
+https://tu-dominio.vercel.app/api/create-demo-user
+\`\`\`
+
+Verás una respuesta JSON confirmando la creación del usuario en Supabase Auth.
+
+**Paso 2:** Ejecuta el script SQL de datos
+
+1. Abre el SQL Editor en tu proyecto Supabase
+2. Ejecuta el contenido completo de `scripts/018_create_demo_user.sql`
+3. Este script agrega:
+   - Perfil Personal
+   - Categorías de ingresos y egresos
+   - 50+ transacciones de ejemplo (últimos 3 meses)
+   - Presupuesto mensual (Gs 3.758.000)
+   - Deudas de ejemplo
+   - Cajas de ahorro
+   - Patrimonio neto
+   - Alertas y logros
+
+**Paso 3:** ¡Listo! Inicia sesión con demo@gmail.com / demo123
+
+#### Método 2: Creación Manual 📝
+
+**Paso 1:** Regístrate manualmente
+
+1. Ve a `/auth/registro`
+2. Usa las credenciales:
+   - Email: demo@gmail.com
+   - Contraseña: demo123
+3. Verifica tu email (revisa tu bandeja de entrada)
+
+**Paso 2:** Ejecuta el script SQL
+
+1. Abre el SQL Editor en Supabase
+2. Ejecuta `scripts/018_create_demo_user.sql`
+
+**Paso 3:** Inicia sesión
+
+Ahora puedes iniciar sesión con las credenciales.
+
+### ⚠️ Solución de Problemas
+
+**Error: "Invalid login credentials"**
+- Causa: El usuario NO ha sido creado en Supabase Auth
+- Solución: Sigue el Método 1 o Método 2 arriba
+
+**Error al ejecutar el script SQL**
+- Causa: El usuario demo aún no existe en auth.users
+- Solución: Completa primero el Paso 1 de cualquier método
+
+**El endpoint /api/create-demo-user no funciona**
+- Causa: Falta la variable `SUPABASE_SERVICE_ROLE_KEY`
+- Solución: Agrega esta variable en tu dashboard de Vercel/Supabase
+
+### 📊 Contenido de la Cuenta Demo
+
+Una vez configurada, la cuenta incluye:
+- ✅ Perfil Personal configurado
+- ✅ Categorías predefinidas completas
+- ✅ 50+ transacciones de ejemplo (últimos 3 meses)
+- ✅ Presupuesto mensual: Gs 3.758.000
+- ✅ Distribución por categorías:
+  - Gastos Vivienda: 30%
+  - Pago Deudas: 20%
+  - Gastos Varios: 20%
+  - Disfrute: 20%
+  - Ahorro 2025: 10%
+- ✅ 3 Deudas activas en seguimiento
+- ✅ 3 Cajas de ahorro con metas
+- ✅ Patrimonio neto registrado
+- ✅ Alertas financieras configuradas
+- ✅ Logros desbloqueados
 
 ## Roadmap y Mejoras Futuras
 
