@@ -3,14 +3,21 @@ import { SuperavitCardClient } from "./superavit-card-client"
 
 interface SuperavitCardProps {
   perfilId: string
+  fechaInicio?: string
+  fechaFin?: string
 }
 
-export async function SuperavitCard({ perfilId }: SuperavitCardProps) {
+export async function SuperavitCard({ perfilId, fechaInicio, fechaFin }: SuperavitCardProps) {
   const supabase = await createClient()
 
-  const now = new Date()
-  const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-  const ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  let primerDiaMes = fechaInicio
+  let ultimoDiaMes = fechaFin
+
+  if (!primerDiaMes || !ultimoDiaMes) {
+    const now = new Date()
+    primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+    ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  }
 
   const { data: ingresos } = await supabase
     .from("ingresos")
@@ -32,9 +39,13 @@ export async function SuperavitCard({ perfilId }: SuperavitCardProps) {
 
   const balance = totalIngresos - totalEgresos
 
-  // Previous month comparison
-  const primerDiaMesAnterior = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0]
-  const ultimoDiaMesAnterior = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0]
+  const fechaInicio_date = new Date(primerDiaMes)
+  const primerDiaMesAnterior = new Date(fechaInicio_date.getFullYear(), fechaInicio_date.getMonth() - 1, 1)
+    .toISOString()
+    .split("T")[0]
+  const ultimoDiaMesAnterior = new Date(fechaInicio_date.getFullYear(), fechaInicio_date.getMonth(), 0)
+    .toISOString()
+    .split("T")[0]
 
   const { data: ingresosMesAnterior } = await supabase
     .from("ingresos")

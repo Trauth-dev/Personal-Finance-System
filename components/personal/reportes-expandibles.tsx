@@ -3,14 +3,21 @@ import { ReportesExpandiblesClient } from "./reportes-expandibles-client"
 
 interface ReportesExpandiblesProps {
   perfilId: string
+  fechaInicio?: string
+  fechaFin?: string
 }
 
-export async function ReportesExpandibles({ perfilId }: ReportesExpandiblesProps) {
+export async function ReportesExpandibles({ perfilId, fechaInicio, fechaFin }: ReportesExpandiblesProps) {
   const supabase = await createClient()
 
-  const now = new Date()
-  const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-  const ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  let primerDiaMes = fechaInicio
+  let ultimoDiaMes = fechaFin
+
+  if (!primerDiaMes || !ultimoDiaMes) {
+    const now = new Date()
+    primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+    ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  }
 
   const { data: egresosConCategoria } = await supabase
     .from("egresos")
@@ -29,7 +36,7 @@ export async function ReportesExpandibles({ perfilId }: ReportesExpandiblesProps
       categorias_egreso (
         nombre
       )
-    `
+    `,
     )
     .eq("perfil_id", perfilId)
     .gte("fecha", primerDiaMes)
@@ -84,10 +91,5 @@ export async function ReportesExpandibles({ perfilId }: ReportesExpandiblesProps
       }))
       .slice(0, 5) || []
 
-  return (
-    <ReportesExpandiblesClient
-      gastosPorCategoria={gastosPorCategoria}
-      top5GastosGenerales={top5GastosGenerales}
-    />
-  )
+  return <ReportesExpandiblesClient gastosPorCategoria={gastosPorCategoria} top5GastosGenerales={top5GastosGenerales} />
 }

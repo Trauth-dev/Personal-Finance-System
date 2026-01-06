@@ -1,22 +1,26 @@
 import { createClient } from "@/lib/supabase/server"
 import { PresupuestoDetalladoTerciarioClient } from "./presupuesto-detallado-terciario-client"
 
-export async function PresupuestoDetalladoTerciario({ perfilId }: { perfilId: string }) {
+export async function PresupuestoDetalladoTerciario({
+  perfilId,
+  fechaInicio,
+  fechaFin,
+}: {
+  perfilId: string
+  fechaInicio: string
+  fechaFin: string
+}) {
   const supabase = await createClient()
 
-  const now = new Date()
-  const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-  const ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
-
   console.log("[v0] Terciario - Buscando presupuesto - perfilId:", perfilId)
-  console.log("[v0] Terciario - Rango de fechas:", primerDiaMes, "a", ultimoDiaMes)
+  console.log("[v0] Terciario - Rango de fechas:", fechaInicio, "a", fechaFin)
 
   const { data: presupuestos, error: presupuestoError } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
-    .gte("fecha", primerDiaMes)
-    .lte("fecha", ultimoDiaMes)
+    .gte("fecha", fechaInicio)
+    .lte("fecha", fechaFin)
     .order("fecha", { ascending: false })
     .limit(1)
 
@@ -38,16 +42,11 @@ export async function PresupuestoDetalladoTerciario({ perfilId }: { perfilId: st
       categoria:categorias_egreso(id, nombre)
     `)
     .eq("perfil_id", perfilId)
-    .gte("fecha", primerDiaMes)
-    .lte("fecha", ultimoDiaMes)
+    .gte("fecha", fechaInicio)
+    .lte("fecha", fechaFin)
     .order("monto", { ascending: false })
 
   console.log("[v0] Terciario - Total egresos:", egresos?.length)
 
-  return (
-    <PresupuestoDetalladoTerciarioClient 
-      presupuesto={presupuesto} 
-      egresos={egresos || []} 
-    />
-  )
+  return <PresupuestoDetalladoTerciarioClient presupuesto={presupuesto} egresos={egresos || []} />
 }

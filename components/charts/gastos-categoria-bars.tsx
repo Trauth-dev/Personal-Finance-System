@@ -3,14 +3,21 @@ import { GastosCategoriaBarsClient } from "./gastos-categoria-bars-client"
 
 interface GastosCategoriaBarsProps {
   perfilId: string
+  fechaInicio?: string
+  fechaFin?: string
 }
 
-export async function GastosCategoriaBars({ perfilId }: GastosCategoriaBarsProps) {
+export async function GastosCategoriaBars({ perfilId, fechaInicio, fechaFin }: GastosCategoriaBarsProps) {
   const supabase = await createClient()
 
-  const now = new Date()
-  const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-  const ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  let primerDiaMes = fechaInicio
+  let ultimoDiaMes = fechaFin
+
+  if (!primerDiaMes || !ultimoDiaMes) {
+    const now = new Date()
+    primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+    ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  }
 
   const { data: egresos } = await supabase
     .from("egresos")

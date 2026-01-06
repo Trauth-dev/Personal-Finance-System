@@ -1,12 +1,25 @@
 import { createClient } from "@/lib/supabase/server"
 import { PresupuestoCategoriasComparativoClient } from "./presupuesto-categoria-comparativo-client"
 
-export async function PresupuestoCategoriasComparativo({ perfilId }: { perfilId: string }) {
+export async function PresupuestoCategoriasComparativo({
+  perfilId,
+  fechaInicio,
+  fechaFin,
+}: {
+  perfilId: string
+  fechaInicio?: string
+  fechaFin?: string
+}) {
   const supabase = await createClient()
 
-  const now = new Date()
-  const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-  const ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  let primerDiaMes = fechaInicio
+  let ultimoDiaMes = fechaFin
+
+  if (!primerDiaMes || !ultimoDiaMes) {
+    const now = new Date()
+    primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+    ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  }
 
   console.log("[v0] Buscando presupuesto - perfilId:", perfilId)
   console.log("[v0] Rango de fechas:", primerDiaMes, "a", ultimoDiaMes)
@@ -44,10 +57,5 @@ export async function PresupuestoCategoriasComparativo({ perfilId }: { perfilId:
     console.log("[v0] No hay presupuesto configurado")
   }
 
-  return (
-    <PresupuestoCategoriasComparativoClient 
-      presupuesto={presupuesto} 
-      egresos={egresos || []} 
-    />
-  )
+  return <PresupuestoCategoriasComparativoClient presupuesto={presupuesto} egresos={egresos || []} />
 }
