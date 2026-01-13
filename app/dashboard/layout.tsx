@@ -20,7 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       try {
         const supabase = createClient()
 
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 10000))
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000))
 
         const authPromise = supabase.auth.getUser()
 
@@ -30,6 +30,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         } = (await Promise.race([authPromise, timeoutPromise])) as any
 
         if (error || !user) {
+          console.error("[v0] Error de autenticación:", error)
           router.push("/auth/login")
           return
         }
@@ -87,7 +88,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         setIsLoading(false)
       } catch (error) {
         console.error("[v0] Error en autenticación:", error)
+        if (error instanceof Error && error.message === "Timeout") {
+          const hasReloaded = sessionStorage.getItem("auth-reload-attempted")
+          if (!hasReloaded) {
+            sessionStorage.setItem("auth-reload-attempted", "true")
+            window.location.reload()
+            return
+          }
+        }
         setIsLoading(false)
+        router.push("/auth/login")
       }
     }
 

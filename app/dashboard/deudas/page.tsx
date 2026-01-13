@@ -21,26 +21,24 @@ export default async function DeudasPage() {
     redirect("/auth/login")
   }
 
+  // Verificar que el perfil pertenece al usuario
   const { data: perfil } = await supabase
     .from("perfiles")
-    .select("id, tipo, nombre")
+    .select("*")
     .eq("id", perfilId)
     .eq("user_id", user.id)
-    .maybeSingle()
+    .single()
 
   if (!perfil) {
     redirect("/dashboard/personal")
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
-      <DashboardHeader
-        title="Gestión de Deudas"
-        description="Controla y da seguimiento a tus deudas de forma efectiva"
-      />
+    <div>
+      <DashboardHeader title="Gestión de Deudas" description="Administra tus préstamos y tarjetas de crédito" />
 
-      <div className="p-4 md:p-6">
-        <DeudasManager userId={user.id} perfilId={perfil.id} />
+      <div className="p-6">
+        <DeudasManager userId={user.id} perfilId={perfilId} />
       </div>
     </div>
   )
