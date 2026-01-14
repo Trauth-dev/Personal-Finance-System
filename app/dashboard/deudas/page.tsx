@@ -2,17 +2,12 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { DeudasManager } from "@/components/personal/deudas-manager"
-import { cookies } from "next/headers"
+
+export const revalidate = 0
 
 export default async function DeudasPage() {
-  const cookieStore = await cookies()
-  const perfilId = cookieStore.get("perfil_activo")?.value
-
-  if (!perfilId) {
-    redirect("/dashboard/personal")
-  }
-
   const supabase = await createClient()
+
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -21,24 +16,23 @@ export default async function DeudasPage() {
     redirect("/auth/login")
   }
 
-  // Verificar que el perfil pertenece al usuario
-  const { data: perfil } = await supabase
+  const { data: perfilPersonal } = await supabase
     .from("perfiles")
-    .select("*")
-    .eq("id", perfilId)
+    .select("id, tipo, nombre")
     .eq("user_id", user.id)
+    .eq("tipo", "personal")
     .single()
 
-  if (!perfil) {
+  if (!perfilPersonal) {
     redirect("/dashboard/personal")
   }
 
   return (
-    <div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       <DashboardHeader title="Gestión de Deudas" description="Administra tus préstamos y tarjetas de crédito" />
 
-      <div className="p-6">
-        <DeudasManager userId={user.id} perfilId={perfilId} />
+      <div className="p-4 md:p-6">
+        <DeudasManager userId={user.id} perfilId={perfilPersonal.id} />
       </div>
     </div>
   )
