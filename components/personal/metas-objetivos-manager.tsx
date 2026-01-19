@@ -32,7 +32,7 @@ interface Meta {
   valor_objetivo: number
   valor_actual: number
   unidad: string | null
-  estado: "pendiente" | "en_progreso" | "completada" | "cancelada"
+  estado: "activa" | "completada" | "pausada" | "cancelada"
   prioridad: "baja" | "media" | "alta"
   color: string | null
   icono: string | null
@@ -92,6 +92,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [showTareaModal, setShowTareaModal] = useState(false)
   const [editingTarea, setEditingTarea] = useState<{id: string, titulo: string, completada: boolean, prioridad: string} | null>(null)
   const [tareaForm, setTareaForm] = useState({ titulo: "", prioridad: "media" })
+  const [deletingTarea, setDeletingTarea] = useState<string | null>(null)
   
   // Estados para modales
   const [showMetaModal, setShowMetaModal] = useState(false)
@@ -238,10 +239,15 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         
         if (error) throw error
       } else {
+        if (!userId) {
+          console.error("[v0] No se encontró el user_id al crear meta")
+          return
+        }
         const { error } = await supabase
           .from("metas")
           .insert({
             perfil_id: perfilId,
+            user_id: userId,
             titulo: metaForm.titulo,
             descripcion: metaForm.descripcion || null,
             tipo: metaForm.tipo,
@@ -250,7 +256,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             fecha_fin: metaForm.fecha_fin,
             valor_objetivo: 100,
             valor_actual: 0,
-            estado: "pendiente"
+            estado: "activa"
           })
         
         if (error) throw error
@@ -331,10 +337,16 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           if (error) throw error
         }
       } else if (completado) {
+        if (!userId) {
+          console.error("[v0] No se encontró el user_id al insertar registro de hábito")
+          return
+        }
         const { error } = await supabase
           .from("registro_habitos")
           .insert({
             habito_id: habitoId,
+            perfil_id: perfilId,
+            user_id: userId,
             fecha: fecha,
             completado: true
           })
@@ -370,11 +382,17 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   // Agregar tarea a meta
   const agregarTarea = async (metaId: string, titulo: string) => {
     try {
+      if (!userId) {
+        console.error("[v0] No se encontró el user_id al agregar tarea")
+        return
+      }
       const maxOrden = tareasMetas.filter(t => t.meta_id === metaId).length
       const { error } = await supabase
         .from("tareas_meta")
         .insert({
           meta_id: metaId,
+          perfil_id: perfilId,
+          user_id: userId,
           titulo: titulo,
           completada: false,
           orden: maxOrden + 1
@@ -414,13 +432,13 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     if (tareasDeEsaMeta.length === 0) return
     
     const completadas = tareasDeEsaMeta.filter(t => t.completada).length
-    const progreso = Math.round((completadas / tareasDeEsaMeta.length) * 100)
-    const estado = progreso === 100 ? "completada" : progreso > 0 ? "en_progreso" : "pendiente"
+    const valorActual = Math.round((completadas / tareasDeEsaMeta.length) * 100)
+    const estado = valorActual === 100 ? "completada" : "activa"
     
     try {
       await supabase
         .from("metas")
-        .update({ progreso, estado })
+        .update({ valor_actual: valorActual, estado })
         .eq("id", metaId)
       
       cargarDatos()
@@ -749,17 +767,16 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                           size="icon" 
                           onClick={() => { setEditingTarea(tarea); setTareaForm({ titulo: tarea.titulo, prioridad: tarea.prioridad }); setShowTareaModal(true); }}
                           className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                          title="Editar tarea"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
-                          onClick={async () => {
-                            await supabase.from("tareas_meta").delete().eq("id", tarea.id)
-                            cargarDatos()
-                          }}
+                          onClick={() => setDeletingTarea(tarea.id)}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          title="Eliminar tarea"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -1636,7 +1653,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         </DialogContent>
       </Dialog>
       
-      {/* Confirmación de eliminación */}
+      {/* Confirmación de eliminación de meta/hábito */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1652,6 +1669,33 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction 
               onClick={eliminar}
+              className="bg-red-500 hover:bg-red-600"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Confirmación de eliminación de tarea del día */}
+      <AlertDialog open={!!deletingTarea} onOpenChange={() => setDeletingTarea(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar tarea del día</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar esta tarea? Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={async () => {
+                if (deletingTarea) {
+                  await supabase.from("tareas_meta").delete().eq("id", deletingTarea)
+                  setDeletingTarea(null)
+                  cargarDatos()
+                }
+              }}
               className="bg-red-500 hover:bg-red-600"
             >
               Eliminar
