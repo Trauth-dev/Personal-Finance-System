@@ -83,8 +83,15 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [habitos, setHabitos] = useState<Habito[]>([])
   const [registrosHabitos, setRegistrosHabitos] = useState<RegistroHabito[]>([])
   const [tareasMetas, setTareasMetas] = useState<TareaMeta[]>([])
+  const [tareasDelDia, setTareasDelDia] = useState<{id: string, titulo: string, completada: boolean, prioridad: string}[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState("habitos")
+  const [activeTab, setActiveTab] = useState("tareas")
+  const [userId, setUserId] = useState<string | null>(null)
+  
+  // Estados para tareas del día
+  const [showTareaModal, setShowTareaModal] = useState(false)
+  const [editingTarea, setEditingTarea] = useState<{id: string, titulo: string, completada: boolean, prioridad: string} | null>(null)
+  const [tareaForm, setTareaForm] = useState({ titulo: "", prioridad: "media" })
   
   // Estados para modales
   const [showMetaModal, setShowMetaModal] = useState(false)
@@ -127,17 +134,25 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const cargarDatos = useCallback(async () => {
     setLoading(true)
     try {
-      const [metasRes, habitosRes, registrosRes, tareasRes] = await Promise.all([
+      // Obtener user_id
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) setUserId(user.id)
+      
+      const hoy = new Date().toISOString().split("T")[0]
+      
+      const [metasRes, habitosRes, registrosRes, tareasMetaRes, tareasDelDiaRes] = await Promise.all([
         supabase.from("metas").select("*").eq("perfil_id", perfilId).order("created_at", { ascending: false }),
         supabase.from("habitos").select("*").eq("perfil_id", perfilId).eq("activo", true).order("created_at", { ascending: true }),
         supabase.from("registro_habitos").select("*").gte("fecha", getStartOfMonth(currentDate)).lte("fecha", getEndOfMonth(currentDate)),
-        supabase.from("tareas_meta").select("*").order("orden", { ascending: true })
+        supabase.from("tareas_meta").select("*").order("orden", { ascending: true }),
+        supabase.from("tareas_meta").select("*").eq("perfil_id", perfilId).eq("fecha_limite", hoy).order("orden", { ascending: true })
       ])
       
       if (metasRes.data) setMetas(metasRes.data)
       if (habitosRes.data) setHabitos(habitosRes.data)
       if (registrosRes.data) setRegistrosHabitos(registrosRes.data)
-      if (tareasRes.data) setTareasMetas(tareasRes.data)
+      if (tareasMetaRes.data) setTareasMetas(tareasMetaRes.data)
+      if (tareasDelDiaRes.data) setTareasDelDia(tareasDelDiaRes.data)
     } catch (error) {
       console.error("Error cargando datos:", error)
     }
@@ -267,10 +282,15 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         
         if (error) throw error
       } else {
+        if (!userId) {
+          console.error("No se encontró el user_id")
+          return
+        }
         const { error } = await supabase
           .from("habitos")
           .insert({
             perfil_id: perfilId,
+            user_id: userId,
             nombre: habitoForm.nombre,
             descripcion: habitoForm.descripcion || null,
             frecuencia: habitoForm.frecuencia,
@@ -652,21 +672,137 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       
       {/* Tabs principales */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 bg-muted/50">
-          <TabsTrigger value="habitos" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-            <ListTodo className="h-4 w-4" />
-            Hábitos Diarios
+        <TabsList className="grid w-full grid-cols-3 bg-muted/50">
+          <TabsTrigger value="tareas" className="flex items-center gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <CheckCircle2 className="h-4 w-4" />
+            <span className="text-blue-600 data-[state=active]:text-white">Tareas del Día</span>
           </TabsTrigger>
-          <TabsTrigger value="metas" className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+          <TabsTrigger value="habitos" className="flex items-center gap-2 data-[state=active]:bg-amber-500 data-[state=active]:text-white">
+            <ListTodo className="h-4 w-4" />
+            <span className="text-amber-600 data-[state=active]:text-white">Hábitos Diarios</span>
+          </TabsTrigger>
+          <TabsTrigger value="metas" className="flex items-center gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white">
             <Target className="h-4 w-4" />
-            Metas y Objetivos
+            <span className="text-green-600 data-[state=active]:text-white">Metas y Objetivos</span>
           </TabsTrigger>
         </TabsList>
         
-        {/* Tab de Hábitos */}
-        <TabsContent value="habitos" className="space-y-4">
-          {/* Controles de navegación */}
-          <Card>
+        {/* Tab de Tareas del Día */}
+        <TabsContent value="tareas" className="space-y-4">
+          <Card className="border-blue-200">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-blue-600 flex items-center gap-2">
+                    <CheckCircle2 className="h-5 w-5" />
+                    Tareas del Día - {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                  </CardTitle>
+                  <CardDescription>Organiza y completa tus tareas diarias</CardDescription>
+                </div>
+                <Button onClick={() => { setTareaForm({ titulo: "", prioridad: "media" }); setEditingTarea(null); setShowTareaModal(true); }} className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nueva Tarea
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {tareasDelDia.length === 0 ? (
+                <div className="text-center py-12">
+                  <CheckCircle2 className="h-16 w-16 mx-auto text-blue-200 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No tienes tareas para hoy</h3>
+                  <p className="text-muted-foreground mb-4">Agrega tareas para organizar tu día</p>
+                  <Button onClick={() => { setTareaForm({ titulo: "", prioridad: "media" }); setShowTareaModal(true); }} className="bg-blue-600 hover:bg-blue-700">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Agregar primera tarea
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {tareasDelDia.map((tarea) => (
+                    <div 
+                      key={tarea.id} 
+                      className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                        tarea.completada ? "bg-green-50 border-green-200" : "bg-card hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Checkbox 
+                          checked={tarea.completada} 
+                          onCheckedChange={async (checked) => {
+                            await supabase.from("tareas_meta").update({ completada: checked }).eq("id", tarea.id)
+                            cargarDatos()
+                          }}
+                          className="h-5 w-5 rounded-full"
+                        />
+                        <div>
+                          <p className={`font-medium ${tarea.completada ? "line-through text-muted-foreground" : ""}`}>
+                            {tarea.titulo}
+                          </p>
+                          <Badge variant={tarea.prioridad === "alta" ? "destructive" : tarea.prioridad === "media" ? "default" : "secondary"} className="text-xs">
+                            {tarea.prioridad}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => { setEditingTarea(tarea); setTareaForm({ titulo: tarea.titulo, prioridad: tarea.prioridad }); setShowTareaModal(true); }}
+                          className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={async () => {
+                            await supabase.from("tareas_meta").delete().eq("id", tarea.id)
+                            cargarDatos()
+                          }}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {/* Resumen */}
+                  <div className="mt-4 pt-4 border-t flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <span className="text-sm text-muted-foreground">
+                        {tareasDelDia.filter(t => t.completada).length} de {tareasDelDia.length} completadas
+                      </span>
+                      <Progress 
+                        value={(tareasDelDia.filter(t => t.completada).length / tareasDelDia.length) * 100} 
+                        className="w-32 h-2" 
+                      />
+                    </div>
+                    <span className="text-lg font-bold text-blue-600">
+                      {Math.round((tareasDelDia.filter(t => t.completada).length / tareasDelDia.length) * 100)}%
+                    </span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+{/* Tab de Hábitos */}
+          <TabsContent value="habitos" className="space-y-4">
+            {/* Título de sección */}
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h2 className="text-xl font-bold text-amber-600 flex items-center gap-2">
+                  <ListTodo className="h-5 w-5" />
+                  Hábitos Diarios
+                </h2>
+                <p className="text-muted-foreground">Construye hábitos positivos con seguimiento diario</p>
+              </div>
+            </div>
+            
+            {/* Controles de navegación */}
+            <Card className="border-amber-200">
             <CardContent className="pt-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -702,7 +838,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                     </SelectContent>
                   </Select>
                   
-                  <Button onClick={() => { resetHabitoForm(); setEditingHabito(null); setShowHabitoModal(true); }}>
+                  <Button onClick={() => { resetHabitoForm(); setEditingHabito(null); setShowHabitoModal(true); }} className="bg-amber-500 hover:bg-amber-600">
                     <Plus className="h-4 w-4 mr-2" />
                     Nuevo Hábito
                   </Button>
@@ -932,10 +1068,10 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           {habitos.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  Progreso por Día
-                </CardTitle>
+<CardTitle className="flex items-center gap-2 text-amber-600">
+                    <BarChart3 className="h-5 w-5" />
+                    Progreso por Día
+                  </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-7 gap-4">
@@ -997,18 +1133,21 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           )}
         </TabsContent>
         
-        {/* Tab de Metas */}
-        <TabsContent value="metas" className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Mis Metas</h2>
-              <p className="text-muted-foreground">Establece y da seguimiento a tus objetivos</p>
+{/* Tab de Metas */}
+          <TabsContent value="metas" className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-green-600 flex items-center gap-2">
+                  <Target className="h-5 w-5" />
+                  Mis Metas y Objetivos
+                </h2>
+                <p className="text-muted-foreground">Establece y da seguimiento a tus objetivos personales</p>
+              </div>
+              <Button onClick={() => { resetMetaForm(); setEditingMeta(null); setShowMetaModal(true); }} className="bg-green-600 hover:bg-green-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Nueva Meta
+              </Button>
             </div>
-            <Button onClick={() => { resetMetaForm(); setEditingMeta(null); setShowMetaModal(true); }}>
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Meta
-            </Button>
-          </div>
           
           {metas.length === 0 ? (
             <Card>
@@ -1218,7 +1357,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       <Dialog open={showMetaModal} onOpenChange={setShowMetaModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingMeta ? "Editar Meta" : "Nueva Meta"}</DialogTitle>
+            <DialogTitle className="text-green-600">{editingMeta ? "Editar Meta" : "Nueva Meta"}</DialogTitle>
             <DialogDescription>
               {editingMeta ? "Modifica los detalles de tu meta" : "Define una nueva meta para alcanzar"}
             </DialogDescription>
@@ -1304,9 +1443,10 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             <Button variant="outline" onClick={() => setShowMetaModal(false)}>
               Cancelar
             </Button>
-            <Button 
+<Button
               onClick={guardarMeta}
               disabled={!metaForm.titulo.trim() || !metaForm.fecha_fin}
+              className="bg-green-600 hover:bg-green-700"
             >
               {editingMeta ? "Guardar cambios" : "Crear meta"}
             </Button>
@@ -1318,7 +1458,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       <Dialog open={showHabitoModal} onOpenChange={setShowHabitoModal}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingHabito ? "Editar Hábito" : "Nuevo Hábito"}</DialogTitle>
+            <DialogTitle className="text-amber-600">{editingHabito ? "Editar Hábito" : "Nuevo Hábito"}</DialogTitle>
             <DialogDescription>
               {editingHabito ? "Modifica los detalles del hábito" : "Crea un nuevo hábito para dar seguimiento"}
             </DialogDescription>
@@ -1408,11 +1548,89 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             <Button variant="outline" onClick={() => setShowHabitoModal(false)}>
               Cancelar
             </Button>
-            <Button 
+<Button
               onClick={guardarHabito}
               disabled={!habitoForm.nombre.trim()}
+              className="bg-amber-500 hover:bg-amber-600"
             >
               {editingHabito ? "Guardar cambios" : "Crear hábito"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Modal de Tarea del Día */}
+      <Dialog open={showTareaModal} onOpenChange={setShowTareaModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600">
+              {editingTarea ? "Editar Tarea" : "Nueva Tarea del Día"}
+            </DialogTitle>
+            <DialogDescription>
+              Agrega una tarea para completar hoy
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="tarea-titulo">Título de la tarea</Label>
+              <Input
+                id="tarea-titulo"
+                value={tareaForm.titulo}
+                onChange={(e) => setTareaForm({ ...tareaForm, titulo: e.target.value })}
+                placeholder="Ej: Revisar correos, Llamar al cliente..."
+              />
+            </div>
+            
+            <div>
+              <Label>Prioridad</Label>
+              <Select value={tareaForm.prioridad} onValueChange={(v) => setTareaForm({ ...tareaForm, prioridad: v })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="baja">Baja</SelectItem>
+                  <SelectItem value="media">Media</SelectItem>
+                  <SelectItem value="alta">Alta</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowTareaModal(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!userId || !tareaForm.titulo.trim()) return
+                const hoy = new Date().toISOString().split("T")[0]
+                
+                if (editingTarea) {
+                  await supabase.from("tareas_meta").update({ 
+                    titulo: tareaForm.titulo, 
+                    prioridad: tareaForm.prioridad 
+                  }).eq("id", editingTarea.id)
+                } else {
+                  await supabase.from("tareas_meta").insert({
+                    perfil_id: perfilId,
+                    user_id: userId,
+                    titulo: tareaForm.titulo,
+                    prioridad: tareaForm.prioridad,
+                    fecha_limite: hoy,
+                    completada: false
+                  })
+                }
+                
+                setShowTareaModal(false)
+                setEditingTarea(null)
+                setTareaForm({ titulo: "", prioridad: "media" })
+                cargarDatos()
+              }}
+              disabled={!tareaForm.titulo.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {editingTarea ? "Guardar cambios" : "Crear tarea"}
             </Button>
           </DialogFooter>
         </DialogContent>
