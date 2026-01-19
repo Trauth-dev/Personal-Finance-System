@@ -1620,29 +1620,48 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             </Button>
             <Button
               onClick={async () => {
-                if (!userId || !tareaForm.titulo.trim()) return
-                const hoy = new Date().toISOString().split("T")[0]
-                
-                if (editingTarea) {
-                  await supabase.from("tareas_meta").update({ 
-                    titulo: tareaForm.titulo, 
-                    prioridad: tareaForm.prioridad 
-                  }).eq("id", editingTarea.id)
-                } else {
-                  await supabase.from("tareas_meta").insert({
-                    perfil_id: perfilId,
-                    user_id: userId,
-                    titulo: tareaForm.titulo,
-                    prioridad: tareaForm.prioridad,
-                    fecha_limite: hoy,
-                    completada: false
-                  })
+                try {
+                  if (!userId || !tareaForm.titulo.trim()) {
+                    console.error("[v0] No se puede crear tarea: falta userId o título")
+                    return
+                  }
+                  const hoy = new Date().toISOString().split("T")[0]
+                  
+                  if (editingTarea) {
+                    const { error } = await supabase.from("tareas_meta").update({ 
+                      titulo: tareaForm.titulo, 
+                      prioridad: tareaForm.prioridad 
+                    }).eq("id", editingTarea.id)
+                    
+                    if (error) {
+                      console.error("[v0] Error actualizando tarea:", error)
+                      throw error
+                    }
+                  } else {
+                    const { data, error } = await supabase.from("tareas_meta").insert({
+                      perfil_id: perfilId,
+                      user_id: userId,
+                      titulo: tareaForm.titulo,
+                      prioridad: tareaForm.prioridad,
+                      fecha_limite: hoy,
+                      completada: false,
+                      meta_id: null
+                    }).select()
+                    
+                    if (error) {
+                      console.error("[v0] Error creando tarea del día:", error)
+                      throw error
+                    }
+                    console.log("[v0] Tarea del día creada exitosamente:", data)
+                  }
+                  
+                  setShowTareaModal(false)
+                  setEditingTarea(null)
+                  setTareaForm({ titulo: "", prioridad: "media" })
+                  cargarDatos()
+                } catch (error) {
+                  console.error("[v0] Error en modal de tarea:", error)
                 }
-                
-                setShowTareaModal(false)
-                setEditingTarea(null)
-                setTareaForm({ titulo: "", prioridad: "media" })
-                cargarDatos()
               }}
               disabled={!tareaForm.titulo.trim()}
               className="bg-blue-600 hover:bg-blue-700"
