@@ -733,17 +733,17 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       {/* Tabs principales */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 bg-muted/50">
-          <TabsTrigger value="tareas" className="flex items-center gap-2 data-[state=active]:bg-blue-600">
-            <CheckCircle2 className="h-4 w-4 text-blue-600 data-[state=active]:text-white" />
-            <span className="text-blue-600 data-[state=active]:text-white font-medium">Tareas del Día</span>
+          <TabsTrigger value="tareas" className="flex items-center gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white group">
+            <CheckCircle2 className="h-4 w-4 text-blue-600 group-data-[state=active]:text-white" />
+            <span className="text-blue-600 group-data-[state=active]:text-white font-medium">Tareas del Día</span>
           </TabsTrigger>
-          <TabsTrigger value="habitos" className="flex items-center gap-2 data-[state=active]:bg-amber-500">
-            <ListTodo className="h-4 w-4 text-amber-600 data-[state=active]:text-white" />
-            <span className="text-amber-600 data-[state=active]:text-white font-medium">Hábitos Diarios</span>
+          <TabsTrigger value="habitos" className="flex items-center gap-2 data-[state=active]:bg-amber-500 data-[state=active]:text-white group">
+            <ListTodo className="h-4 w-4 text-amber-600 group-data-[state=active]:text-white" />
+            <span className="text-amber-600 group-data-[state=active]:text-white font-medium">Hábitos Diarios</span>
           </TabsTrigger>
-          <TabsTrigger value="metas" className="flex items-center gap-2 data-[state=active]:bg-green-600">
-            <Target className="h-4 w-4 text-green-600 data-[state=active]:text-white" />
-            <span className="text-green-600 data-[state=active]:text-white font-medium">Metas y Objetivos</span>
+          <TabsTrigger value="metas" className="flex items-center gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white group">
+            <Target className="h-4 w-4 text-green-600 group-data-[state=active]:text-white" />
+            <span className="text-green-600 group-data-[state=active]:text-white font-medium">Metas y Objetivos</span>
           </TabsTrigger>
         </TabsList>
         
@@ -864,7 +864,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           )}
         </TabsContent>
         
-{/* Tab de Hábitos */}
+        {/* Tab de Hábitos */}
           <TabsContent value="habitos" className="space-y-4">
             {/* Título de sección */}
             <div className="flex items-center justify-between mb-2">
@@ -877,69 +877,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               </div>
             </div>
             
-            {/* Progreso Mensual */}
-            {habitos.length > 0 && (
-              <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-amber-600 flex items-center gap-2 text-base">
-                    <TrendingUp className="h-5 w-5" />
-                    Progreso del Mes - {currentDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {habitos.map(habito => {
-                      const diasDelMes = getDaysInMonth(currentDate)
-                      const completadosMes = diasDelMes.filter(d => 
-                        debeCompletarHabito(habito, d) && isHabitoCompletado(habito.id, formatDate(d))
-                      ).length
-                      const totalMes = diasDelMes.filter(d => debeCompletarHabito(habito, d)).length
-                      const porcentajeMes = totalMes > 0 ? Math.round((completadosMes / totalMes) * 100) : 0
-                      
-                      return (
-                        <div key={habito.id} className="bg-white rounded-lg p-3 border border-amber-100 shadow-sm">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: habito.color }} />
-                            <p className="font-medium text-sm truncate">{habito.nombre}</p>
-                          </div>
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-xs text-muted-foreground">
-                              <span>{completadosMes}/{totalMes} días</span>
-                              <span className="font-bold text-amber-600">{porcentajeMes}%</span>
-                            </div>
-                            <Progress value={porcentajeMes} className="h-1.5" />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  
-                  {/* Resumen general del mes */}
-                  <div className="mt-4 pt-4 border-t border-amber-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Trophy className="h-5 w-5 text-amber-600" />
-                        <span className="font-semibold text-amber-700">Progreso Total del Mes</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl font-bold text-amber-600">
-                          {habitos.length > 0 ? Math.round(habitos.reduce((acc, habito) => {
-                            const diasDelMes = getDaysInMonth(currentDate)
-                            const completadosMes = diasDelMes.filter(d => 
-                              debeCompletarHabito(habito, d) && isHabitoCompletado(habito.id, formatDate(d))
-                            ).length
-                            const totalMes = diasDelMes.filter(d => debeCompletarHabito(habito, d)).length
-                            return acc + (totalMes > 0 ? (completadosMes / totalMes) * 100 : 0)
-                          }, 0) / habitos.length) : 0}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            
-            {/* Controles de navegación */}
+            {/* Controles de navegación y visualización de hábitos */}
             <Card className="border-amber-200">
             <CardContent className="pt-4">
               <div className="flex items-center justify-between mb-4">
@@ -1269,9 +1207,69 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               </CardContent>
             </Card>
           )}
+          
+          {/* Progreso Mensual - Al final */}
+          {habitos.length > 0 && (
+            <Card className="border-amber-200">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-amber-600 flex items-center gap-2 text-base">
+                  <TrendingUp className="h-5 w-5" />
+                  Progreso del Mes - {currentDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {habitos.map(habito => {
+                    const diasDelMes = getDaysInMonth(currentDate)
+                    const completadosMes = diasDelMes.filter(d => 
+                      debeCompletarHabito(habito, d) && isHabitoCompletado(habito.id, formatDate(d))
+                    ).length
+                    const totalMes = diasDelMes.filter(d => debeCompletarHabito(habito, d)).length
+                    const porcentajeMes = totalMes > 0 ? Math.round((completadosMes / totalMes) * 100) : 0
+                    
+                    return (
+                      <div key={habito.id} className="bg-white rounded-lg p-3 border border-amber-100 shadow-sm">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: habito.color }} />
+                          <p className="font-medium text-sm truncate">{habito.nombre}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between text-xs text-muted-foreground">
+                            <span>{completadosMes}/{totalMes} días</span>
+                            <span className="font-bold text-amber-600">{porcentajeMes}%</span>
+                          </div>
+                          <Progress value={porcentajeMes} className="h-1.5" />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                
+                {/* Resumen general del mes */}
+                <div className="mt-4 pt-4 border-t border-amber-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Trophy className="h-5 w-5 text-amber-600" />
+                      <span className="font-semibold text-amber-700">Progreso Total del Mes</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl font-bold text-amber-600">
+                        {habitos.length > 0 ? Math.round(habitos.reduce((acc, habito) => {
+                          const diasDelMes = getDaysInMonth(currentDate)
+                          const completadosMes = diasDelMes.filter(d => 
+                            debeCompletarHabito(habito, d) && isHabitoCompletado(habito.id, formatDate(d))
+                          ).length
+                          const totalMes = diasDelMes.filter(d => debeCompletarHabito(habito, d)).length
+                          return acc + (totalMes > 0 ? (completadosMes / totalMes) * 100 : 0)
+                        }, 0) / habitos.length) : 0}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
-        
-{/* Tab de Metas */}
           <TabsContent value="metas" className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
