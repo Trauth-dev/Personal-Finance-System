@@ -83,7 +83,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [habitos, setHabitos] = useState<Habito[]>([])
   const [registrosHabitos, setRegistrosHabitos] = useState<RegistroHabito[]>([])
   const [tareasMetas, setTareasMetas] = useState<TareaMeta[]>([])
-  const [tareasDelDia, setTareasDelDia] = useState<{id: string, titulo: string, completada: boolean, prioridad: string}[]>([])
+  const [tareasDelDia, setTareasDelDia] = useState<{id: string, titulo: string, completada: boolean, prioridad: string, fecha_limite: string}[]>([])
+  const [tareasPorFecha, setTareasPorFecha] = useState<Record<string, {id: string, titulo: string, completada: boolean, prioridad: string, fecha_limite: string}[]>>({})
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("tareas")
   const [userId, setUserId] = useState<string | null>(null)
@@ -139,21 +140,48 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) setUserId(user.id)
       
-      const hoy = new Date().toISOString().split("T")[0]
+      const hoy = new Date()
+      const hace5Dias = new Date(hoy)
+      hace5Dias.setDate(hoy.getDate() - 5)
+      const hace6Dias = new Date(hoy)
+      hace6Dias.setDate(hoy.getDate() - 6)
       
-      const [metasRes, habitosRes, registrosRes, tareasMetaRes, tareasDelDiaRes] = await Promise.all([
+      const hoyStr = hoy.toISOString().split("T")[0]
+      const hace5DiasStr = hace5Dias.toISOString().split("T")[0]
+      const hace6DiasStr = hace6Dias.toISOString().split("T")[0]
+      
+      // Eliminar tareas de más de 6 días
+      await supabase.from("tareas_meta")
+        .delete()
+        .eq("perfil_id", perfilId)
+        .is("meta_id", null)
+        .lt("fecha_limite", hace6DiasStr)
+      
+      const [metasRes, habitosRes, registrosRes, tareasMetaRes, tareasUltimos5DiasRes] = await Promise.all([
         supabase.from("metas").select("*").eq("perfil_id", perfilId).order("created_at", { ascending: false }),
         supabase.from("habitos").select("*").eq("perfil_id", perfilId).eq("activo", true).order("created_at", { ascending: true }),
         supabase.from("registro_habitos").select("*").gte("fecha", getStartOfMonth(currentDate)).lte("fecha", getEndOfMonth(currentDate)),
         supabase.from("tareas_meta").select("*").order("orden", { ascending: true }),
-        supabase.from("tareas_meta").select("*").eq("perfil_id", perfilId).eq("fecha_limite", hoy).order("orden", { ascending: true })
+        supabase.from("tareas_meta").select("*").eq("perfil_id", perfilId).is("meta_id", null).gte("fecha_limite", hace5DiasStr).lte("fecha_limite", hoyStr).order("fecha_limite", { ascending: false })
       ])
       
       if (metasRes.data) setMetas(metasRes.data)
       if (habitosRes.data) setHabitos(habitosRes.data)
       if (registrosRes.data) setRegistrosHabitos(registrosRes.data)
       if (tareasMetaRes.data) setTareasMetas(tareasMetaRes.data)
-      if (tareasDelDiaRes.data) setTareasDelDia(tareasDelDiaRes.data)
+      
+      // Agrupar tareas por fecha
+      if (tareasUltimos5DiasRes.data) {
+        const agrupadasPorFecha: Record<string, typeof tareasUltimos5DiasRes.data> = {}
+        for (const tarea of tareasUltimos5DiasRes.data) {
+          if (!agrupadasPorFecha[tarea.fecha_limite]) {
+            agrupadasPorFecha[tarea.fecha_limite] = []
+          }
+          agrupadasPorFecha[tarea.fecha_limite].push(tarea)
+        }
+        setTareasPorFecha(agrupadasPorFecha)
+        setTareasDelDia(tareasUltimos5DiasRes.data.filter(t => t.fecha_limite === hoyStr))
+      }
     } catch (error) {
       console.error("Error cargando datos:", error)
     }
@@ -208,6 +236,20 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     }
     
     return weeks
+  }
+  
+  function getDaysInMonth(date: Date): Date[] {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const days: Date[] = []
+    
+    for (let d = new Date(firstDay); d <= lastDay; d.setDate(d.getDate() + 1)) {
+      days.push(new Date(d))
+    }
+    
+    return days
   }
   
   function formatDate(date: Date): string {
@@ -691,118 +733,135 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       {/* Tabs principales */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="grid w-full grid-cols-3 bg-muted/50">
-          <TabsTrigger value="tareas" className="flex items-center gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white">
-            <CheckCircle2 className="h-4 w-4" />
-            <span className="text-blue-600 data-[state=active]:text-white">Tareas del Día</span>
+          <TabsTrigger value="tareas" className="flex items-center gap-2 data-[state=active]:bg-blue-600">
+            <CheckCircle2 className="h-4 w-4 text-blue-600 data-[state=active]:text-white" />
+            <span className="text-blue-600 data-[state=active]:text-white font-medium">Tareas del Día</span>
           </TabsTrigger>
-          <TabsTrigger value="habitos" className="flex items-center gap-2 data-[state=active]:bg-amber-500 data-[state=active]:text-white">
-            <ListTodo className="h-4 w-4" />
-            <span className="text-amber-600 data-[state=active]:text-white">Hábitos Diarios</span>
+          <TabsTrigger value="habitos" className="flex items-center gap-2 data-[state=active]:bg-amber-500">
+            <ListTodo className="h-4 w-4 text-amber-600 data-[state=active]:text-white" />
+            <span className="text-amber-600 data-[state=active]:text-white font-medium">Hábitos Diarios</span>
           </TabsTrigger>
-          <TabsTrigger value="metas" className="flex items-center gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white">
-            <Target className="h-4 w-4" />
-            <span className="text-green-600 data-[state=active]:text-white">Metas y Objetivos</span>
+          <TabsTrigger value="metas" className="flex items-center gap-2 data-[state=active]:bg-green-600">
+            <Target className="h-4 w-4 text-green-600 data-[state=active]:text-white" />
+            <span className="text-green-600 data-[state=active]:text-white font-medium">Metas y Objetivos</span>
           </TabsTrigger>
         </TabsList>
         
         {/* Tab de Tareas del Día */}
         <TabsContent value="tareas" className="space-y-4">
-          <Card className="border-blue-200">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-blue-600 flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5" />
-                    Tareas del Día - {new Date().toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-                  </CardTitle>
-                  <CardDescription>Organiza y completa tus tareas diarias</CardDescription>
-                </div>
-                <Button onClick={() => { setTareaForm({ titulo: "", prioridad: "media" }); setEditingTarea(null); setShowTareaModal(true); }} className="bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nueva Tarea
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {tareasDelDia.length === 0 ? (
-                <div className="text-center py-12">
+          {/* Botón para nueva tarea */}
+          <div className="flex justify-end">
+            <Button onClick={() => { setTareaForm({ titulo: "", prioridad: "media" }); setEditingTarea(null); setShowTareaModal(true); }} className="bg-blue-600 hover:bg-blue-700">
+              <Plus className="h-4 w-4 mr-2" />
+              Nueva Tarea
+            </Button>
+          </div>
+          
+          {Object.keys(tareasPorFecha).length === 0 ? (
+            <Card className="border-blue-200">
+              <CardContent className="py-12">
+                <div className="text-center">
                   <CheckCircle2 className="h-16 w-16 mx-auto text-blue-200 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No tienes tareas para hoy</h3>
+                  <h3 className="text-lg font-semibold mb-2">No tienes tareas registradas</h3>
                   <p className="text-muted-foreground mb-4">Agrega tareas para organizar tu día</p>
                   <Button onClick={() => { setTareaForm({ titulo: "", prioridad: "media" }); setShowTareaModal(true); }} className="bg-blue-600 hover:bg-blue-700">
                     <Plus className="h-4 w-4 mr-2" />
                     Agregar primera tarea
                   </Button>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {tareasDelDia.map((tarea) => (
-                    <div 
-                      key={tarea.id} 
-                      className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
-                        tarea.completada ? "bg-green-50 border-green-200" : "bg-card hover:bg-muted/50"
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Checkbox 
-                          checked={tarea.completada} 
-                          onCheckedChange={async (checked) => {
-                            await supabase.from("tareas_meta").update({ completada: checked }).eq("id", tarea.id)
-                            cargarDatos()
-                          }}
-                          className="h-5 w-5 rounded-full"
-                        />
-                        <div>
-                          <p className={`font-medium ${tarea.completada ? "line-through text-muted-foreground" : ""}`}>
-                            {tarea.titulo}
-                          </p>
-                          <Badge variant={tarea.prioridad === "alta" ? "destructive" : tarea.prioridad === "media" ? "default" : "secondary"} className="text-xs">
-                            {tarea.prioridad}
-                          </Badge>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {Object.keys(tareasPorFecha).sort((a, b) => b.localeCompare(a)).map((fecha) => {
+                const tareas = tareasPorFecha[fecha]
+                const fechaObj = new Date(fecha + "T12:00:00")
+                const esHoy = fecha === new Date().toISOString().split("T")[0]
+                
+                return (
+                  <Card key={fecha} className={`border-blue-200 ${esHoy ? "ring-2 ring-blue-400" : ""}`}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-blue-600 flex items-center gap-2">
+                        <Calendar className="h-5 w-5" />
+                        {esHoy ? "Hoy - " : ""}{fechaObj.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                        {esHoy && <Badge variant="default" className="ml-2 bg-blue-600">Hoy</Badge>}
+                      </CardTitle>
+                      <CardDescription>
+                        {tareas.filter(t => t.completada).length} de {tareas.length} completadas
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {tareas.map((tarea) => (
+                          <div 
+                            key={tarea.id} 
+                            className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
+                              tarea.completada ? "bg-green-50 border-green-200" : "bg-card hover:bg-muted/50"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <Checkbox 
+                                checked={tarea.completada} 
+                                onCheckedChange={async (checked) => {
+                                  await supabase.from("tareas_meta").update({ completada: checked }).eq("id", tarea.id)
+                                  cargarDatos()
+                                }}
+                                className="h-5 w-5 rounded-full"
+                              />
+                              <div>
+                                <p className={`font-medium ${tarea.completada ? "line-through text-muted-foreground" : ""}`}>
+                                  {tarea.titulo}
+                                </p>
+                                <Badge variant={tarea.prioridad === "alta" ? "destructive" : tarea.prioridad === "media" ? "default" : "secondary"} className="text-xs">
+                                  {tarea.prioridad}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => { setEditingTarea(tarea); setTareaForm({ titulo: tarea.titulo, prioridad: tarea.prioridad }); setShowTareaModal(true); }}
+                                className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                title="Editar tarea"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                onClick={() => setDeletingTarea(tarea.id)}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                title="Eliminar tarea"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        {/* Progreso del día */}
+                        <div className="mt-4 pt-4 border-t flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <span className="text-sm text-muted-foreground">
+                              Progreso del día
+                            </span>
+                            <Progress 
+                              value={(tareas.filter(t => t.completada).length / tareas.length) * 100} 
+                              className="w-32 h-2" 
+                            />
+                          </div>
+                          <span className="text-lg font-bold text-blue-600">
+                            {Math.round((tareas.filter(t => t.completada).length / tareas.length) * 100)}%
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => { setEditingTarea(tarea); setTareaForm({ titulo: tarea.titulo, prioridad: tarea.prioridad }); setShowTareaModal(true); }}
-                          className="text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                          title="Editar tarea"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => setDeletingTarea(tarea.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          title="Eliminar tarea"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                  
-                  {/* Resumen */}
-                  <div className="mt-4 pt-4 border-t flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <span className="text-sm text-muted-foreground">
-                        {tareasDelDia.filter(t => t.completada).length} de {tareasDelDia.length} completadas
-                      </span>
-                      <Progress 
-                        value={(tareasDelDia.filter(t => t.completada).length / tareasDelDia.length) * 100} 
-                        className="w-32 h-2" 
-                      />
-                    </div>
-                    <span className="text-lg font-bold text-blue-600">
-                      {Math.round((tareasDelDia.filter(t => t.completada).length / tareasDelDia.length) * 100)}%
-                    </span>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
         </TabsContent>
         
 {/* Tab de Hábitos */}
@@ -817,6 +876,68 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                 <p className="text-muted-foreground">Construye hábitos positivos con seguimiento diario</p>
               </div>
             </div>
+            
+            {/* Progreso Mensual */}
+            {habitos.length > 0 && (
+              <Card className="border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-amber-600 flex items-center gap-2 text-base">
+                    <TrendingUp className="h-5 w-5" />
+                    Progreso del Mes - {currentDate.toLocaleDateString("es-ES", { month: "long", year: "numeric" })}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {habitos.map(habito => {
+                      const diasDelMes = getDaysInMonth(currentDate)
+                      const completadosMes = diasDelMes.filter(d => 
+                        debeCompletarHabito(habito, d) && isHabitoCompletado(habito.id, formatDate(d))
+                      ).length
+                      const totalMes = diasDelMes.filter(d => debeCompletarHabito(habito, d)).length
+                      const porcentajeMes = totalMes > 0 ? Math.round((completadosMes / totalMes) * 100) : 0
+                      
+                      return (
+                        <div key={habito.id} className="bg-white rounded-lg p-3 border border-amber-100 shadow-sm">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: habito.color }} />
+                            <p className="font-medium text-sm truncate">{habito.nombre}</p>
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-xs text-muted-foreground">
+                              <span>{completadosMes}/{totalMes} días</span>
+                              <span className="font-bold text-amber-600">{porcentajeMes}%</span>
+                            </div>
+                            <Progress value={porcentajeMes} className="h-1.5" />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  
+                  {/* Resumen general del mes */}
+                  <div className="mt-4 pt-4 border-t border-amber-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Trophy className="h-5 w-5 text-amber-600" />
+                        <span className="font-semibold text-amber-700">Progreso Total del Mes</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl font-bold text-amber-600">
+                          {habitos.length > 0 ? Math.round(habitos.reduce((acc, habito) => {
+                            const diasDelMes = getDaysInMonth(currentDate)
+                            const completadosMes = diasDelMes.filter(d => 
+                              debeCompletarHabito(habito, d) && isHabitoCompletado(habito.id, formatDate(d))
+                            ).length
+                            const totalMes = diasDelMes.filter(d => debeCompletarHabito(habito, d)).length
+                            return acc + (totalMes > 0 ? (completadosMes / totalMes) * 100 : 0)
+                          }, 0) / habitos.length) : 0}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             
             {/* Controles de navegación */}
             <Card className="border-amber-200">
