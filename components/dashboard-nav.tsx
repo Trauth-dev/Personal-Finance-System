@@ -41,11 +41,12 @@ const navItemsPersonal = [
     href: "/dashboard/personal",
     icon: LayoutDashboard,
   },
-  {
-    title: "Dashboard Secundario",
-    href: "/dashboard/personal/resumen",
-    icon: Activity,
-  },
+  // Dashboard Secundario - Oculto temporalmente
+  // {
+  //   title: "Dashboard Secundario",
+  //   href: "/dashboard/personal/resumen",
+  //   icon: Activity,
+  // },
   {
     title: "Dashboard Terciario",
     href: "/dashboard/personal/terciario",
@@ -56,16 +57,18 @@ const navItemsPersonal = [
     href: "/dashboard/carga",
     icon: PlusCircle,
   },
-  {
-    title: "Presupuesto Mensual",
-    href: "/dashboard/personal/presupuesto",
-    icon: Calculator,
-  },
-  {
-    title: "Patrimonio Neto",
-    href: "/dashboard/personal/patrimonio",
-    icon: Wallet,
-  },
+  // Presupuesto Mensual - Oculto temporalmente
+  // {
+  //   title: "Presupuesto Mensual",
+  //   href: "/dashboard/personal/presupuesto",
+  //   icon: Calculator,
+  // },
+  // Patrimonio Neto - Oculto temporalmente
+  // {
+  //   title: "Patrimonio Neto",
+  //   href: "/dashboard/personal/patrimonio",
+  //   icon: Wallet,
+  // },
   {
     title: "Cajas de Ahorro",
     href: "/dashboard/personal/cajas-ahorro",
@@ -86,16 +89,18 @@ const navItemsPersonal = [
     href: "/dashboard/personal/analisis",
     icon: BarChart3,
   },
-  {
-    title: "Flujo de Caja",
-    href: "/dashboard/personal/flujo",
-    icon: TrendingUp,
-  },
-  {
-    title: "Categorías",
-    href: "/dashboard/personal/categorias",
-    icon: PieChart,
-  },
+  // Flujo de Caja - Oculto temporalmente
+  // {
+  //   title: "Flujo de Caja",
+  //   href: "/dashboard/personal/flujo",
+  //   icon: TrendingUp,
+  // },
+  // Categorías - Oculto temporalmente
+  // {
+  //   title: "Categorías",
+  //   href: "/dashboard/personal/categorias",
+  //   icon: PieChart,
+  // },
   {
     title: "Metas y Objetivos",
     href: "/dashboard/personal/metas",

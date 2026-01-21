@@ -858,9 +858,10 @@ export function EgresoForm() {
                     {deudas.map((deuda) => {
                       const Icon = getDeudaIcon(deuda.tipo_deuda)
                       const isSelected = selectedDeuda === deuda.id
+                      const esTarjeta = deuda.tipo_deuda === "tarjeta_credito"
+                      // Para ambos casos: mostrar saldo pendiente (total - pagado)
                       const pendiente = Number(deuda.monto_total) - Number(deuda.monto_pagado)
                       const porcentaje = (Number(deuda.monto_pagado) / Number(deuda.monto_total)) * 100
-                      const esTarjeta = deuda.tipo_deuda === "tarjeta_credito"
 
                       return (
                         <button
@@ -921,7 +922,9 @@ export function EgresoForm() {
                             </div>
 
                             <div className="text-right shrink-0">
-                              <p className="text-lg font-bold text-red-400">{formatGuaranies(pendiente)}</p>
+                              <p className="text-lg font-bold text-red-400">
+                                {formatGuaranies(pendiente)}
+                              </p>
                               <p className="text-[10px] text-muted-foreground">pendiente</p>
                               {deuda.cuotas_totales && (
                                 <p className="text-xs text-muted-foreground mt-1 bg-background/50 px-2 py-0.5 rounded-full">

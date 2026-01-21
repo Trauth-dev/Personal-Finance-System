@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -375,20 +375,20 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
 
     return (
       <Card className="border-2 hover:shadow-lg transition-all">
-        <CardHeader className="pb-3">
-          <div className="flex items-start justify-between">
+        <CardHeader className="pb-3 px-3 sm:px-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="flex items-start gap-3">
               <div
-                className={`p-3 rounded-full ${deuda.tipo_deuda === "tarjeta_credito" ? "bg-purple-500/20" : "bg-blue-500/20"}`}
+                className={`p-2 sm:p-3 rounded-full flex-shrink-0 ${deuda.tipo_deuda === "tarjeta_credito" ? "bg-purple-500/20" : "bg-blue-500/20"}`}
               >
                 <Icon
-                  className={`w-6 h-6 ${deuda.tipo_deuda === "tarjeta_credito" ? "text-purple-400" : "text-blue-400"}`}
+                  className={`w-5 h-5 sm:w-6 sm:h-6 ${deuda.tipo_deuda === "tarjeta_credito" ? "text-purple-400" : "text-blue-400"}`}
                 />
               </div>
-              <div>
-                <CardTitle className="text-lg">{deuda.nombre}</CardTitle>
-                <p className="text-sm text-muted-foreground mt-1">{deuda.acreedor}</p>
-                <div className="flex items-center gap-2 mt-2">
+              <div className="min-w-0 flex-1">
+                <CardTitle className="text-base sm:text-lg truncate">{deuda.nombre}</CardTitle>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">{deuda.acreedor}</p>
+                <div className="flex flex-wrap items-center gap-2 mt-2">
                   <span
                     className={`text-xs px-2 py-0.5 rounded-full ${deuda.tipo_deuda === "tarjeta_credito" ? "bg-purple-500/20 text-purple-300" : "bg-blue-500/20 text-blue-300"}`}
                   >
@@ -402,7 +402,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center sm:flex-col sm:items-end gap-2 ml-auto">
               <div className={`w-3 h-3 rounded-full ${getPrioridadColor(deuda.prioridad)}`} />
               <span className={`text-xs px-2 py-1 rounded-full font-medium ${getEstadoColor(deuda.estado)}`}>
                 {deuda.estado}
@@ -410,27 +410,27 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-3 sm:px-6">
           <div className="space-y-2">
-            <div className="flex justify-between text-sm">
+            <div className="flex justify-between text-xs sm:text-sm">
               <span className="text-muted-foreground">Progreso de pago</span>
               <span className="font-semibold">{porcentaje.toFixed(1)}%</span>
             </div>
             <Progress value={porcentaje} className="h-2" />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="p-3 rounded-lg bg-muted/30">
+          <div className="grid grid-cols-2 gap-2 sm:gap-4">
+            <div className="p-2 sm:p-3 rounded-lg bg-muted/30">
               <p className="text-xs text-muted-foreground">
                 {deuda.tipo_deuda === "tarjeta_credito" ? "Saldo Utilizado" : "Monto Total"}
               </p>
-              <p className="text-lg font-bold">{formatGuaranies(montoTotal)}</p>
+              <p className="text-sm sm:text-lg font-bold">{formatGuaranies(montoTotal)}</p>
             </div>
-            <div className={`p-3 rounded-lg ${deuda.tipo_deuda === "tarjeta_credito" ? "bg-green-500/10" : "bg-red-500/10"}`}>
+            <div className={`p-2 sm:p-3 rounded-lg ${deuda.tipo_deuda === "tarjeta_credito" ? "bg-green-500/10" : "bg-red-500/10"}`}>
               <p className="text-xs text-muted-foreground">
                 {deuda.tipo_deuda === "tarjeta_credito" ? "Crédito Disponible" : "Saldo Pendiente"}
               </p>
-              <p className={`text-lg font-bold ${deuda.tipo_deuda === "tarjeta_credito" ? "text-green-400" : "text-red-400"}`}>
+              <p className={`text-sm sm:text-lg font-bold ${deuda.tipo_deuda === "tarjeta_credito" ? "text-green-400" : "text-red-400"}`}>
                 {formatGuaranies(deuda.tipo_deuda === "tarjeta_credito" ? creditoDisponible : pendiente)}
               </p>
             </div>
@@ -616,13 +616,17 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
             inputMode="numeric"
             value={formData.monto_total}
             onChange={(e) => {
-              const inputValue = e.target.value
-              const raw = inputValue.replace(/[^\d]/g, "")
-              setFormData({ ...formData, monto_total: raw ? formatNumberWithSeparators(raw) : "" })
+              const value = e.target.value.replace(/[^0-9]/g, "")
+              setFormData((prev) => ({ ...prev, monto_total: value }))
             }}
-            placeholder="Ej: 12.000.000"
+            placeholder="12000000"
             required
           />
+          {formData.monto_total && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {formatGuaranies(Number(formData.monto_total))}
+            </p>
+          )}
         </div>
 
         <div>
@@ -658,13 +662,17 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                 inputMode="numeric"
                 value={formData.monto_cuota}
                 onChange={(e) => {
-                  const inputValue = e.target.value
-                  const raw = inputValue.replace(/[^\d]/g, "")
-                  setFormData({ ...formData, monto_cuota: raw ? formatNumberWithSeparators(raw) : "" })
+                  const value = e.target.value.replace(/[^0-9]/g, "")
+                  setFormData((prev) => ({ ...prev, monto_cuota: value }))
                 }}
-                placeholder="Ej: 500.000"
+                placeholder="500000"
                 required
               />
+              {formData.monto_cuota && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formatGuaranies(Number(formData.monto_cuota))}
+                </p>
+              )}
             </div>
 
             <div>
@@ -689,12 +697,16 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                 inputMode="numeric"
                 value={formData.limite_credito}
                 onChange={(e) => {
-                  const inputValue = e.target.value
-                  const raw = inputValue.replace(/[^\d]/g, "")
-                  setFormData({ ...formData, limite_credito: raw ? formatNumberWithSeparators(raw) : "" })
+                  const value = e.target.value.replace(/[^0-9]/g, "")
+                  setFormData((prev) => ({ ...prev, limite_credito: value }))
                 }}
-                placeholder="Ej: 10.000.000"
+                placeholder="10000000"
               />
+              {formData.limite_credito && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formatGuaranies(Number(formData.limite_credito))}
+                </p>
+              )}
             </div>
 
             <div>

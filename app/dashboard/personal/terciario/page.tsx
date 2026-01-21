@@ -162,8 +162,8 @@ export default async function DashboardTerciarioPage({
       <DashboardHeader title="Dashboard Terciario" description="Análisis detallado del periodo" />
 
       <DashboardTerciarioClient initialMonth={currentMonthValue}>
-        <div className="p-4 md:p-6">
-          <div className="mb-6 space-y-6">
+        <div className="p-3 sm:p-4 md:p-6">
+          <div className="mb-4 sm:mb-6 space-y-4 sm:space-y-6">
             <PresupuestoDetalladoTerciario
               perfilId={perfilActivo.id}
               fechaInicio={primerDiaMes}
@@ -173,9 +173,9 @@ export default async function DashboardTerciarioPage({
             <HistoricoPresupuestos perfilId={perfilActivo.id} />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 md:gap-6">
             {/* Sidebar Izquierdo - Filtros y Resumen */}
-            <div className="lg:col-span-3 space-y-4">
+            <div className="lg:col-span-3 space-y-3 sm:space-y-4">
               {/* Filtro de Período */}
               <Card className="bg-white border-2 border-blue-200 shadow-lg overflow-hidden">
                 <CardHeader className="pb-3 bg-gradient-to-r from-blue-500 to-cyan-500 -mx-6 -mt-6 px-6 pt-6">
@@ -255,20 +255,20 @@ export default async function DashboardTerciarioPage({
             </div>
 
             {/* Contenido Principal */}
-            <div className="lg:col-span-9 space-y-4 md:space-y-6">
+            <div className="lg:col-span-9 space-y-3 sm:space-y-4 md:space-y-6">
               {/* Métricas Principales - Top */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                 <Card className="bg-white border-2 border-green-200 shadow-lg hover:shadow-xl transition-all">
-                  <CardHeader className="pb-3 bg-gradient-to-br from-green-50 to-emerald-50">
+                  <CardHeader className="pb-2 sm:pb-3 bg-gradient-to-br from-green-50 to-emerald-50 px-3 sm:px-6">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm text-slate-600 font-semibold">Total Ingresos</CardTitle>
-                      <div className="w-12 h-12 rounded-full bg-green-500 flex items-center justify-center shadow-lg">
-                        <TrendingUp className="w-6 h-6 text-white" />
+                      <CardTitle className="text-xs sm:text-sm text-slate-600 font-semibold">Total Ingresos</CardTitle>
+                      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-green-500 flex items-center justify-center shadow-lg">
+                        <TrendingUp className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl md:text-4xl font-bold text-green-600 mb-2">
+                  <CardContent className="px-3 sm:px-6">
+                    <div className="text-xl sm:text-3xl md:text-4xl font-bold text-green-600 mb-2">
                       {formatGuaranies(totalIngresos)}
                     </div>
                     <div className="flex items-center gap-2">
@@ -281,16 +281,16 @@ export default async function DashboardTerciarioPage({
                 </Card>
 
                 <Card className="bg-white border-2 border-red-200 shadow-lg hover:shadow-xl transition-all">
-                  <CardHeader className="pb-3 bg-gradient-to-br from-red-50 to-rose-50">
+                  <CardHeader className="pb-2 sm:pb-3 bg-gradient-to-br from-red-50 to-rose-50 px-3 sm:px-6">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm text-slate-600 font-semibold">Total Egresos</CardTitle>
-                      <div className="w-12 h-12 rounded-full bg-red-500 flex items-center justify-center shadow-lg">
-                        <TrendingDown className="w-6 h-6 text-white" />
+                      <CardTitle className="text-xs sm:text-sm text-slate-600 font-semibold">Total Egresos</CardTitle>
+                      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-red-500 flex items-center justify-center shadow-lg">
+                        <TrendingDown className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="text-3xl md:text-4xl font-bold text-red-600 mb-2">
+                  <CardContent className="px-3 sm:px-6">
+                    <div className="text-xl sm:text-3xl md:text-4xl font-bold text-red-600 mb-2">
                       {formatGuaranies(totalEgresos)}
                     </div>
                     <div className="flex items-center gap-2">
@@ -306,17 +306,17 @@ export default async function DashboardTerciarioPage({
                 </Card>
 
                 <Card className="bg-white border-2 border-blue-200 shadow-lg hover:shadow-xl transition-all">
-                  <CardHeader className="pb-3 bg-gradient-to-br from-blue-50 to-cyan-50">
+                  <CardHeader className="pb-2 sm:pb-3 bg-gradient-to-br from-blue-50 to-cyan-50 px-3 sm:px-6">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm text-slate-600 font-semibold">Balance Neto</CardTitle>
-                      <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center shadow-lg">
-                        <Wallet className="w-6 h-6 text-white" />
+                      <CardTitle className="text-xs sm:text-sm text-slate-600 font-semibold">Balance Neto</CardTitle>
+                      <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-blue-500 flex items-center justify-center shadow-lg">
+                        <Wallet className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-3 sm:px-6">
                     <div
-                      className={`text-3xl md:text-4xl font-bold mb-2 ${balance >= 0 ? "text-green-600" : "text-red-600"}`}
+                      className={`text-xl sm:text-3xl md:text-4xl font-bold mb-2 ${balance >= 0 ? "text-green-600" : "text-red-600"}`}
                     >
                       {formatGuaranies(balance)}
                     </div>
@@ -329,7 +329,7 @@ export default async function DashboardTerciarioPage({
               </div>
 
               {/* Sección de Top 5 Gastos */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {/* Top 5 Gastos del Mes */}
                 <Card className="bg-white border-2 border-purple-200 shadow-lg overflow-hidden">
                   <CardHeader className="pb-3 bg-gradient-to-r from-purple-500 to-pink-500 -mx-6 -mt-6 px-6 pt-6">

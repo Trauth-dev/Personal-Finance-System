@@ -670,60 +670,60 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   }
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header con estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4">
         <Card className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-green-500/30">
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Hábitos Activos</p>
-                <p className="text-3xl font-bold text-green-500">{estadisticas.totalHabitos}</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Hábitos Activos</p>
+                <p className="text-2xl sm:text-3xl font-bold text-green-500">{estadisticas.totalHabitos}</p>
               </div>
-              <div className="p-3 bg-green-500/20 rounded-full">
-                <ListTodo className="h-6 w-6 text-green-500" />
+              <div className="p-2 sm:p-3 bg-green-500/20 rounded-full">
+                <ListTodo className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" />
               </div>
             </div>
           </CardContent>
         </Card>
         
         <Card className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 border-blue-500/30">
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Completados Hoy</p>
-                <p className="text-3xl font-bold text-blue-500">{estadisticas.completadosHoy}</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Completados Hoy</p>
+                <p className="text-2xl sm:text-3xl font-bold text-blue-500">{estadisticas.completadosHoy}</p>
               </div>
-              <div className="p-3 bg-blue-500/20 rounded-full">
-                <CheckCircle2 className="h-6 w-6 text-blue-500" />
+              <div className="p-2 sm:p-3 bg-blue-500/20 rounded-full">
+                <CheckCircle2 className="h-5 w-5 sm:h-6 sm:w-6 text-blue-500" />
               </div>
             </div>
           </CardContent>
         </Card>
         
         <Card className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border-purple-500/30">
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Progreso Semanal</p>
-                <p className="text-3xl font-bold text-purple-500">{estadisticas.porcentajeSemanal}%</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Progreso Semanal</p>
+                <p className="text-2xl sm:text-3xl font-bold text-purple-500">{estadisticas.porcentajeSemanal}%</p>
               </div>
-              <div className="p-3 bg-purple-500/20 rounded-full">
-                <TrendingUp className="h-6 w-6 text-purple-500" />
+              <div className="p-2 sm:p-3 bg-purple-500/20 rounded-full">
+                <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-purple-500" />
               </div>
             </div>
           </CardContent>
         </Card>
         
         <Card className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border-orange-500/30">
-          <CardContent className="pt-6">
+          <CardContent className="pt-4 sm:pt-6 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-muted-foreground">Racha Actual</p>
-                <p className="text-3xl font-bold text-orange-500">{estadisticas.rachaActual} días</p>
+                <p className="text-xs sm:text-sm font-medium text-muted-foreground">Racha Actual</p>
+                <p className="text-2xl sm:text-3xl font-bold text-orange-500">{estadisticas.rachaActual} <span className="text-base sm:text-xl">días</span></p>
               </div>
-              <div className="p-3 bg-orange-500/20 rounded-full">
-                <Flame className="h-6 w-6 text-orange-500" />
+              <div className="p-2 sm:p-3 bg-orange-500/20 rounded-full">
+                <Flame className="h-5 w-5 sm:h-6 sm:w-6 text-orange-500" />
               </div>
             </div>
           </CardContent>
@@ -732,18 +732,21 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       
       {/* Tabs principales */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 bg-muted/50">
-          <TabsTrigger value="tareas" className="flex items-center gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white group">
+        <TabsList className="grid w-full grid-cols-3 bg-muted/50 h-auto p-1">
+          <TabsTrigger value="tareas" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
             <CheckCircle2 className="h-4 w-4 text-blue-600 group-data-[state=active]:text-white" />
-            <span className="text-blue-600 group-data-[state=active]:text-white font-medium">Tareas del Día</span>
+            <span className="text-blue-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Tareas del Día</span>
+            <span className="text-blue-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Tareas</span>
           </TabsTrigger>
-          <TabsTrigger value="habitos" className="flex items-center gap-2 data-[state=active]:bg-amber-500 data-[state=active]:text-white group">
+          <TabsTrigger value="habitos" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-amber-500 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
             <ListTodo className="h-4 w-4 text-amber-600 group-data-[state=active]:text-white" />
-            <span className="text-amber-600 group-data-[state=active]:text-white font-medium">Hábitos Diarios</span>
+            <span className="text-amber-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Hábitos Diarios</span>
+            <span className="text-amber-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Hábitos</span>
           </TabsTrigger>
-          <TabsTrigger value="metas" className="flex items-center gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white group">
+          <TabsTrigger value="metas" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
             <Target className="h-4 w-4 text-green-600 group-data-[state=active]:text-white" />
-            <span className="text-green-600 group-data-[state=active]:text-white font-medium">Metas y Objetivos</span>
+            <span className="text-green-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Metas y Objetivos</span>
+            <span className="text-green-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Metas</span>
           </TabsTrigger>
         </TabsList>
         

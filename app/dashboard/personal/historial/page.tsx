@@ -211,19 +211,20 @@ export default function PersonalHistorialPage() {
     <div>
       <DashboardHeader title="Historial Personal" description="Registro completo de tus movimientos personales" />
 
-      <div className="p-6">
+      <div className="p-4 md:p-6">
         <div className="flex justify-end mb-4">
-          <Button onClick={handleExportCSV} className="gap-2">
+          <Button onClick={handleExportCSV} className="gap-2 text-sm">
             <Download className="w-4 h-4" />
-            Exportar a CSV
+            <span className="hidden sm:inline">Exportar a CSV</span>
+            <span className="sm:hidden">CSV</span>
           </Button>
         </div>
 
         <Tabs defaultValue="todos" className="w-full">
-          <TabsList className="glass-effect">
-            <TabsTrigger value="todos">Todos</TabsTrigger>
-            <TabsTrigger value="ingresos">Ingresos</TabsTrigger>
-            <TabsTrigger value="egresos">Egresos</TabsTrigger>
+          <TabsList className="glass-effect w-full grid grid-cols-3">
+            <TabsTrigger value="todos" className="text-xs sm:text-sm">Todos</TabsTrigger>
+            <TabsTrigger value="ingresos" className="text-xs sm:text-sm">Ingresos</TabsTrigger>
+            <TabsTrigger value="egresos" className="text-xs sm:text-sm">Egresos</TabsTrigger>
           </TabsList>
 
           <div className="mt-6">
@@ -245,11 +246,11 @@ export default function PersonalHistorialPage() {
                             key={item.id}
                             className="glass-effect border-border/50 hover:glow-effect transition-all"
                           >
-                            <CardContent className="p-6">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-4">
+                            <CardContent className="p-3 sm:p-6">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                <div className="flex items-center gap-3 sm:gap-4">
                                   <div
-                                    className={`w-12 h-12 rounded-lg flex items-center justify-center`}
+                                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                                     style={{
                                       backgroundColor: isIngreso
                                         ? "rgba(34, 197, 94, 0.2)"
@@ -257,23 +258,24 @@ export default function PersonalHistorialPage() {
                                     }}
                                   >
                                     {isIngreso ? (
-                                      <TrendingUp className="w-6 h-6 text-green-600" />
+                                      <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                                     ) : (
                                       <TrendingDown
-                                        className="w-6 h-6"
+                                        className="w-5 h-5 sm:w-6 sm:h-6"
                                         style={{ color: egreso?.tipos_categoria_egreso?.color || "#ef4444" }}
                                       />
                                     )}
                                   </div>
-                                  <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                      <h3 className="font-semibold">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                                      <h3 className="font-semibold text-sm sm:text-base truncate">
                                         {isIngreso
                                           ? (item as Ingreso).tipo_ingreso
                                           : egreso?.tipos_categoria_egreso?.nombre || "Sin categoría"}
                                       </h3>
                                       <Badge
                                         variant={isIngreso ? "default" : "destructive"}
+                                        className="text-xs"
                                         style={
                                           !isIngreso
                                             ? { backgroundColor: egreso?.tipos_categoria_egreso?.color || "#ef4444" }
@@ -283,7 +285,7 @@ export default function PersonalHistorialPage() {
                                         {isIngreso ? "Ingreso" : "Egreso"}
                                       </Badge>
                                     </div>
-                                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                    <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
                                       <span className="flex items-center gap-1">
                                         <Calendar className="w-3 h-3" />
                                         {formatDateWithoutTimezone(item.fecha)}
@@ -293,14 +295,14 @@ export default function PersonalHistorialPage() {
                                       )}
                                     </div>
                                     {!isIngreso && egreso?.concepto && (
-                                      <p className="text-sm text-muted-foreground mt-1">{egreso.concepto}</p>
+                                      <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-1">{egreso.concepto}</p>
                                     )}
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 pl-13 sm:pl-0">
                                   <div className="text-right">
                                     <p
-                                      className={`text-2xl font-bold`}
+                                      className="text-lg sm:text-2xl font-bold"
                                       style={{
                                         color: isIngreso
                                           ? "#22c55e"
@@ -310,25 +312,27 @@ export default function PersonalHistorialPage() {
                                       {isIngreso ? "+" : "-"}₲{Number(item.monto).toLocaleString("es-PY")}
                                     </p>
                                   </div>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => handleEdit(item, isIngreso ? "ingreso" : "egreso")}
-                                    className="text-primary hover:text-primary hover:bg-primary/10"
-                                  >
-                                    <Edit className="w-4 h-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => {
-                                      setDeleteId(item.id)
-                                      setDeleteType(isIngreso ? "ingreso" : "egreso")
-                                    }}
-                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  >
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleEdit(item, isIngreso ? "ingreso" : "egreso")}
+                                      className="text-primary hover:text-primary hover:bg-primary/10 h-8 w-8 sm:h-10 sm:w-10"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        setDeleteId(item.id)
+                                        setDeleteType(isIngreso ? "ingreso" : "egreso")
+                                      }}
+                                      className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 sm:h-10 sm:w-10"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
                                 </div>
                               </div>
                             </CardContent>
