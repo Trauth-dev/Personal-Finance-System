@@ -418,11 +418,15 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="p-3 rounded-lg bg-muted/30">
-              <p className="text-xs text-muted-foreground">Monto Total</p>
+              <p className="text-xs text-muted-foreground">
+                {deuda.tipo_deuda === "tarjeta_credito" ? "Saldo Utilizado" : "Monto Total"}
+              </p>
               <p className="text-lg font-bold">{formatGuaranies(montoTotal)}</p>
             </div>
             <div className="p-3 rounded-lg bg-red-500/10">
-              <p className="text-xs text-muted-foreground">Saldo Pendiente</p>
+              <p className="text-xs text-muted-foreground">
+                {deuda.tipo_deuda === "tarjeta_credito" ? "Saldo a Pagar" : "Saldo Pendiente"}
+              </p>
               <p className="text-lg font-bold text-red-400">{formatGuaranies(pendiente)}</p>
             </div>
           </div>
@@ -603,12 +607,13 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           <Label htmlFor="monto_total">{tipoDeuda === "tarjeta_credito" ? "Saldo Actual *" : "Monto Total *"}</Label>
           <Input
             id="monto_total"
+            type="text"
+            inputMode="numeric"
             value={formData.monto_total}
             onChange={(e) => {
-              const raw = parseFormattedNumber(e.target.value)
-              if (/^\d*$/.test(raw)) {
-                setFormData({ ...formData, monto_total: formatNumberWithSeparators(raw) })
-              }
+              const inputValue = e.target.value
+              const raw = inputValue.replace(/[^\d]/g, "")
+              setFormData({ ...formData, monto_total: raw ? formatNumberWithSeparators(raw) : "" })
             }}
             placeholder="Ej: 12.000.000"
             required
@@ -644,12 +649,13 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
               <Label htmlFor="monto_cuota">Monto por Cuota *</Label>
               <Input
                 id="monto_cuota"
+                type="text"
+                inputMode="numeric"
                 value={formData.monto_cuota}
                 onChange={(e) => {
-                  const raw = parseFormattedNumber(e.target.value)
-                  if (/^\d*$/.test(raw)) {
-                    setFormData({ ...formData, monto_cuota: formatNumberWithSeparators(raw) })
-                  }
+                  const inputValue = e.target.value
+                  const raw = inputValue.replace(/[^\d]/g, "")
+                  setFormData({ ...formData, monto_cuota: raw ? formatNumberWithSeparators(raw) : "" })
                 }}
                 placeholder="Ej: 500.000"
                 required
@@ -674,12 +680,13 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
               <Label htmlFor="limite_credito">Límite de Crédito</Label>
               <Input
                 id="limite_credito"
+                type="text"
+                inputMode="numeric"
                 value={formData.limite_credito}
                 onChange={(e) => {
-                  const raw = parseFormattedNumber(e.target.value)
-                  if (/^\d*$/.test(raw)) {
-                    setFormData({ ...formData, limite_credito: formatNumberWithSeparators(raw) })
-                  }
+                  const inputValue = e.target.value
+                  const raw = inputValue.replace(/[^\d]/g, "")
+                  setFormData({ ...formData, limite_credito: raw ? formatNumberWithSeparators(raw) : "" })
                 }}
                 placeholder="Ej: 10.000.000"
               />
