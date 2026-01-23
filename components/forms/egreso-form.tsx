@@ -878,9 +878,12 @@ export function EgresoForm() {
                       const pendiente = esTarjeta
                         ? (Number(deuda.limite_credito) || 0) - Number(deuda.monto_total)
                         : Number(deuda.monto_total) - Number(deuda.monto_pagado)
-                      // Porcentaje = (Pagado / (Pendiente + Pagado)) * 100
+                      // Para tarjetas: Porcentaje = (Pagado / (Pendiente + Pagado)) * 100
+                      // Para préstamos: Porcentaje = (Pagado / Monto Total) * 100 (igual que en sección Deudas)
                       const totalDeuda = esTarjeta ? pendiente : Number(deuda.monto_total)
-                      const porcentaje = totalDeuda > 0 ? (Number(deuda.monto_pagado) / (totalDeuda + Number(deuda.monto_pagado))) * 100 : 0
+                      const porcentaje = esTarjeta 
+                        ? (totalDeuda > 0 ? (Number(deuda.monto_pagado) / (totalDeuda + Number(deuda.monto_pagado))) * 100 : 0)
+                        : (Number(deuda.monto_total) > 0 ? (Number(deuda.monto_pagado) / Number(deuda.monto_total)) * 100 : 0)
 
                       return (
                         <button
