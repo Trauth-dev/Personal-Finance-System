@@ -878,9 +878,9 @@ export function EgresoForm() {
                       const pendiente = esTarjeta
                         ? (Number(deuda.limite_credito) || 0) - Number(deuda.monto_total)
                         : Number(deuda.monto_total) - Number(deuda.monto_pagado)
-                      const porcentaje = esTarjeta
-                        ? (Number(deuda.monto_pagado) / ((Number(deuda.limite_credito) || 0) - Number(deuda.monto_total) || 1)) * 100
-                        : (Number(deuda.monto_pagado) / Number(deuda.monto_total)) * 100
+                      // Porcentaje = (Pagado / (Pendiente + Pagado)) * 100
+                      const totalDeuda = esTarjeta ? pendiente : Number(deuda.monto_total)
+                      const porcentaje = totalDeuda > 0 ? (Number(deuda.monto_pagado) / (totalDeuda + Number(deuda.monto_pagado))) * 100 : 0
 
                       return (
                         <button
@@ -1006,32 +1006,47 @@ export function EgresoForm() {
                       </div>
 
                       <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/50">
-                        <div className="text-center p-2 rounded-lg bg-muted/20">
-                          <p className="text-xs text-muted-foreground">Total deuda</p>
-                          <p className="text-sm font-semibold">
-                            {formatGuaranies(
-                              selectedDeudaData.tipo_deuda === "tarjeta_credito"
-                                ? (Number(selectedDeudaData.limite_credito) || 0) - Number(selectedDeudaData.monto_total)
-                                : Number(selectedDeudaData.monto_total)
-                            )}
-                          </p>
-                        </div>
-                        <div className="text-center p-2 rounded-lg bg-green-500/10">
-                          <p className="text-xs text-muted-foreground">Pagado</p>
-                          <p className="text-sm font-semibold text-green-400">
-                            {formatGuaranies(Number(selectedDeudaData.monto_pagado))}
-                          </p>
-                        </div>
-                        <div className="text-center p-2 rounded-lg bg-red-500/10">
-                          <p className="text-xs text-muted-foreground">Pendiente</p>
-                          <p className="text-sm font-semibold text-red-400">
-                            {formatGuaranies(
-                              selectedDeudaData.tipo_deuda === "tarjeta_credito"
-                                ? (Number(selectedDeudaData.limite_credito) || 0) - Number(selectedDeudaData.monto_total) - Number(selectedDeudaData.monto_pagado)
-                                : Number(selectedDeudaData.monto_total) - Number(selectedDeudaData.monto_pagado)
-                            )}
-                          </p>
-                        </div>
+                        {(() => {
+                          const esTarjeta = selectedDeudaData.tipo_deuda === "tarjeta_credito"
+                          const montoPagado = Number(selectedDeudaData.monto_pagado)
+                          const limiteCredito = Number(selectedDeudaData.limite_credito) || 0
+                          const montoDisponible = Number(selectedDeudaData.monto_total)
+                          
+                          // Para tarjetas: Total Deuda = Límite de Crédito - Monto Disponible
+                          // Para préstamos: Total Deuda = Monto Total
+                          const totalDeuda = esTarjeta
+                            ? limiteCredito - montoDisponible
+                            : montoDisponible
+                          
+                          // Para tarjetas: Pendiente = Total Deuda (mismo valor, sin restar pagado)
+                          // Para préstamos: Pendiente = Total Deuda - Pagado
+                          const pendienteActual = esTarjeta ? totalDeuda : totalDeuda - montoPagado
+                          
+                          return (
+                            <>
+                              <div className="text-center p-2 rounded-lg bg-muted/20">
+                                <p className="text-xs text-muted-foreground">
+                                  {esTarjeta ? "Límite de Crédito" : "Total deuda"}
+                                </p>
+                                <p className="text-sm font-semibold">
+                                  {formatGuaranies(esTarjeta ? limiteCredito : totalDeuda)}
+                                </p>
+                              </div>
+                              <div className="text-center p-2 rounded-lg bg-green-500/10">
+                                <p className="text-xs text-muted-foreground">Pagado</p>
+                                <p className="text-sm font-semibold text-green-400">
+                                  {formatGuaranies(montoPagado)}
+                                </p>
+                              </div>
+                              <div className="text-center p-2 rounded-lg bg-red-500/10">
+                                <p className="text-xs text-muted-foreground">Pendiente</p>
+                                <p className="text-sm font-semibold text-red-400">
+                                  {formatGuaranies(pendienteActual)}
+                                </p>
+                              </div>
+                            </>
+                          )
+                        })()}
                       </div>
                     </div>
                   )}
