@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -82,6 +82,230 @@ const formatNumberWithSeparators = (value: string | number): string => {
 
 const parseFormattedNumber = (value: string): string => {
   return value.replace(/\./g, "")
+}
+
+const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any) => {
+  return (
+    <>
+      <div className="space-y-3">
+        <Label>Tipo de Deuda</Label>
+        <div className="grid grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => setTipoDeuda("prestamo")}
+            className={`p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
+              tipoDeuda === "prestamo" ? "border-blue-400 bg-blue-500/20" : "border-border/30 hover:border-blue-400/50"
+            }`}
+          >
+            <div className="p-3 rounded-full bg-blue-500/20">
+              <Landmark className="w-6 h-6 text-blue-400" />
+            </div>
+            <div className="text-left">
+              <p className="font-semibold">Préstamo</p>
+              <p className="text-xs text-muted-foreground">Préstamos bancarios, personales, etc.</p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTipoDeuda("tarjeta_credito")}
+            className={`p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
+              tipoDeuda === "tarjeta_credito"
+                ? "border-purple-400 bg-purple-500/20"
+                : "border-border/30 hover:border-purple-400/50"
+            }`}
+          >
+            <div className="p-3 rounded-full bg-purple-500/20">
+              <CreditCard className="w-6 h-6 text-purple-400" />
+            </div>
+            <div className="text-left">
+              <p className="font-semibold">Tarjeta de Crédito</p>
+              <p className="text-xs text-muted-foreground">Tarjetas de crédito bancarias</p>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      {/* Campos comunes */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="nombre">Nombre *</Label>
+          <Input
+            id="nombre"
+            placeholder={tipoDeuda === "tarjeta_credito" ? "Visa Oro" : "Préstamo Personal"}
+            value={formData.nombre}
+            onChange={(e) => setFormData((prev) => ({ ...prev, nombre: e.target.value }))}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="acreedor">Acreedor/Banco *</Label>
+          <Input
+            id="acreedor"
+            placeholder="Banco Itaú"
+            value={formData.acreedor}
+            onChange={(e) => setFormData((prev) => ({ ...prev, acreedor: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="monto_total">
+            {tipoDeuda === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}
+          </Label>
+          <Input
+            id="monto_total"
+            type="text"
+            inputMode="numeric"
+            placeholder="5000000"
+            value={formData.monto_total}
+            onChange={(e) => {
+              const value = e.target.value.replace(/[^0-9]/g, "")
+              setFormData((prev) => ({ ...prev, monto_total: value }))
+            }}
+          />
+          {formData.monto_total && (
+            <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.monto_total))}</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="tasa_interes">Tasa de Interés (%)</Label>
+          <Input
+            id="tasa_interes"
+            type="number"
+            step="0.01"
+            placeholder="12.5"
+            value={formData.tasa_interes}
+            onChange={(e) => setFormData((prev) => ({ ...prev, tasa_interes: e.target.value }))}
+          />
+        </div>
+      </div>
+
+      {/* Campos específicos para préstamo */}
+      {tipoDeuda === "prestamo" && (
+        <div className="space-y-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+          <div className="flex items-center gap-2 text-blue-400">
+            <Landmark className="w-4 h-4" />
+            <span className="font-medium text-sm">Datos del Préstamo</span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="cuotas_totales">Cantidad de Cuotas</Label>
+              <Input
+                id="cuotas_totales"
+                type="number"
+                placeholder="12"
+                value={formData.cuotas_totales}
+                onChange={(e) => setFormData((prev) => ({ ...prev, cuotas_totales: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="monto_cuota">Monto por Cuota</Label>
+              <Input
+                id="monto_cuota"
+                type="text"
+                inputMode="numeric"
+                placeholder="450000"
+                value={formData.monto_cuota}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, "")
+                  setFormData((prev) => ({ ...prev, monto_cuota: value }))
+                }}
+              />
+              {formData.monto_cuota && (
+                <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.monto_cuota))}</p>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="fecha_inicio">Fecha de Inicio</Label>
+              <Input
+                id="fecha_inicio"
+                type="date"
+                value={formData.fecha_inicio}
+                onChange={(e) => setFormData((prev) => ({ ...prev, fecha_inicio: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fecha_vencimiento">Fecha de Vencimiento</Label>
+              <Input
+                id="fecha_vencimiento"
+                type="date"
+                value={formData.fecha_vencimiento}
+                onChange={(e) => setFormData((prev) => ({ ...prev, fecha_vencimiento: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Campos específicos para tarjeta de crédito */}
+      {tipoDeuda === "tarjeta_credito" && (
+        <div className="space-y-4 p-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
+          <div className="flex items-center gap-2 text-purple-400">
+            <CreditCard className="w-4 h-4" />
+            <span className="font-medium text-sm">Datos de la Tarjeta</span>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="limite_credito">Límite de Crédito</Label>
+              <Input
+                id="limite_credito"
+                type="text"
+                inputMode="numeric"
+                placeholder="10000000"
+                value={formData.limite_credito}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/[^0-9]/g, "")
+                  setFormData((prev) => ({ ...prev, limite_credito: value }))
+                }}
+              />
+              {formData.limite_credito && (
+                <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.limite_credito))}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fecha_corte">Día de Corte</Label>
+              <Input
+                id="fecha_corte"
+                type="number"
+                min="1"
+                max="31"
+                placeholder="15"
+                value={formData.fecha_corte}
+                onChange={(e) => setFormData((prev) => ({ ...prev, fecha_corte: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fecha_pago">Día de Pago</Label>
+              <Input
+                id="fecha_pago"
+                type="number"
+                min="1"
+                max="31"
+                placeholder="25"
+                value={formData.fecha_pago}
+                onChange={(e) => setFormData((prev) => ({ ...prev, fecha_pago: e.target.value }))}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Notas */}
+      <div className="space-y-2">
+        <Label htmlFor="notas">Notas (Opcional)</Label>
+        <Textarea
+          id="notas"
+          placeholder="Información adicional sobre la deuda..."
+          value={formData.notas || ""}
+          onChange={(e) => setFormData((prev) => ({ ...prev, notas: e.target.value }))}
+          rows={2}
+        />
+      </div>
+    </>
+  )
 }
 
 export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
@@ -562,267 +786,6 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     )
   }
 
-  const DeudaFormFields = () => (
-    <>
-      <div className="space-y-3">
-        <Label>Tipo de Deuda</Label>
-        <div className="grid grid-cols-2 gap-4">
-          <button
-            type="button"
-            onClick={() => setTipoDeuda("prestamo")}
-            className={`p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
-              tipoDeuda === "prestamo" ? "border-blue-400 bg-blue-500/20" : "border-border/30 hover:border-blue-400/50"
-            }`}
-          >
-            <div className="p-3 rounded-full bg-blue-500/20">
-              <Landmark className="w-6 h-6 text-blue-400" />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold">Préstamo</p>
-              <p className="text-xs text-muted-foreground">Préstamos bancarios, personales, etc.</p>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTipoDeuda("tarjeta_credito")}
-            className={`p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
-              tipoDeuda === "tarjeta_credito"
-                ? "border-purple-400 bg-purple-500/20"
-                : "border-border/30 hover:border-purple-400/50"
-            }`}
-          >
-            <div className="p-3 rounded-full bg-purple-500/20">
-              <CreditCard className="w-6 h-6 text-purple-400" />
-            </div>
-            <div className="text-left">
-              <p className="font-semibold">Tarjeta de Crédito</p>
-              <p className="text-xs text-muted-foreground">Tarjetas de crédito bancarias</p>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <Label htmlFor="nombre">Nombre de la Deuda *</Label>
-          <Input
-            id="nombre"
-            value={formData.nombre}
-            onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-            placeholder={tipoDeuda === "tarjeta_credito" ? "Ej: Visa Banco X" : "Ej: Préstamo Auto"}
-            required
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="acreedor">{tipoDeuda === "tarjeta_credito" ? "Banco Emisor *" : "Acreedor *"}</Label>
-          <Input
-            id="acreedor"
-            value={formData.acreedor}
-            onChange={(e) => setFormData({ ...formData, acreedor: e.target.value })}
-            placeholder={tipoDeuda === "tarjeta_credito" ? "Ej: Banco Continental" : "Ej: Banco Itaú"}
-            required
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="monto_total">{tipoDeuda === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}</Label>
-          <Input
-            id="monto_total"
-            type="text"
-            inputMode="numeric"
-            value={formData.monto_total}
-            onChange={(e) => {
-              const value = e.target.value.replace(/[^0-9]/g, "")
-              setFormData((prev) => ({ ...prev, monto_total: value }))
-            }}
-            placeholder="12000000"
-            required
-          />
-          {formData.monto_total && (
-            <p className="text-xs text-muted-foreground mt-1">
-              {formatGuaranies(Number(formData.monto_total))}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <Label htmlFor="tasa_interes">Tasa de Interés Anual (%)</Label>
-          <Input
-            id="tasa_interes"
-            type="number"
-            step="0.01"
-            value={formData.tasa_interes}
-            onChange={(e) => setFormData({ ...formData, tasa_interes: e.target.value })}
-          />
-        </div>
-
-        {tipoDeuda === "prestamo" && (
-          <>
-            <div>
-              <Label htmlFor="cuotas_totales">Número de Cuotas *</Label>
-              <Input
-                id="cuotas_totales"
-                type="number"
-                value={formData.cuotas_totales}
-                onChange={(e) => setFormData({ ...formData, cuotas_totales: e.target.value })}
-                placeholder="Ej: 24"
-                required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="monto_cuota">Monto por Cuota *</Label>
-              <Input
-                id="monto_cuota"
-                type="text"
-                inputMode="numeric"
-                value={formData.monto_cuota}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, "")
-                  setFormData((prev) => ({ ...prev, monto_cuota: value }))
-                }}
-                placeholder="500000"
-                required
-              />
-              {formData.monto_cuota && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {formatGuaranies(Number(formData.monto_cuota))}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="fecha_vencimiento">Fecha de Vencimiento Final</Label>
-              <Input
-                id="fecha_vencimiento"
-                type="date"
-                value={formData.fecha_vencimiento}
-                onChange={(e) => setFormData({ ...formData, fecha_vencimiento: e.target.value })}
-              />
-            </div>
-          </>
-        )}
-
-        {tipoDeuda === "tarjeta_credito" && (
-          <>
-            <div>
-              <Label htmlFor="limite_credito">Límite de Crédito</Label>
-              <Input
-                id="limite_credito"
-                type="text"
-                inputMode="numeric"
-                value={formData.limite_credito}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, "")
-                  setFormData((prev) => ({ ...prev, limite_credito: value }))
-                }}
-                placeholder="10000000"
-              />
-              {formData.limite_credito && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {formatGuaranies(Number(formData.limite_credito))}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <Label htmlFor="fecha_corte">Día de Corte (1-31)</Label>
-              <Input
-                id="fecha_corte"
-                type="number"
-                min="1"
-                max="31"
-                value={formData.fecha_corte}
-                onChange={(e) => setFormData({ ...formData, fecha_corte: e.target.value })}
-                placeholder="Ej: 15"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="fecha_pago">Día de Pago (1-31)</Label>
-              <Input
-                id="fecha_pago"
-                type="number"
-                min="1"
-                max="31"
-                value={formData.fecha_pago}
-                onChange={(e) => setFormData({ ...formData, fecha_pago: e.target.value })}
-                placeholder="Ej: 5"
-              />
-            </div>
-          </>
-        )}
-
-        <div>
-          <Label htmlFor="fecha_inicio">Fecha de Inicio *</Label>
-          <Input
-            id="fecha_inicio"
-            type="date"
-            value={formData.fecha_inicio}
-            onChange={(e) => setFormData({ ...formData, fecha_inicio: e.target.value })}
-            required
-          />
-        </div>
-
-        <div>
-          <Label htmlFor="frecuencia_pago">Frecuencia de Pago</Label>
-          <Select
-            value={formData.frecuencia_pago}
-            onValueChange={(value) => setFormData({ ...formData, frecuencia_pago: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="semanal">Semanal</SelectItem>
-              <SelectItem value="quincenal">Quincenal</SelectItem>
-              <SelectItem value="mensual">Mensual</SelectItem>
-              <SelectItem value="trimestral">Trimestral</SelectItem>
-              <SelectItem value="anual">Anual</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div>
-          <Label htmlFor="prioridad">Prioridad</Label>
-          <Select value={formData.prioridad} onValueChange={(value) => setFormData({ ...formData, prioridad: value })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="baja">Baja</SelectItem>
-              <SelectItem value="media">Media</SelectItem>
-              <SelectItem value="alta">Alta</SelectItem>
-              <SelectItem value="urgente">Urgente</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div>
-        <Label htmlFor="descripcion">Descripción</Label>
-        <Textarea
-          id="descripcion"
-          value={formData.descripcion}
-          onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-          rows={2}
-        />
-      </div>
-
-      <div>
-        <Label htmlFor="notas">Notas adicionales</Label>
-        <Textarea
-          id="notas"
-          value={formData.notas}
-          onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
-          rows={2}
-        />
-      </div>
-    </>
-  )
-
   return (
     <div className="space-y-6">
       {/* Resumen de Deudas */}
@@ -896,7 +859,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <DeudaFormFields />
+              <DeudaFormFields tipoDeuda={tipoDeuda} formData={formData} setFormData={setFormData} setTipoDeuda={setTipoDeuda} />
               <Button type="submit" className="w-full">
                 Registrar Deuda
               </Button>
@@ -1013,7 +976,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="space-y-6">
-            <DeudaFormFields />
+            <DeudaFormFields tipoDeuda={tipoDeuda} formData={formData} setFormData={setFormData} setTipoDeuda={setTipoDeuda} />
             <DialogFooter>
               <Button
                 type="button"
