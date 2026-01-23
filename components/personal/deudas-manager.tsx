@@ -350,9 +350,22 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   const prestamos = deudas.filter((d) => d.tipo_deuda !== "tarjeta_credito")
   const tarjetas = deudas.filter((d) => d.tipo_deuda === "tarjeta_credito")
 
-  const totalDeudas = deudas.reduce((sum, d) => sum + Number(d.monto_total), 0)
+  // Calcular totales correctamente según tipo de deuda
+  // Para tarjetas: Pendiente = Límite de Crédito - Monto Disponible (monto_total)
+  // Para préstamos: Pendiente = Monto Total - Monto Pagado
+  const totalDeudas = deudas.reduce((sum, d) => {
+    if (d.tipo_deuda === "tarjeta_credito") {
+      return sum + ((Number(d.limite_credito) || 0) - Number(d.monto_total))
+    }
+    return sum + Number(d.monto_total)
+  }, 0)
   const totalPagado = deudas.reduce((sum, d) => sum + Number(d.monto_pagado), 0)
-  const totalPendiente = totalDeudas - totalPagado
+  const totalPendiente = deudas.reduce((sum, d) => {
+    if (d.tipo_deuda === "tarjeta_credito") {
+      return sum + ((Number(d.limite_credito) || 0) - Number(d.monto_total) - Number(d.monto_pagado))
+    }
+    return sum + (Number(d.monto_total) - Number(d.monto_pagado))
+  }, 0)
   const porcentajePagado = totalDeudas > 0 ? (totalPagado / totalDeudas) * 100 : 0
 
   if (loading) {
@@ -360,18 +373,25 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   }
 
   const DeudaDetailCard = ({ deuda }: { deuda: Deuda }) => {
-    const montoTotal = Number(deuda.monto_total) || 0
+    const montoDisponible = Number(deuda.monto_total) || 0 // Para tarjetas: monto_total = monto disponible
     const montoPagado = Number(deuda.monto_pagado) || 0
     const limiteCredito = Number(deuda.limite_credito) || 0
-    const porcentaje = montoTotal > 0 ? (montoPagado / montoTotal) * 100 : 0
-    const pendiente = montoTotal - montoPagado
-    // Para tarjetas: crédito disponible = límite - saldo utilizado
-    const creditoDisponible = deuda.tipo_deuda === "tarjeta_credito" ? limiteCredito - montoTotal : 0
+    // Para tarjetas: Pendiente = Límite de Crédito - Monto Disponible
+    // Para préstamos: Pendiente = Monto Total - Monto Pagado
+    const pendiente = deuda.tipo_deuda === "tarjeta_credito" 
+      ? limiteCredito - montoDisponible
+      : montoDisponible - montoPagado
+    const porcentaje = deuda.tipo_deuda === "tarjeta_credito"
+      ? (montoPagado / (pendiente || 1)) * 100
+      : montoDisponible > 0 ? (montoPagado / montoDisponible) * 100 : 0
     const pagosDeuda = pagos.filter((p) => p.deuda_id === deuda.id)
     const Icon = deuda.tipo_deuda === "tarjeta_credito" ? CreditCard : Landmark
 
     const cuotaActual = deuda.cuotas_pagadas + 1
     const cuotasTotales = deuda.cuotas_totales || 0
+
+    const montoTotal = deuda.monto_total
+    const creditoDisponible = deuda.limite_credito ? deuda.limite_credito - deuda.monto_total : 0
 
     return (
       <Card className="border-2 hover:shadow-lg transition-all">
@@ -422,16 +442,14 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           <div className="grid grid-cols-2 gap-2 sm:gap-4">
             <div className="p-2 sm:p-3 rounded-lg bg-muted/30">
               <p className="text-xs text-muted-foreground">
-                {deuda.tipo_deuda === "tarjeta_credito" ? "Saldo Utilizado" : "Monto Total"}
+                {deuda.tipo_deuda === "tarjeta_credito" ? "Monto Disponible" : "Monto Total"}
               </p>
-              <p className="text-sm sm:text-lg font-bold">{formatGuaranies(montoTotal)}</p>
+              <p className="text-sm sm:text-lg font-bold">{formatGuaranies(montoDisponible)}</p>
             </div>
-            <div className={`p-2 sm:p-3 rounded-lg ${deuda.tipo_deuda === "tarjeta_credito" ? "bg-green-500/10" : "bg-red-500/10"}`}>
-              <p className="text-xs text-muted-foreground">
-                {deuda.tipo_deuda === "tarjeta_credito" ? "Crédito Disponible" : "Saldo Pendiente"}
-              </p>
-              <p className={`text-sm sm:text-lg font-bold ${deuda.tipo_deuda === "tarjeta_credito" ? "text-green-400" : "text-red-400"}`}>
-                {formatGuaranies(deuda.tipo_deuda === "tarjeta_credito" ? creditoDisponible : pendiente)}
+            <div className="p-2 sm:p-3 rounded-lg bg-red-500/10">
+              <p className="text-xs text-muted-foreground">Saldo Pendiente</p>
+              <p className="text-sm sm:text-lg font-bold text-red-400">
+                {formatGuaranies(pendiente)}
               </p>
             </div>
           </div>
@@ -609,7 +627,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
         </div>
 
         <div>
-          <Label htmlFor="monto_total">{tipoDeuda === "tarjeta_credito" ? "Saldo Actual *" : "Monto Total *"}</Label>
+          <Label htmlFor="monto_total">{tipoDeuda === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}</Label>
           <Input
             id="monto_total"
             type="text"

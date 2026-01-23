@@ -449,14 +449,28 @@ export function EgresoForm() {
       if (esPagoDeudas && selectedDeuda) {
         const deudaSeleccionada = deudas.find((d) => d.id === selectedDeuda)
         if (deudaSeleccionada) {
-          const nuevoMontoPagado = Number(deudaSeleccionada.monto_pagado) + Number.parseFloat(monto)
+          const montoPago = Number.parseFloat(monto)
+          const nuevoMontoPagado = Number(deudaSeleccionada.monto_pagado) + montoPago
           const nuevasCuotasPagadas = deudaSeleccionada.cuotas_pagadas + (numeroCuota ? 1 : 0)
+          
+          let estaPagada = false
+          let nuevoMontoTotal = Number(deudaSeleccionada.monto_total)
 
-          const estaPagada = nuevoMontoPagado >= Number(deudaSeleccionada.monto_total)
+          if (deudaSeleccionada.tipo_deuda === "tarjeta_credito") {
+            // Para tarjetas: al pagar, aumenta el monto disponible
+            nuevoMontoTotal = Number(deudaSeleccionada.monto_total) + montoPago
+            const limiteCredito = Number(deudaSeleccionada.limite_credito) || 0
+            // La tarjeta está "pagada" solo si el disponible alcanza el límite
+            estaPagada = nuevoMontoTotal >= limiteCredito
+          } else {
+            // Para préstamos: verificar si se pagó todo el monto total
+            estaPagada = nuevoMontoPagado >= Number(deudaSeleccionada.monto_total)
+          }
 
           await supabase
             .from("deudas")
             .update({
+              monto_total: nuevoMontoTotal,
               monto_pagado: nuevoMontoPagado,
               cuotas_pagadas: nuevasCuotasPagadas,
               estado: estaPagada ? "pagada" : "activa",
@@ -659,7 +673,7 @@ export function EgresoForm() {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="deuda-monto">
-                            {tipoNuevaDeuda === "tarjeta_credito" ? "Saldo Actual *" : "Monto Total *"}
+                            {tipoNuevaDeuda === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}
                           </Label>
                           <Input
                             id="deuda-monto"
@@ -859,9 +873,14 @@ export function EgresoForm() {
                       const Icon = getDeudaIcon(deuda.tipo_deuda)
                       const isSelected = selectedDeuda === deuda.id
                       const esTarjeta = deuda.tipo_deuda === "tarjeta_credito"
-                      // Para ambos casos: mostrar saldo pendiente (total - pagado)
-                      const pendiente = Number(deuda.monto_total) - Number(deuda.monto_pagado)
-                      const porcentaje = (Number(deuda.monto_pagado) / Number(deuda.monto_total)) * 100
+                      // Para tarjetas: Pendiente = Límite de Crédito - Monto Disponible (monto_total)
+                      // Para préstamos: Pendiente = Monto Total - Monto Pagado
+                      const pendiente = esTarjeta
+                        ? (Number(deuda.limite_credito) || 0) - Number(deuda.monto_total)
+                        : Number(deuda.monto_total) - Number(deuda.monto_pagado)
+                      const porcentaje = esTarjeta
+                        ? (Number(deuda.monto_pagado) / ((Number(deuda.limite_credito) || 0) - Number(deuda.monto_total) || 1)) * 100
+                        : (Number(deuda.monto_pagado) / Number(deuda.monto_total)) * 100
 
                       return (
                         <button
@@ -990,7 +1009,11 @@ export function EgresoForm() {
                         <div className="text-center p-2 rounded-lg bg-muted/20">
                           <p className="text-xs text-muted-foreground">Total deuda</p>
                           <p className="text-sm font-semibold">
-                            {formatGuaranies(Number(selectedDeudaData.monto_total))}
+                            {formatGuaranies(
+                              selectedDeudaData.tipo_deuda === "tarjeta_credito"
+                                ? (Number(selectedDeudaData.limite_credito) || 0) - Number(selectedDeudaData.monto_total)
+                                : Number(selectedDeudaData.monto_total)
+                            )}
                           </p>
                         </div>
                         <div className="text-center p-2 rounded-lg bg-green-500/10">
@@ -1003,7 +1026,9 @@ export function EgresoForm() {
                           <p className="text-xs text-muted-foreground">Pendiente</p>
                           <p className="text-sm font-semibold text-red-400">
                             {formatGuaranies(
-                              Number(selectedDeudaData.monto_total) - Number(selectedDeudaData.monto_pagado),
+                              selectedDeudaData.tipo_deuda === "tarjeta_credito"
+                                ? (Number(selectedDeudaData.limite_credito) || 0) - Number(selectedDeudaData.monto_total) - Number(selectedDeudaData.monto_pagado)
+                                : Number(selectedDeudaData.monto_total) - Number(selectedDeudaData.monto_pagado)
                             )}
                           </p>
                         </div>
