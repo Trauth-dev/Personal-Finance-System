@@ -75,8 +75,14 @@ const COLORES_HABITOS = [
   "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
 ]
 
-const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
-const DIAS_SEMANA_COMPLETO = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+const DIAS_SEMANA = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"]
+const DIAS_SEMANA_COMPLETO = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"]
+
+// Función auxiliar para convertir getDay() (0=Dom) a índice de DIAS_SEMANA (0=Lun)
+const getDiaSemanaIndex = (date: Date): number => {
+  const day = date.getDay()
+  return day === 0 ? 6 : day - 1
+}
 
 export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) {
   const [metas, setMetas] = useState<Meta[]>([])
@@ -204,7 +210,9 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   function getWeekDates(date: Date): Date[] {
     const start = new Date(date)
     const day = start.getDay()
-    start.setDate(start.getDate() - day)
+    // Ajustar para que la semana empiece en Lunes (0 = Lunes, 6 = Domingo)
+    const diff = day === 0 ? -6 : 1 - day
+    start.setDate(start.getDate() + diff)
     
     const dates: Date[] = []
     for (let i = 0; i < 7; i++) {
@@ -952,7 +960,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                           const isToday = formatDate(fecha) === formatDate(new Date())
                           return (
                             <th key={idx} className={`text-center p-2 min-w-[80px] ${isToday ? "bg-primary/20 rounded-t-lg" : ""}`}>
-                              <div className="text-xs text-muted-foreground">{DIAS_SEMANA[fecha.getDay()]}</div>
+                              <div className="text-xs text-muted-foreground">{DIAS_SEMANA[getDiaSemanaIndex(fecha)]}</div>
                               <div className={`text-lg font-bold ${isToday ? "text-primary" : ""}`}>
                                 {fecha.getDate()}
                               </div>
@@ -1090,7 +1098,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                                 key={idx} 
                                 className={`text-center min-w-[60px] ${!isCurrentMonth ? "opacity-30" : ""}`}
                               >
-                                <div className="text-xs text-muted-foreground">{DIAS_SEMANA[fecha.getDay()]}</div>
+                                <div className="text-xs text-muted-foreground">{DIAS_SEMANA[getDiaSemanaIndex(fecha)]}</div>
                                 <div className={`text-sm font-medium ${isToday ? "text-primary bg-primary/20 rounded-full w-6 h-6 flex items-center justify-center mx-auto" : ""}`}>
                                   {fecha.getDate()}
                                 </div>
@@ -1204,7 +1212,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                         </div>
                         <div className={`text-center ${isToday ? "bg-primary/20 px-3 py-1 rounded-full" : ""}`}>
                           <p className={`text-xs ${isToday ? "text-primary font-semibold" : "text-muted-foreground"}`}>
-                            {DIAS_SEMANA_COMPLETO[fecha.getDay()]}
+                            {DIAS_SEMANA_COMPLETO[getDiaSemanaIndex(fecha)]}
                           </p>
                           <p className={`text-xs ${isToday ? "text-primary" : "text-muted-foreground"}`}>
                             {fecha.getDate()}/{fecha.getMonth() + 1}
