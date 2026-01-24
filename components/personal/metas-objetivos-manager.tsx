@@ -795,7 +795,14 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
-                        {tareas.map((tarea) => (
+                        {[...tareas].sort((a, b) => {
+                          // Primero las pendientes (no completadas), luego las completadas
+                          if (a.completada !== b.completada) {
+                            return a.completada ? 1 : -1
+                          }
+                          // Mantener el orden original dentro de cada grupo
+                          return 0
+                        }).map((tarea) => (
                           <div 
                             key={tarea.id} 
                             className={`flex items-center justify-between p-3 rounded-lg border transition-all ${
