@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatGuaranies } from "@/lib/utils"
+import { formatGuaranies, getParaguayDate } from "@/lib/utils"
 import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Calendar, Target } from 'lucide-react'
 import { createClient } from "@/lib/supabase/server"
 
@@ -10,7 +10,8 @@ interface Props {
 export async function ComparativoMesAnterior({ perfilId }: Props) {
   const supabase = await createClient()
   
-  const now = new Date()
+  // Usar la fecha de Paraguay en lugar de new Date()
+  const now = getParaguayDate()
   
   // Mes actual
   const primerDiaMesActual = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]

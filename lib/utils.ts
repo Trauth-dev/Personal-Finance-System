@@ -9,8 +9,48 @@ export function formatGuaranies(amount: number): string {
   return `Gs ${amount.toLocaleString("es-PY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
+/**
+ * Obtiene la fecha actual en el timezone de Paraguay (America/Asuncion)
+ * @returns Fecha en formato YYYY-MM-DD
+ */
 export function getTodayDate(): string {
-  return new Date().toISOString().split("T")[0]
+  const paraguayDate = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/Asuncion" })
+  )
+  const year = paraguayDate.getFullYear()
+  const month = String(paraguayDate.getMonth() + 1).padStart(2, "0")
+  const day = String(paraguayDate.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * Obtiene un objeto Date en el timezone de Paraguay
+ * @returns Date object en timezone de Paraguay
+ */
+export function getParaguayDate(): Date {
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "America/Asuncion" })
+  )
+}
+
+/**
+ * Convierte una fecha UTC a fecha de Paraguay
+ * @param date - Fecha a convertir
+ * @returns Date object en timezone de Paraguay
+ */
+export function toParaguayDate(date: Date): Date {
+  return new Date(
+    date.toLocaleString("en-US", { timeZone: "America/Asuncion" })
+  )
+}
+
+/**
+ * Obtiene la fecha y hora actual como ISO string en timezone de Paraguay
+ * @returns ISO string de la fecha actual en Paraguay
+ */
+export function getParaguayISOString(): string {
+  const paraguayDate = getParaguayDate()
+  return paraguayDate.toISOString()
 }
 
 export function formatDateWithoutTimezone(dateString: string, locale = "es-ES"): string {

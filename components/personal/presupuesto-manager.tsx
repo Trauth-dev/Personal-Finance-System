@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { createBrowserClient } from "@supabase/ssr"
 import { Plus, TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, Edit2, Trash2 } from "lucide-react"
-import { formatGuaranies } from "@/lib/utils"
+import { formatGuaranies, getParaguayDate } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
 interface PresupuestoCategoria {
@@ -50,7 +50,7 @@ export function PresupuestoManager() {
     if (!perfilActivo) return
 
     setLoading(true)
-    const now = new Date()
+    const now = getParaguayDate()
     const primerDia = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
     const ultimoDia = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
 
@@ -128,7 +128,7 @@ export function PresupuestoManager() {
     e.preventDefault()
     if (!perfilActivo) return
 
-    const now = new Date()
+    const now = getParaguayDate()
     const primerDia = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
 
     const dataToSave = {
