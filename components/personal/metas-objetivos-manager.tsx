@@ -469,8 +469,11 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         .eq("id", tareaId)
       
       if (error) throw error
+      
+      // Actualizar progreso inmediatamente después de cambiar el estado
+      await actualizarProgresoMeta(metaId)
+      // Recargar datos para reflejar cambios en la UI
       cargarDatos()
-      actualizarProgresoMeta(metaId)
     } catch (error) {
       console.error("Error actualizando tarea:", error)
     }
@@ -478,20 +481,24 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   
   // Actualizar progreso de meta
   const actualizarProgresoMeta = async (metaId: string) => {
-    const tareasDeEsaMeta = tareasMetas.filter(t => t.meta_id === metaId)
-    if (tareasDeEsaMeta.length === 0) return
-    
-    const completadas = tareasDeEsaMeta.filter(t => t.completada).length
-    const valorActual = Math.round((completadas / tareasDeEsaMeta.length) * 100)
-    const estado = valorActual === 100 ? "completada" : "activa"
-    
     try {
+      // Obtener las tareas actualizadas directamente de la base de datos
+      const { data: tareasActualizadas, error } = await supabase
+        .from("tareas_meta")
+        .select("*")
+        .eq("meta_id", metaId)
+      
+      if (error) throw error
+      if (!tareasActualizadas || tareasActualizadas.length === 0) return
+      
+      const completadas = tareasActualizadas.filter(t => t.completada).length
+      const valorActual = Math.round((completadas / tareasActualizadas.length) * 100)
+      const estado = valorActual === 100 ? "completada" : "activa"
+      
       await supabase
         .from("metas")
         .update({ valor_actual: valorActual, estado })
         .eq("id", metaId)
-      
-      cargarDatos()
     } catch (error) {
       console.error("Error actualizando progreso:", error)
     }
