@@ -1246,14 +1246,14 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                     const porcentajeMes = totalMes > 0 ? Math.round((completadosMes / totalMes) * 100) : 0
                     
                     return (
-                      <div key={habito.id} className="bg-white rounded-lg p-3 border border-amber-100 shadow-sm">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: habito.color }} />
-                          <p className="font-medium text-sm truncate">{habito.nombre}</p>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-xs text-muted-foreground">
-                            <span>{completadosMes}/{totalMes} días</span>
+  <div key={habito.id} className="bg-white rounded-lg p-3 border border-amber-100 shadow-sm">
+  <div className="flex items-center gap-2 mb-2">
+  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: habito.color }} />
+  <p className="font-medium text-sm truncate text-black">{habito.nombre}</p>
+  </div>
+  <div className="space-y-1">
+  <div className="flex items-center justify-between text-xs text-gray-700">
+  <span>{completadosMes}/{totalMes} días</span>
                             <span className="font-bold text-amber-600">{porcentajeMes}%</span>
                           </div>
                           <Progress value={porcentajeMes} className="h-1.5" />
