@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { formatGuaranies } from "@/lib/utils"
+import { formatGuaranies, getParaguayDate } from "@/lib/utils"
 import { AlertasFinancieras } from "@/components/personal/alertas-financieras"
 import { LogrosFinancieros } from "@/components/personal/logros-financieros"
 import { TasaAhorroDonut } from "@/components/charts/tasa-ahorro-donut"
@@ -63,7 +63,7 @@ export default async function DashboardPersonalPage({
     )
   }
 
-  const now = new Date()
+  const now = getParaguayDate()
   let selectedYear = now.getFullYear()
   let selectedMonth = now.getMonth()
 

@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { DistribucionGastosChartClient } from "./distribucion-gastos-chart-client"
+import { getParaguayDate } from "@/lib/utils"
 
 export async function DistribucionGastosChart({ perfilId }: { perfilId: string }) {
   const supabase = await createClient()
 
-  const now = new Date()
+  const now = getParaguayDate()
   const primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
   const ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
 

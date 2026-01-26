@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { GastosCategoriaBarsClient } from "./gastos-categoria-bars-client"
+import { getParaguayDate } from "@/lib/utils"
 
 interface GastosCategoriaBarsProps {
   perfilId: string
@@ -14,7 +15,7 @@ export async function GastosCategoriaBars({ perfilId, fechaInicio, fechaFin }: G
   let ultimoDiaMes = fechaFin
 
   if (!primerDiaMes || !ultimoDiaMes) {
-    const now = new Date()
+    const now = getParaguayDate()
     primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
     ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
   }

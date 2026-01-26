@@ -36,7 +36,7 @@ import {
   Receipt,
   Info,
 } from "lucide-react"
-import { getTodayDate, formatGuaranies } from "@/lib/utils"
+import { getTodayDate, formatGuaranies, getParaguayTimestamp } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { toast } from "sonner"
 
@@ -474,7 +474,7 @@ export function EgresoForm() {
               monto_pagado: nuevoMontoPagado,
               cuotas_pagadas: nuevasCuotasPagadas,
               estado: estaPagada ? "pagada" : "activa",
-              updated_at: new Date().toISOString(),
+              updated_at: getParaguayTimestamp(),
             })
             .eq("id", selectedDeuda)
         }
