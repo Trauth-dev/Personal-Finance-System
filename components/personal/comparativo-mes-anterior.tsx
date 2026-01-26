@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatGuaranies } from "@/lib/utils"
+import { formatGuaranies, getParaguayDate } from "@/lib/utils"
 import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Calendar, Target } from 'lucide-react'
 import { createClient } from "@/lib/supabase/server"
 
@@ -10,7 +10,8 @@ interface Props {
 export async function ComparativoMesAnterior({ perfilId }: Props) {
   const supabase = await createClient()
   
-  const now = new Date()
+  // Usar la fecha de Paraguay en lugar de new Date()
+  const now = getParaguayDate()
   
   // Mes actual
   const primerDiaMesActual = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
@@ -21,7 +22,7 @@ export async function ComparativoMesAnterior({ perfilId }: Props) {
   const ultimoDiaMesAnterior = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0]
 
   // Datos mes actual
-  const { data: presupuestoActual } = await supabase
+  const { data: presupuestoActualData } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
@@ -29,7 +30,8 @@ export async function ComparativoMesAnterior({ perfilId }: Props) {
     .lte("fecha", ultimoDiaMesActual)
     .order("fecha", { ascending: false })
     .limit(1)
-    .single()
+
+  const presupuestoActual = presupuestoActualData?.[0] || null
 
   const { data: egresosActuales } = await supabase
     .from("egresos")
@@ -41,7 +43,7 @@ export async function ComparativoMesAnterior({ perfilId }: Props) {
   const totalEgresosActual = egresosActuales?.reduce((sum, e) => sum + Number(e.monto), 0) || 0
 
   // Datos mes anterior
-  const { data: presupuestoAnterior } = await supabase
+  const { data: presupuestoAnteriorData } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
@@ -49,7 +51,8 @@ export async function ComparativoMesAnterior({ perfilId }: Props) {
     .lte("fecha", ultimoDiaMesAnterior)
     .order("fecha", { ascending: false })
     .limit(1)
-    .single()
+
+  const presupuestoAnterior = presupuestoAnteriorData?.[0] || null
 
   const { data: egresosAnteriores } = await supabase
     .from("egresos")

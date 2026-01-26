@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { PresupuestoCategoriasComparativoClient } from "./presupuesto-categoria-comparativo-client"
+import { getParaguayDate } from "@/lib/utils"
 
 export async function PresupuestoCategoriasComparativo({
   perfilId,
@@ -16,7 +17,7 @@ export async function PresupuestoCategoriasComparativo({
   let ultimoDiaMes = fechaFin
 
   if (!primerDiaMes || !ultimoDiaMes) {
-    const now = new Date()
+    const now = getParaguayDate()
     primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
     ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
   }

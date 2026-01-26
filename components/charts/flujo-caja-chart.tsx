@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { FlujoCajaChartClient } from "./flujo-caja-chart-client"
+import { getParaguayDate } from "@/lib/utils"
 
 export async function FlujoCajaChart({ perfilId }: { perfilId: string }) {
   const supabase = await createClient()
 
   const meses = []
-  const now = new Date()
+  const now = getParaguayDate()
 
   const mesActual = new Date(now.getFullYear(), now.getMonth(), 1)
   const primerDiaActual = mesActual.toISOString().split("T")[0]

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { PresupuestoCategoriasRingsClient } from "./presupuesto-categorias-rings-client"
+import { getParaguayDate } from "@/lib/utils"
 
 interface PresupuestoCategoriasRingsProps {
   perfilId: string
@@ -8,7 +9,7 @@ interface PresupuestoCategoriasRingsProps {
 export async function PresupuestoCategoriasRings({ perfilId }: PresupuestoCategoriasRingsProps) {
   const supabase = await createClient()
 
-  const now = new Date()
+  const now = getParaguayDate()
   const primerDia = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
   const ultimoDia = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
 
