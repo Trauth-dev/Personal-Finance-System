@@ -140,6 +140,7 @@ export function CajasAhorroManager() {
       perfil_id: perfilActual.id,
       nombre: formData.nombre,
       descripcion: formData.descripcion || null,
+      tipo: 'otro',
       meta_monto: Number.parseFloat(formData.meta_monto),
       monto_actual: 0,
       icono: formData.icono,
@@ -182,7 +183,7 @@ export function CajasAhorroManager() {
       caja_id: cajaSeleccionada.id,
       tipo: movimientoData.tipo,
       monto: monto,
-      descripcion: movimientoData.descripcion || null,
+      concepto: movimientoData.descripcion || null,
       fecha: new Date().toISOString().split("T")[0],
     })
 
