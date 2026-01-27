@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { formatGuaranies } from "@/lib/utils"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts"
-import { TrendingUp, TrendingDown, DollarSign, Target, AlertCircle } from "lucide-react"
+import { TrendingUp, TrendingDown, DollarSign, Target, AlertCircle, Wallet, PiggyBank, CreditCard } from "lucide-react"
 
 interface AnalisisData {
   mesActual: {
@@ -56,6 +56,11 @@ export function AnalisisMensualComparativo({ data }: Props) {
   // Salud financiera
   const tasaAhorro = mesActual.ingresos > 0 ? (mesActual.ahorro / mesActual.ingresos) * 100 : 0
   const cumplimientoPresupuesto = mesActual.presupuesto > 0 ? (mesActual.egresos / mesActual.presupuesto) * 100 : 0
+  
+  // Métricas adicionales
+  const capacidadAhorro = mesActual.ingresos - mesActual.egresos
+  const promedioGastoDiario = mesActual.egresos / 30
+  const eficienciaFinanciera = mesActual.presupuesto > 0 ? ((mesActual.presupuesto - mesActual.egresos) / mesActual.presupuesto) * 100 : 0
 
   const getSaludColor = (tasa: number) => {
     if (tasa >= 20) return "text-green-600"
@@ -142,6 +147,46 @@ export function AnalisisMensualComparativo({ data }: Props) {
               </div>
               <p className="text-xs text-slate-600">vs {formatGuaranies(mesAnterior.ahorro)}</p>
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Métricas Adicionales */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="border-2 border-blue-200 bg-blue-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">Capacidad de Ahorro</span>
+              <Wallet className="w-5 h-5 text-blue-600" />
+            </div>
+            <p className="text-2xl font-bold text-slate-900">{formatGuaranies(capacidadAhorro)}</p>
+            <p className="text-xs text-slate-600 mt-2">Disponible para ahorrar</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2 border-purple-200 bg-purple-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">Gasto Diario Promedio</span>
+              <CreditCard className="w-5 h-5 text-purple-600" />
+            </div>
+            <p className="text-2xl font-bold text-slate-900">{formatGuaranies(promedioGastoDiario)}</p>
+            <p className="text-xs text-slate-600 mt-2">Aprox. por día</p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-2 border-teal-200 bg-teal-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-700">Eficiencia Financiera</span>
+              <PiggyBank className="w-5 h-5 text-teal-600" />
+            </div>
+            <p className={`text-2xl font-bold ${eficienciaFinanciera >= 0 ? 'text-teal-600' : 'text-red-600'}`}>
+              {eficienciaFinanciera.toFixed(1)}%
+            </p>
+            <p className="text-xs text-slate-600 mt-2">
+              {eficienciaFinanciera >= 0 ? 'Bajo presupuesto' : 'Sobre presupuesto'}
+            </p>
           </CardContent>
         </Card>
       </div>

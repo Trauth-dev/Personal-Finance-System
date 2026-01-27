@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client"
 import { MonthSelector } from "@/components/personal/month-selector"
 import { AnalisisMensualComparativo } from "@/components/personal/analisis-mensual-comparativo"
 import { getParaguayDate } from "@/lib/utils"
-import { TrendingUp, BarChart3 } from "lucide-react"
+import { TrendingUp, BarChart3, Info } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
 
 interface Props {
   perfilId: string
@@ -181,6 +182,27 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
       <div className="mb-6">
         <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
       </div>
+
+      {/* Mensaje informativo */}
+      {!loading && analisisData && (
+        <Card className="mb-6 border-2 border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <Info className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h3 className="font-semibold text-slate-800 mb-1">Resumen Ejecutivo</h3>
+                <p className="text-sm text-slate-600 leading-relaxed">
+                  Este análisis compara tus finanzas de <span className="font-semibold">{analisisData.mesActual.mes}</span> con <span className="font-semibold">{analisisData.mesAnterior.mes}</span>. 
+                  {analisisData.mesActual.ahorro > analisisData.mesAnterior.ahorro && " ¡Excelente! Has mejorado tu capacidad de ahorro."}
+                  {analisisData.mesActual.ahorro < analisisData.mesAnterior.ahorro && " Tu ahorro ha disminuido, revisa tus gastos."}
+                  {analisisData.mesActual.egresos < analisisData.mesAnterior.egresos && " Tus gastos han disminuido, ¡sigue así!"}
+                  {analisisData.mesActual.egresos > analisisData.mesAnterior.egresos && " Tus gastos han aumentado, considera optimizar."}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Contenido */}
       {loading ? (
