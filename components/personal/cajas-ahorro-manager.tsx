@@ -556,7 +556,7 @@ export function CajasAhorroManager() {
       )}
 
       <Dialog open={isMovimientoDialogOpen} onOpenChange={setIsMovimientoDialogOpen}>
-        <DialogContent className="glass-effect max-w-md">
+        <DialogContent className="glass-effect max-w-md max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>
               {movimientoData.tipo === "deposito" ? "Depositar en" : "Retirar de"} {cajaSeleccionada?.nombre}
@@ -567,7 +567,7 @@ export function CajasAhorroManager() {
                 : "Retira dinero de esta caja de ahorro"}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleMovimiento} className="space-y-4">
+          <form onSubmit={handleMovimiento} className="space-y-3">
             <div>
               <Label htmlFor="monto">Monto</Label>
               <Input
@@ -588,11 +588,11 @@ export function CajasAhorroManager() {
                 value={movimientoData.descripcion}
                 onChange={(e) => setMovimientoData({ ...movimientoData, descripcion: e.target.value })}
                 placeholder="Ej: Ahorro mensual, Regalo, etc."
-                rows={3}
+                rows={2}
               />
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setIsMovimientoDialogOpen(false)}>
                 Cancelar
               </Button>
