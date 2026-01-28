@@ -14,21 +14,22 @@ export default async function PersonalAnalysisPage() {
     redirect("/auth/login")
   }
 
-  // Obtener perfil activo del usuario
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("perfil_activo_id")
-    .eq("id", user.id)
+  // Obtener perfil personal del usuario
+  const { data: perfilPersonal } = await supabase
+    .from("perfiles")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("tipo", "personal")
     .single()
 
-  if (!profile?.perfil_activo_id) {
+  if (!perfilPersonal) {
     redirect("/dashboard/perfiles")
   }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <DashboardHeader />
-      <AnalisisFinancieroClient perfilId={profile.perfil_activo_id} />
+      <DashboardHeader title="Análisis Financiero" description="Análisis detallado de tus finanzas" />
+      <AnalisisFinancieroClient perfilId={perfilPersonal.id} />
     </div>
   )
 }
