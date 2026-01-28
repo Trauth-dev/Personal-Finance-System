@@ -37,6 +37,7 @@ import {
   Trash2,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { formatGuaranies } from "@/lib/utils"
 
 type CajaAhorro = {
   id: string
@@ -136,16 +137,26 @@ export function CajasAhorroManager() {
 
     const supabase = createClient()
 
-    const { error } = await supabase.from("cajas_ahorro").insert({
+    console.log("[v0] Creando caja de ahorro:", {
       perfil_id: perfilActual.id,
+      user_id: perfilActual.user_id,
+      nombre: formData.nombre,
+    })
+
+    const { data, error } = await supabase.from("cajas_ahorro").insert({
+      perfil_id: perfilActual.id,
+      user_id: perfilActual.user_id,
       nombre: formData.nombre,
       descripcion: formData.descripcion || null,
+      tipo: 'otro',
       meta_monto: Number.parseFloat(formData.meta_monto),
       monto_actual: 0,
       icono: formData.icono,
       color: formData.color,
       prioridad: Number.parseInt(formData.prioridad),
-    })
+    }).select()
+
+    console.log("[v0] Resultado insert caja:", { data, error })
 
     if (!error) {
       toast({
@@ -178,13 +189,21 @@ export function CajasAhorroManager() {
     const supabase = createClient()
     const monto = Number.parseFloat(movimientoData.monto)
 
-    const { error: movimientoError } = await supabase.from("movimientos_caja").insert({
+    console.log("[v0] Registrando movimiento:", {
       caja_id: cajaSeleccionada.id,
       tipo: movimientoData.tipo,
       monto: monto,
-      descripcion: movimientoData.descripcion || null,
-      fecha: new Date().toISOString().split("T")[0],
     })
+
+    const { data: movData, error: movimientoError } = await supabase.from("movimientos_caja").insert({
+      caja_id: cajaSeleccionada.id,
+      tipo: movimientoData.tipo,
+      monto: monto,
+      concepto: movimientoData.descripcion || null,
+      fecha: new Date().toISOString().split("T")[0],
+    }).select()
+
+    console.log("[v0] Resultado insert movimiento:", { movData, movimientoError })
 
     if (movimientoError) {
       toast({
@@ -397,20 +416,29 @@ export function CajasAhorroManager() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 rounded-lg bg-white/50">
-              <p className="text-sm text-muted-foreground mb-1">Total Ahorrado</p>
-              <p className="text-2xl font-bold text-primary">${totalAhorrado.toFixed(2)}</p>
+            <div className="text-center p-4 rounded-lg bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
+              <PiggyBank className="w-8 h-8 mx-auto mb-2 text-green-600" />
+              <p className="text-sm text-green-700 font-medium mb-1">Monto Ahorrado</p>
+              <p className="text-2xl font-bold text-green-700">{formatGuaranies(totalAhorrado)}</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-white/50">
-              <p className="text-sm text-muted-foreground mb-1">Meta Total</p>
-              <p className="text-2xl font-bold">${totalMetas.toFixed(2)}</p>
+            <div className="text-center p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
+              <Target className="w-8 h-8 mx-auto mb-2 text-blue-600" />
+              <p className="text-sm text-blue-700 font-medium mb-1">Meta Total</p>
+              <p className="text-2xl font-bold text-blue-700">{formatGuaranies(totalMetas)}</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-white/50">
-              <p className="text-sm text-muted-foreground mb-1">Progreso General</p>
-              <p className="text-2xl font-bold text-green-600">{porcentajeTotal.toFixed(1)}%</p>
+            <div className="text-center p-4 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200">
+              <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-600" />
+              <p className="text-sm text-purple-700 font-medium mb-1">Logro Alcanzado</p>
+              <p className="text-2xl font-bold text-purple-700">{porcentajeTotal.toFixed(1)}%</p>
             </div>
           </div>
-          <Progress value={porcentajeTotal} className="h-3" />
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Progreso hacia tus metas</span>
+              <span className="font-medium">{formatGuaranies(totalAhorrado)} / {formatGuaranies(totalMetas)}</span>
+            </div>
+            <Progress value={Math.min(100, porcentajeTotal)} className="h-3" />
+          </div>
         </CardContent>
       </Card>
 
@@ -461,22 +489,34 @@ export function CajasAhorroManager() {
                   {caja.descripcion && <CardDescription className="mt-2">{caja.descripcion}</CardDescription>}
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Progreso</span>
-                      <span className="font-semibold">{porcentaje.toFixed(1)}%</span>
-                    </div>
-                    <Progress value={Math.min(100, porcentaje)} className="h-2" />
+                  {/* Monto Ahorrado destacado */}
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
+                    <p className="text-xs text-green-700 font-medium mb-1">Monto Ahorrado</p>
+                    <p className="text-2xl font-bold text-green-700">{formatGuaranies(caja.monto_actual)}</p>
                   </div>
 
-                  <div className="flex justify-between items-center">
+                  {/* Barra de progreso con porcentaje */}
+                  <div>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="text-muted-foreground">Progreso hacia la meta</span>
+                      <span className={`font-bold ${porcentaje >= 100 ? 'text-green-600' : porcentaje >= 50 ? 'text-blue-600' : 'text-orange-600'}`}>
+                        {porcentaje.toFixed(1)}%
+                      </span>
+                    </div>
+                    <Progress value={Math.min(100, porcentaje)} className="h-3" />
+                  </div>
+
+                  {/* Meta */}
+                  <div className="flex justify-between items-center pt-2 border-t border-border/50">
                     <div>
-                      <p className="text-sm text-muted-foreground">Ahorrado</p>
-                      <p className="text-xl font-bold text-primary">${caja.monto_actual.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">Meta</p>
+                      <p className="text-lg font-semibold">{formatGuaranies(caja.meta_monto)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-muted-foreground">Meta</p>
-                      <p className="text-xl font-bold">${caja.meta_monto.toFixed(2)}</p>
+                      <p className="text-xs text-muted-foreground">Falta</p>
+                      <p className="text-lg font-semibold text-orange-600">
+                        {formatGuaranies(Math.max(0, caja.meta_monto - caja.monto_actual))}
+                      </p>
                     </div>
                   </div>
 
