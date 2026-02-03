@@ -28,6 +28,7 @@ import {
   CreditCard,
   Wallet,
   Calculator,
+  Repeat,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -105,6 +106,11 @@ const navItemsPersonal = [
     title: "Metas y Objetivos",
     href: "/dashboard/personal/metas",
     icon: Target,
+  },
+  {
+    title: "Hábitos Recurrentes",
+    href: "/dashboard/personal/habitos-recurrentes",
+    icon: Repeat,
   },
 ]
 
