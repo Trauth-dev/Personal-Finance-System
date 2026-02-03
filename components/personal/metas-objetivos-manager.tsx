@@ -70,12 +70,14 @@ interface HabitoRecurrente {
   id: string
   nombre: string
   descripcion: string | null
-  frecuencia: "diario" | "semanal" | "mensual"
-  dias_semana: number[] | null
-  dia_mes: number | null
+  intervalo_dias: number
+  fecha_inicio: string
+  fecha_fin: string | null
+  color: string
+  icono: string
   activo: boolean
-  racha_actual: number
-  mejor_racha: number
+  ultima_completada: string | null
+  proxima_ocurrencia: string | null
   created_at: string
 }
 
@@ -122,9 +124,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [habitoRecurrenteForm, setHabitoRecurrenteForm] = useState({
     nombre: "",
     descripcion: "",
-    frecuencia: "diario" as "diario" | "semanal" | "mensual",
-    dias_semana: [] as number[],
-    dia_mes: 1,
+    intervalo_dias: 1,
   })
   
   // Estados para tareas del día
@@ -607,20 +607,21 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     try {
       if (!userId) return
       
+      const hoy = new Date().toISOString().split("T")[0]
       const { error } = await supabase.from("habitos_recurrentes").insert({
         perfil_id: perfilId,
         user_id: userId,
         nombre: habitoRecurrenteForm.nombre,
         descripcion: habitoRecurrenteForm.descripcion || null,
-        frecuencia: habitoRecurrenteForm.frecuencia,
-        dias_semana: habitoRecurrenteForm.frecuencia === "semanal" ? habitoRecurrenteForm.dias_semana : null,
-        dia_mes: habitoRecurrenteForm.frecuencia === "mensual" ? habitoRecurrenteForm.dia_mes : null,
+        intervalo_dias: habitoRecurrenteForm.intervalo_dias,
+        fecha_inicio: hoy,
+        proxima_ocurrencia: hoy,
       })
       
       if (error) throw error
       
       setShowHabitoRecurrenteModal(false)
-      setHabitoRecurrenteForm({ nombre: "", descripcion: "", frecuencia: "diario", dias_semana: [], dia_mes: 1 })
+      setHabitoRecurrenteForm({ nombre: "", descripcion: "", intervalo_dias: 1 })
       cargarDatos()
     } catch (error) {
       console.error("Error guardando hábito recurrente:", error)
@@ -644,22 +645,28 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           .update({ completado })
           .eq("id", existingRecord.id)
       } else {
+        if (!userId) return
         await supabase.from("registro_habitos_recurrentes").insert({
           habito_id: habitoId,
+          perfil_id: perfilId,
+          user_id: userId,
           fecha: hoy,
           completado,
         })
       }
       
-      // Actualizar racha si se completó
+      // Actualizar última completada y próxima ocurrencia si se completó
       if (completado) {
         const habito = habitosRecurrentes.find((h) => h.id === habitoId)
         if (habito) {
-          const nuevaRacha = habito.racha_actual + 1
-          const mejorRacha = Math.max(nuevaRacha, habito.mejor_racha)
+          const proximaFecha = new Date()
+          proximaFecha.setDate(proximaFecha.getDate() + habito.intervalo_dias)
           await supabase
             .from("habitos_recurrentes")
-            .update({ racha_actual: nuevaRacha, mejor_racha: mejorRacha })
+            .update({ 
+              ultima_completada: hoy, 
+              proxima_ocurrencia: proximaFecha.toISOString().split("T")[0] 
+            })
             .eq("id", habitoId)
         }
       }
@@ -680,13 +687,11 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     }
   }
   
-  const getFrecuenciaLabel = (frecuencia: string) => {
-    switch (frecuencia) {
-      case "diario": return "Diario"
-      case "semanal": return "Semanal"
-      case "mensual": return "Mensual"
-      default: return frecuencia
-    }
+  const getIntervaloLabel = (dias: number) => {
+    if (dias === 1) return "Diario"
+    if (dias === 7) return "Semanal"
+    if (dias === 30) return "Mensual"
+    return `Cada ${dias} días`
   }
   
   const habitosRecCompletadosHoy = Object.values(registrosHabitosRecurrentes).filter(Boolean).length
@@ -1489,7 +1494,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                 <TrendingUp className="w-5 h-5 text-cyan-600" />
               </div>
               <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">
-                {habitosRecurrentes.length > 0 ? Math.max(...habitosRecurrentes.map((h) => h.mejor_racha)) : 0} días
+                {habitosRecCompletadosHoy} completados
               </p>
             </CardContent>
           </Card>
@@ -1563,11 +1568,13 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                   <CardContent>
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="border-cyan-500 text-cyan-700 dark:text-cyan-300">
-                        {getFrecuenciaLabel(habito.frecuencia)}
+                        {getIntervaloLabel(habito.intervalo_dias)}
                       </Badge>
                       <div className="flex items-center gap-2 text-sm">
-                        <TrendingUp className="w-4 h-4 text-cyan-600" />
-                        <span className="text-cyan-700 dark:text-cyan-300 font-medium">{habito.racha_actual} días</span>
+                        <Calendar className="w-4 h-4 text-cyan-600" />
+                        <span className="text-cyan-700 dark:text-cyan-300 font-medium">
+                          {habito.proxima_ocurrencia ? `Próximo: ${new Date(habito.proxima_ocurrencia).toLocaleDateString("es-PY", { day: "numeric", month: "short" })}` : "Hoy"}
+                        </span>
                       </div>
                     </div>
                   </CardContent>
@@ -2181,70 +2188,26 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             </div>
 
             <div>
-              <Label htmlFor="frecuencia-recurrente">Frecuencia</Label>
+              <Label htmlFor="intervalo-recurrente">Repetir cada</Label>
               <Select
-                value={habitoRecurrenteForm.frecuencia}
-                onValueChange={(value: "diario" | "semanal" | "mensual") =>
-                  setHabitoRecurrenteForm({ ...habitoRecurrenteForm, frecuencia: value })
+                value={habitoRecurrenteForm.intervalo_dias.toString()}
+                onValueChange={(value) =>
+                  setHabitoRecurrenteForm({ ...habitoRecurrenteForm, intervalo_dias: parseInt(value) })
                 }
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="diario">Diario</SelectItem>
-                  <SelectItem value="semanal">Semanal</SelectItem>
-                  <SelectItem value="mensual">Mensual</SelectItem>
+                  <SelectItem value="1">Diario (cada día)</SelectItem>
+                  <SelectItem value="2">Cada 2 días</SelectItem>
+                  <SelectItem value="3">Cada 3 días</SelectItem>
+                  <SelectItem value="7">Semanal (cada 7 días)</SelectItem>
+                  <SelectItem value="14">Cada 2 semanas</SelectItem>
+                  <SelectItem value="30">Mensual (cada 30 días)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-
-            {habitoRecurrenteForm.frecuencia === "semanal" && (
-              <div>
-                <Label>Días de la semana</Label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {[
-                    { value: 0, label: "Dom" },
-                    { value: 1, label: "Lun" },
-                    { value: 2, label: "Mar" },
-                    { value: 3, label: "Mié" },
-                    { value: 4, label: "Jue" },
-                    { value: 5, label: "Vie" },
-                    { value: 6, label: "Sáb" },
-                  ].map((dia) => (
-                    <Button
-                      key={dia.value}
-                      type="button"
-                      variant={habitoRecurrenteForm.dias_semana.includes(dia.value) ? "default" : "outline"}
-                      size="sm"
-                      className={habitoRecurrenteForm.dias_semana.includes(dia.value) ? "bg-cyan-600 hover:bg-cyan-700" : ""}
-                      onClick={() => {
-                        const newDias = habitoRecurrenteForm.dias_semana.includes(dia.value)
-                          ? habitoRecurrenteForm.dias_semana.filter((d) => d !== dia.value)
-                          : [...habitoRecurrenteForm.dias_semana, dia.value]
-                        setHabitoRecurrenteForm({ ...habitoRecurrenteForm, dias_semana: newDias })
-                      }}
-                    >
-                      {dia.label}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {habitoRecurrenteForm.frecuencia === "mensual" && (
-              <div>
-                <Label htmlFor="dia_mes">Día del mes</Label>
-                <Input
-                  id="dia_mes"
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={habitoRecurrenteForm.dia_mes}
-                  onChange={(e) => setHabitoRecurrenteForm({ ...habitoRecurrenteForm, dia_mes: parseInt(e.target.value) })}
-                />
-              </div>
-            )}
 
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setShowHabitoRecurrenteModal(false)}>
