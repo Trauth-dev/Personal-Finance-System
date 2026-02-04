@@ -117,10 +117,12 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [activeTab, setActiveTab] = useState("tareas")
   const [userId, setUserId] = useState<string | null>(null)
   
-  // Estados para hábitos recurrentes
+  // Estados para hábitos recurrentes (Tareas Programadas)
   const [habitosRecurrentes, setHabitosRecurrentes] = useState<HabitoRecurrente[]>([])
   const [registrosHabitosRecurrentes, setRegistrosHabitosRecurrentes] = useState<Record<string, boolean>>({})
   const [showHabitoRecurrenteModal, setShowHabitoRecurrenteModal] = useState(false)
+  const [verDiasFuturos, setVerDiasFuturos] = useState(false)
+  const [tareaAEliminar, setTareaAEliminar] = useState<string | null>(null)
   const [habitoRecurrenteForm, setHabitoRecurrenteForm] = useState({
     nombre: "",
     descripcion: "",
@@ -221,7 +223,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         setTareasDelDia(tareasUltimos5DiasRes.data.filter(t => t.fecha_limite === hoyStr))
       }
       
-      // Cargar hábitos recurrentes
+      // Cargar tareas programadas (hábitos recurrentes)
       const { data: habitosRecData } = await supabase
         .from("habitos_recurrentes")
         .select("*")
@@ -232,18 +234,23 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       if (habitosRecData) {
         setHabitosRecurrentes(habitosRecData)
         
-        // Cargar registros de hoy
+        // Cargar registros de las últimas 2 semanas
         if (habitosRecData.length > 0) {
           const habitoIds = habitosRecData.map((h) => h.id)
+          const haceDosSemanas = new Date()
+          haceDosSemanas.setDate(haceDosSemanas.getDate() - 14)
+          const fechaDesde = haceDosSemanas.toISOString().split("T")[0]
+          
           const { data: registrosRec } = await supabase
             .from("registro_habitos_recurrentes")
             .select("*")
             .in("habito_id", habitoIds)
-            .eq("fecha", hoyStr)
+            .gte("fecha", fechaDesde)
           
           const registrosMap: Record<string, boolean> = {}
           registrosRec?.forEach((r) => {
-            registrosMap[r.habito_id] = r.completado
+            const clave = `${r.habito_id}-${r.fecha}`
+            registrosMap[clave] = r.completado
           })
           setRegistrosHabitosRecurrentes(registrosMap)
         }
@@ -628,15 +635,13 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     }
   }
   
-  const toggleHabitoRecurrente = async (habitoId: string, completado: boolean) => {
+  const toggleTareaProgramada = async (habitoId: string, fecha: string, completado: boolean) => {
     try {
-      const hoy = new Date().toISOString().split("T")[0]
-      
       const { data: existingRecord } = await supabase
         .from("registro_habitos_recurrentes")
         .select("id")
         .eq("habito_id", habitoId)
-        .eq("fecha", hoy)
+        .eq("fecha", fecha)
         .single()
       
       if (existingRecord) {
@@ -650,7 +655,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           habito_id: habitoId,
           perfil_id: perfilId,
           user_id: userId,
-          fecha: hoy,
+          fecha: fecha,
           completado,
         })
       }
@@ -659,31 +664,39 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       if (completado) {
         const habito = habitosRecurrentes.find((h) => h.id === habitoId)
         if (habito) {
-          const proximaFecha = new Date()
+          const fechaActual = new Date(fecha)
+          const proximaFecha = new Date(fechaActual)
           proximaFecha.setDate(proximaFecha.getDate() + habito.intervalo_dias)
           await supabase
             .from("habitos_recurrentes")
             .update({ 
-              ultima_completada: hoy, 
+              ultima_completada: fecha, 
               proxima_ocurrencia: proximaFecha.toISOString().split("T")[0] 
             })
             .eq("id", habitoId)
         }
       }
       
-      setRegistrosHabitosRecurrentes((prev) => ({ ...prev, [habitoId]: completado }))
+      const clave = `${habitoId}-${fecha}`
+      setRegistrosHabitosRecurrentes((prev) => ({ ...prev, [clave]: completado }))
       cargarDatos()
     } catch (error) {
-      console.error("Error actualizando hábito recurrente:", error)
+      console.error("Error actualizando tarea programada:", error)
     }
   }
   
-  const eliminarHabitoRecurrente = async (id: string) => {
+  const confirmarEliminarTarea = (id: string) => {
+    setTareaAEliminar(id)
+  }
+  
+  const eliminarTareaProgramada = async () => {
+    if (!tareaAEliminar) return
     try {
-      await supabase.from("habitos_recurrentes").update({ activo: false }).eq("id", id)
+      await supabase.from("habitos_recurrentes").update({ activo: false }).eq("id", tareaAEliminar)
+      setTareaAEliminar(null)
       cargarDatos()
     } catch (error) {
-      console.error("Error eliminando hábito recurrente:", error)
+      console.error("Error eliminando tarea programada:", error)
     }
   }
   
@@ -694,8 +707,60 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     return `Cada ${dias} días`
   }
   
-  const habitosRecCompletadosHoy = Object.values(registrosHabitosRecurrentes).filter(Boolean).length
-  const porcentajeHabitosRec = habitosRecurrentes.length > 0 ? (habitosRecCompletadosHoy / habitosRecurrentes.length) * 100 : 0
+  // Función para calcular ocurrencias de una tarea en un rango de fechas
+  const calcularOcurrencias = (tarea: HabitoRecurrente, fechaInicio: Date, fechaFin: Date) => {
+    const ocurrencias: { fecha: string; diaNombre: string }[] = []
+    const inicio = new Date(tarea.fecha_inicio)
+    let fechaActual = new Date(Math.max(inicio.getTime(), fechaInicio.getTime()))
+    
+    while (fechaActual <= fechaFin) {
+      if (fechaActual >= inicio && (!tarea.fecha_fin || fechaActual <= new Date(tarea.fecha_fin))) {
+        const fechaStr = fechaActual.toISOString().split("T")[0]
+        const diaNombre = fechaActual.toLocaleDateString("es-PY", { weekday: "long" })
+        ocurrencias.push({ fecha: fechaStr, diaNombre: diaNombre.charAt(0).toUpperCase() + diaNombre.slice(1) })
+      }
+      fechaActual.setDate(fechaActual.getDate() + tarea.intervalo_dias)
+    }
+    
+    return ocurrencias
+  }
+  
+  // Obtener tareas agrupadas por día
+  const getTareasPorDia = () => {
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+    
+    const inicioDeSemana = new Date(hoy)
+    const diaSemana = hoy.getDay()
+    inicioDeSemana.setDate(hoy.getDate() - diaSemana)
+    
+    const finDeSemana = new Date(inicioDeSemana)
+    finDeSemana.setDate(inicioDeSemana.getDate() + (verDiasFuturos ? 13 : 6))
+    
+    const tareasPorDia: Record<string, { tarea: HabitoRecurrente; fecha: string; diaNombre: string; completada: boolean }[]> = {}
+    
+    habitosRecurrentes.forEach((tarea) => {
+      const ocurrencias = calcularOcurrencias(tarea, inicioDeSemana, finDeSemana)
+      ocurrencias.forEach((ocurrencia) => {
+        if (!tareasPorDia[ocurrencia.fecha]) {
+          tareasPorDia[ocurrencia.fecha] = []
+        }
+        const clave = `${tarea.id}-${ocurrencia.fecha}`
+        const completada = registrosHabitosRecurrentes[clave] || false
+        tareasPorDia[ocurrencia.fecha].push({ 
+          tarea, 
+          fecha: ocurrencia.fecha, 
+          diaNombre: ocurrencia.diaNombre,
+          completada 
+        })
+      })
+    })
+    
+    return tareasPorDia
+  }
+  
+  const tareasPorDia = getTareasPorDia()
+  const diasConTareas = Object.keys(tareasPorDia).sort()
   
   // Calcular estadísticas
   const calcularEstadisticasHabitos = () => {
@@ -915,8 +980,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       </TabsTrigger>
       <TabsTrigger value="recurrentes" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-cyan-600 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
         <Repeat className="h-4 w-4 text-cyan-600 group-data-[state=active]:text-white" />
-        <span className="text-cyan-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Hábitos Recurrentes</span>
-        <span className="text-cyan-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Recurrentes</span>
+        <span className="text-cyan-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Tareas Programadas</span>
+        <span className="text-cyan-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Programadas</span>
       </TabsTrigger>
           <TabsTrigger value="metas" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
             <Target className="h-4 w-4 text-green-600 group-data-[state=active]:text-white" />
@@ -1456,127 +1521,128 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           )}
   </TabsContent>
       
-      {/* Tab de Hábitos Recurrentes */}
+      {/* Tab de Tareas Programadas */}
       <TabsContent value="recurrentes" className="space-y-4">
         <div className="flex items-center justify-between mb-2">
           <div>
             <h2 className="text-xl font-bold text-cyan-600 flex items-center gap-2">
               <Repeat className="h-5 w-5" />
-              Hábitos Recurrentes
+              Tareas Programadas
             </h2>
-            <p className="text-sm text-muted-foreground">Gestiona tus hábitos diarios, semanales y mensuales</p>
+            <p className="text-sm text-muted-foreground">Programa tareas que se repiten cada ciertos días</p>
           </div>
           <Button onClick={() => setShowHabitoRecurrenteModal(true)} className="bg-cyan-600 hover:bg-cyan-700">
-            <Plus className="h-4 w-4 mr-2" />
-            Nuevo Hábito
+            <Plus className="h-4 h-4 mr-2" />
+            Nueva Tarea
           </Button>
         </div>
         
-        {/* Resumen de hábitos recurrentes */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Progreso de Hoy</span>
-                <Calendar className="w-5 h-5 text-cyan-600" />
-              </div>
-              <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">
-                {habitosRecCompletadosHoy}/{habitosRecurrentes.length}
-              </p>
-              <Progress value={porcentajeHabitosRec} className="h-2 mt-2" />
-            </CardContent>
-          </Card>
-          
-          <Card className="border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Mejor Racha</span>
-                <TrendingUp className="w-5 h-5 text-cyan-600" />
-              </div>
-              <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">
-                {habitosRecCompletadosHoy} completados
-              </p>
-            </CardContent>
-          </Card>
-          
-          <Card className="border-2 border-cyan-200 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30">
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-cyan-700 dark:text-cyan-300">Total Hábitos</span>
-                <Award className="w-5 h-5 text-cyan-600" />
-              </div>
-              <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">{habitosRecurrentes.length}</p>
-            </CardContent>
-          </Card>
+        {/* Toggle para ver días futuros */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={!verDiasFuturos ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVerDiasFuturos(false)}
+            className={!verDiasFuturos ? "bg-cyan-600 hover:bg-cyan-700" : ""}
+          >
+            Semana Actual
+          </Button>
+          <Button
+            variant={verDiasFuturos ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVerDiasFuturos(true)}
+            className={verDiasFuturos ? "bg-cyan-600 hover:bg-cyan-700" : ""}
+          >
+            Próxima Semana
+          </Button>
         </div>
         
-        {/* Lista de Hábitos Recurrentes */}
+        {/* Lista de tareas por día */}
         {habitosRecurrentes.length === 0 ? (
           <Card className="border-2 border-dashed border-cyan-300">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Repeat className="w-12 h-12 text-cyan-400 mb-4" />
-              <h3 className="text-lg font-semibold text-cyan-700 dark:text-cyan-300 mb-2">Sin hábitos recurrentes</h3>
+              <h3 className="text-lg font-semibold text-cyan-700 dark:text-cyan-300 mb-2">Sin tareas programadas</h3>
               <p className="text-muted-foreground text-center mb-4">
-                Crea tu primer hábito para comenzar a construir rutinas positivas
+                Crea tu primera tarea programada para organizar actividades recurrentes
               </p>
               <Button onClick={() => setShowHabitoRecurrenteModal(true)} className="bg-cyan-600 hover:bg-cyan-700">
                 <Plus className="w-4 h-4 mr-2" />
-                Crear Primer Hábito
+                Crear Primera Tarea
               </Button>
             </CardContent>
           </Card>
+        ) : diasConTareas.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Calendar className="w-12 h-12 text-cyan-400 mb-4" />
+              <p className="text-muted-foreground text-center">
+                No hay tareas programadas para {verDiasFuturos ? "la próxima semana" : "esta semana"}
+              </p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {habitosRecurrentes.map((habito) => {
-              const completadoHoy = registrosHabitosRecurrentes[habito.id] || false
+          <div className="space-y-3">
+            {diasConTareas.map((fecha) => {
+              const tareas = tareasPorDia[fecha]
+              const diaFecha = new Date(fecha + "T00:00:00")
+              const hoy = new Date()
+              hoy.setHours(0, 0, 0, 0)
+              const esPasado = diaFecha < hoy
+              const esHoy = diaFecha.getTime() === hoy.getTime()
+              
               return (
-                <Card
-                  key={habito.id}
-                  className={`border-2 transition-all ${
-                    completadoHoy
-                      ? "border-cyan-500 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30"
-                      : "border-slate-200 hover:border-cyan-300 dark:border-slate-700"
-                  }`}
-                >
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <Checkbox
-                          checked={completadoHoy}
-                          onCheckedChange={(checked) => toggleHabitoRecurrente(habito.id, checked as boolean)}
-                          className="border-cyan-500 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
-                        />
-                        <div>
-                          <CardTitle className={`text-lg ${completadoHoy ? "line-through text-muted-foreground" : ""}`}>
-                            {habito.nombre}
-                          </CardTitle>
-                          {habito.descripcion && (
-                            <p className="text-sm text-muted-foreground mt-1">{habito.descripcion}</p>
-                          )}
-                        </div>
+                <Card key={fecha} className={`border-2 ${esHoy ? "border-cyan-500 bg-cyan-50/50 dark:bg-cyan-950/20" : esPasado ? "opacity-60" : ""}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-cyan-600" />
+                        <h3 className="font-semibold text-cyan-700 dark:text-cyan-300">
+                          {tareas[0].diaNombre}
+                        </h3>
+                        <span className="text-sm text-muted-foreground">
+                          {diaFecha.toLocaleDateString("es-PY", { day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                        {esHoy && (
+                          <Badge className="bg-cyan-600 text-white">Hoy</Badge>
+                        )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => eliminarHabitoRecurrente(habito.id)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
                     </div>
                   </CardHeader>
-                  <CardContent>
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="border-cyan-500 text-cyan-700 dark:text-cyan-300">
-                        {getIntervaloLabel(habito.intervalo_dias)}
-                      </Badge>
-                      <div className="flex items-center gap-2 text-sm">
-                        <Calendar className="w-4 h-4 text-cyan-600" />
-                        <span className="text-cyan-700 dark:text-cyan-300 font-medium">
-                          {habito.proxima_ocurrencia ? `Próximo: ${new Date(habito.proxima_ocurrencia).toLocaleDateString("es-PY", { day: "numeric", month: "short" })}` : "Hoy"}
-                        </span>
+                  <CardContent className="space-y-2">
+                    {tareas.map(({ tarea, fecha: fechaTarea, completada }) => (
+                      <div key={`${tarea.id}-${fechaTarea}`} className="flex items-center justify-between p-3 rounded-lg border bg-white dark:bg-slate-900">
+                        <div className="flex items-center gap-3 flex-1">
+                          <Checkbox
+                            checked={completada}
+                            onCheckedChange={(checked) => toggleTareaProgramada(tarea.id, fechaTarea, checked as boolean)}
+                            className="border-cyan-500 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
+                            disabled={esPasado && !completada}
+                          />
+                          <div className="flex-1">
+                            <p className={`font-medium ${completada ? "line-through text-muted-foreground" : ""}`}>
+                              {tarea.nombre}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="border-cyan-500 text-cyan-700 dark:text-cyan-300 text-xs">
+                                {getIntervaloLabel(tarea.intervalo_dias)}
+                              </Badge>
+                              {tarea.descripcion && (
+                                <span className="text-xs text-muted-foreground">{tarea.descripcion}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => confirmarEliminarTarea(tarea.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
-                    </div>
+                    ))}
                   </CardContent>
                 </Card>
               )
@@ -2157,21 +2223,21 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         </AlertDialogContent>
       </AlertDialog>
       
-      {/* Modal de Hábito Recurrente */}
+      {/* Modal de Tarea Programada */}
       <Dialog open={showHabitoRecurrenteModal} onOpenChange={setShowHabitoRecurrenteModal}>
         <DialogContent className="glass-effect max-w-md max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle className="text-cyan-700">Nuevo Hábito Recurrente</DialogTitle>
-            <DialogDescription>Crea un nuevo hábito para tu rutina</DialogDescription>
+            <DialogTitle className="text-cyan-700">Nueva Tarea Programada</DialogTitle>
+            <DialogDescription>Crea una tarea que se repite automáticamente</DialogDescription>
           </DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); guardarHabitoRecurrente(); }} className="space-y-3">
             <div>
-              <Label htmlFor="nombre-recurrente">Nombre del hábito</Label>
+              <Label htmlFor="nombre-recurrente">Nombre de la tarea</Label>
               <Input
                 id="nombre-recurrente"
                 value={habitoRecurrenteForm.nombre}
                 onChange={(e) => setHabitoRecurrenteForm({ ...habitoRecurrenteForm, nombre: e.target.value })}
-                placeholder="Ej: Meditar, Ejercicio, Leer..."
+                placeholder="Ej: Limpiar Patio, Revisar Notebook..."
                 required
               />
             </div>
@@ -2182,7 +2248,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                 id="descripcion-recurrente"
                 value={habitoRecurrenteForm.descripcion}
                 onChange={(e) => setHabitoRecurrenteForm({ ...habitoRecurrenteForm, descripcion: e.target.value })}
-                placeholder="Detalles adicionales del hábito"
+                placeholder="Detalles adicionales"
                 rows={2}
               />
             </div>
@@ -2214,12 +2280,30 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                 Cancelar
               </Button>
               <Button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white">
-                Crear Hábito
+                Crear Tarea
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+      
+      {/* AlertDialog para confirmar eliminación */}
+      <AlertDialog open={tareaAEliminar !== null} onOpenChange={(open) => !open && setTareaAEliminar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Finalizar esta tarea programada?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará todas las ocurrencias futuras de esta tarea. Las ocurrencias ya completadas se mantendrán en el historial.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={eliminarTareaProgramada} className="bg-red-600 hover:bg-red-700">
+              Finalizar Tarea
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
