@@ -29,6 +29,10 @@ export function PresupuestoManager() {
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [mesSeleccionado, setMesSeleccionado] = useState(() => {
+    const now = getParaguayDate()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
   const [formData, setFormData] = useState({
     categoria: "",
     tipo_categoria: "egreso" as "ingreso" | "egreso",
@@ -44,15 +48,15 @@ export function PresupuestoManager() {
     if (perfilActivo) {
       fetchPresupuestos()
     }
-  }, [perfilActivo])
+  }, [perfilActivo, mesSeleccionado])
 
   const fetchPresupuestos = async () => {
     if (!perfilActivo) return
 
     setLoading(true)
-    const now = getParaguayDate()
-    const primerDia = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-    const ultimoDia = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+    const [year, month] = mesSeleccionado.split('-').map(Number)
+    const primerDia = new Date(year, month - 1, 1).toISOString().split("T")[0]
+    const ultimoDia = new Date(year, month, 0).toISOString().split("T")[0]
 
     // Obtener presupuestos
     const { data: presupuestosData } = await supabase
@@ -128,8 +132,8 @@ export function PresupuestoManager() {
     e.preventDefault()
     if (!perfilActivo) return
 
-    const now = getParaguayDate()
-    const primerDia = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+    const [year, month] = mesSeleccionado.split('-').map(Number)
+    const primerDia = new Date(year, month - 1, 1).toISOString().split("T")[0]
 
     const dataToSave = {
       perfil_id: perfilActivo.id,
@@ -191,8 +195,33 @@ export function PresupuestoManager() {
     return <div className="text-center py-8">Cargando presupuestos...</div>
   }
 
+  const getMesNombre = () => {
+    const [year, month] = mesSeleccionado.split('-').map(Number)
+    const fecha = new Date(year, month - 1, 1)
+    return fecha.toLocaleDateString('es-PY', { month: 'long', year: 'numeric' })
+  }
+
   return (
     <div className="space-y-6">
+      {/* Selector de Mes */}
+      <Card className="border-2 border-primary/20">
+        <CardContent className="pt-6">
+          <div className="flex items-center gap-4">
+            <Label htmlFor="mes-selector" className="font-semibold">Seleccionar Mes:</Label>
+            <Input
+              id="mes-selector"
+              type="month"
+              value={mesSeleccionado}
+              onChange={(e) => setMesSeleccionado(e.target.value)}
+              className="max-w-xs"
+            />
+            <span className="text-sm text-muted-foreground capitalize">
+              Viendo: {getMesNombre()}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Resumen General */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
