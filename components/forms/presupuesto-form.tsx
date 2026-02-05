@@ -92,22 +92,50 @@ export function PresupuestoForm() {
         Object.entries(porcentajes).map(([key, value]) => [key, value / 100])
       )
 
+      // Normalizar fecha al primer día del mes para que haya un solo registro por mes
+      const fechaObj = new Date(fecha + "T00:00:00")
+      const primerDiaMes = new Date(fechaObj.getFullYear(), fechaObj.getMonth(), 1).toISOString().split("T")[0]
+
       const dataToUpsert = {
         user_id: user.id,
         perfil_id: perfilActual.id,
         meta_salario: Number.parseFloat(presupuesto),
-        fecha: fecha,
+        fecha: primerDiaMes,
         ...porcentajesDecimales
       }
 
-      console.log("[v0] Datos a upsert:", dataToUpsert)
-
-      const { data, error: upsertError } = await supabase
+      // Primero buscar si ya existe un presupuesto para este mes
+      const { data: existente } = await supabase
         .from("presupuesto_mensual")
-        .upsert(dataToUpsert, {
-          onConflict: 'user_id,fecha'
-        })
-        .select()
+        .select("id")
+        .eq("perfil_id", perfilActual.id)
+        .gte("fecha", primerDiaMes)
+        .lte("fecha", new Date(fechaObj.getFullYear(), fechaObj.getMonth() + 1, 0).toISOString().split("T")[0])
+        .limit(1)
+
+      let data, upsertError
+      if (existente && existente.length > 0) {
+        // Actualizar el registro existente
+        const result = await supabase
+          .from("presupuesto_mensual")
+          .update({
+            meta_salario: Number.parseFloat(presupuesto),
+            fecha: primerDiaMes,
+            ...porcentajesDecimales
+          })
+          .eq("id", existente[0].id)
+          .select()
+        data = result.data
+        upsertError = result.error
+      } else {
+        // Insertar nuevo registro
+        const result = await supabase
+          .from("presupuesto_mensual")
+          .insert(dataToUpsert)
+          .select()
+        data = result.data
+        upsertError = result.error
+      }
 
       if (upsertError) {
         console.error("[v0] Error al guardar presupuesto:", upsertError)
