@@ -35,7 +35,12 @@ import {
   Landmark,
   Receipt,
   Info,
+  Wallet,
+  Building2,
+  Banknote,
+  ArrowRight,
 } from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getTodayDate, formatGuaranies, getParaguayTimestamp } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { toast } from "sonner"
@@ -68,6 +73,15 @@ interface Deuda {
   fecha_pago: number | null
 }
 
+interface CajaAhorro {
+  id: string
+  nombre: string
+  monto_actual: number
+  moneda: string
+  color: string | null
+  icono: string | null
+}
+
 const ICONOS_CATEGORIAS: Record<string, React.ElementType> = {
   Donación: Heart,
   "Ahorro 2025": Coins,
@@ -98,6 +112,12 @@ export function EgresoForm() {
   const [selectedDeuda, setSelectedDeuda] = useState<string>("")
   const [numeroCuota, setNumeroCuota] = useState("")
 
+  // Origen de fondos
+  const [cajasAhorro, setCajasAhorro] = useState<CajaAhorro[]>([])
+  const [tarjetasCredito, setTarjetasCredito] = useState<Deuda[]>([])
+  const [origenTipo, setOrigenTipo] = useState<string>("")
+  const [origenId, setOrigenId] = useState<string>("")
+
   const [showNewCategoria, setShowNewCategoria] = useState(false)
   const [newCategoriaNombre, setNewCategoriaNombre] = useState("")
 
@@ -125,6 +145,7 @@ export function EgresoForm() {
     setFecha(getTodayDate())
     if (perfilActual?.id) {
       loadTiposCategorias()
+      loadOrigenFondos()
     }
   }, [perfilActual])
 
@@ -270,6 +291,42 @@ export function EgresoForm() {
       }
     } catch (error) {
       setDeudas([])
+    }
+  }
+
+  const loadOrigenFondos = async () => {
+    if (!perfilActual?.id) return
+
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Cargar cajas de ahorro activas
+      const { data: cajasData } = await supabase
+        .from("cajas_ahorro")
+        .select("id, nombre, monto_actual, moneda, color, icono")
+        .eq("perfil_id", perfilActual.id)
+        .eq("activa", true)
+        .order("nombre")
+
+      if (cajasData) setCajasAhorro(cajasData)
+
+      // Cargar tarjetas de credito activas (para usar como origen de fondos)
+      const { data: tarjetasData } = await supabase
+        .from("deudas")
+        .select("*")
+        .eq("perfil_id", perfilActual.id)
+        .eq("tipo_deuda", "tarjeta_credito")
+        .eq("estado", "activa")
+        .order("nombre")
+
+      if (tarjetasData) setTarjetasCredito(tarjetasData)
+    } catch (error) {
+      setCajasAhorro([])
+      setTarjetasCredito([])
     }
   }
 
@@ -423,14 +480,33 @@ export function EgresoForm() {
         throw new Error("Debes seleccionar una deuda para registrar el pago")
       }
 
+      const montoNumerico = Number.parseFloat(monto)
+
+      // Validar saldo disponible en el origen seleccionado
+      if (origenTipo && origenId) {
+        if (origenTipo === "caja_ahorro") {
+          const cajaOrigen = cajasAhorro.find((c) => c.id === origenId)
+          if (cajaOrigen && montoNumerico > Number(cajaOrigen.monto_actual)) {
+            throw new Error(`Saldo insuficiente en "${cajaOrigen.nombre}". Disponible: ${formatGuaranies(Number(cajaOrigen.monto_actual))}`)
+          }
+        } else if (origenTipo === "tarjeta_credito") {
+          const tarjetaOrigen = tarjetasCredito.find((t) => t.id === origenId)
+          if (tarjetaOrigen && montoNumerico > Number(tarjetaOrigen.monto_total)) {
+            throw new Error(`Crédito insuficiente en "${tarjetaOrigen.nombre}". Disponible: ${formatGuaranies(Number(tarjetaOrigen.monto_total))}`)
+          }
+        }
+      }
+
       const egresoData: any = {
         user_id: user.id,
         perfil_id: perfilActual.id,
         tipo_categoria_id: selectedTipo,
         categoria_id: selectedCategoria,
-        monto: Number.parseFloat(monto),
+        monto: montoNumerico,
         fecha: fecha,
         concepto: concepto || null,
+        origen_tipo: origenTipo || null,
+        origen_id: origenId || null,
       }
 
       if (esPagoDeudas && selectedDeuda) {
@@ -444,6 +520,46 @@ export function EgresoForm() {
 
       if (insertError) {
         throw insertError
+      }
+
+      // Descontar del origen de fondos
+      if (origenTipo && origenId) {
+        if (origenTipo === "caja_ahorro") {
+          // Descontar de la caja de ahorro
+          const cajaOrigen = cajasAhorro.find((c) => c.id === origenId)
+          if (cajaOrigen) {
+            const nuevoMonto = Number(cajaOrigen.monto_actual) - montoNumerico
+
+            await supabase
+              .from("cajas_ahorro")
+              .update({ monto_actual: nuevoMonto })
+              .eq("id", origenId)
+
+            // Registrar movimiento de retiro
+            await supabase.from("movimientos_caja").insert({
+              caja_id: origenId,
+              perfil_id: perfilActual.id,
+              user_id: user.id,
+              tipo: "retiro",
+              monto: montoNumerico,
+              descripcion: `Egreso: ${concepto || selectedTipoData?.nombre || "Gasto"}`,
+              fecha: fecha,
+            })
+          }
+        } else if (origenTipo === "tarjeta_credito") {
+          // Descontar del credito disponible de la tarjeta
+          const tarjetaOrigen = tarjetasCredito.find((t) => t.id === origenId)
+          if (tarjetaOrigen) {
+            const nuevoDisponible = Number(tarjetaOrigen.monto_total) - montoNumerico
+            await supabase
+              .from("deudas")
+              .update({
+                monto_total: nuevoDisponible,
+                updated_at: getParaguayTimestamp(),
+              })
+              .eq("id", origenId)
+          }
+        }
       }
 
       if (esPagoDeudas && selectedDeuda) {
@@ -489,6 +605,8 @@ export function EgresoForm() {
       setSelectedDeuda("")
       setNumeroCuota("")
       setEsPagoDeudas(false)
+      setOrigenTipo("")
+      setOrigenId("")
 
       setTimeout(() => {
         window.location.reload()
@@ -1171,10 +1289,181 @@ export function EgresoForm() {
             </div>
           )}
 
+          {/* Selector de Origen de Fondos */}
+          {selectedTipo && (
+            <div className="space-y-3 p-5 rounded-xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/30">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-full bg-emerald-500/20">
+                  <Wallet className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <Label className="text-base font-semibold text-emerald-400">Origen del Dinero</Label>
+                  <p className="text-xs text-muted-foreground">Selecciona de donde sale el dinero (opcional)</p>
+                </div>
+              </div>
+
+              {/* Tipo de origen */}
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => { setOrigenTipo(""); setOrigenId("") }}
+                  className={`p-3 rounded-lg border-2 transition-all text-center text-xs ${
+                    !origenTipo
+                      ? "border-emerald-400 bg-emerald-500/20"
+                      : "border-border/30 hover:border-border/60"
+                  }`}
+                >
+                  <Banknote className="w-5 h-5 mx-auto mb-1 text-emerald-400" />
+                  <span className="font-medium">Sin especificar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setOrigenTipo("caja_ahorro"); setOrigenId("") }}
+                  className={`p-3 rounded-lg border-2 transition-all text-center text-xs ${
+                    origenTipo === "caja_ahorro"
+                      ? "border-blue-400 bg-blue-500/20"
+                      : "border-border/30 hover:border-border/60"
+                  }`}
+                >
+                  <Building2 className="w-5 h-5 mx-auto mb-1 text-blue-400" />
+                  <span className="font-medium">Caja de Ahorro</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setOrigenTipo("tarjeta_credito"); setOrigenId("") }}
+                  className={`p-3 rounded-lg border-2 transition-all text-center text-xs ${
+                    origenTipo === "tarjeta_credito"
+                      ? "border-purple-400 bg-purple-500/20"
+                      : "border-border/30 hover:border-border/60"
+                  }`}
+                >
+                  <CreditCard className="w-5 h-5 mx-auto mb-1 text-purple-400" />
+                  <span className="font-medium">Tarjeta Crédito</span>
+                </button>
+              </div>
+
+              {/* Seleccionar caja de ahorro */}
+              {origenTipo === "caja_ahorro" && (
+                <div className="space-y-2">
+                  {cajasAhorro.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      {cajasAhorro.map((caja) => {
+                        const isSelected = origenId === caja.id
+                        const saldoInsuficiente = monto && Number(caja.monto_actual) < Number(monto)
+                        return (
+                          <button
+                            key={caja.id}
+                            type="button"
+                            onClick={() => setOrigenId(caja.id)}
+                            className={`p-3 rounded-lg border-2 transition-all text-left flex items-center justify-between ${
+                              isSelected
+                                ? "border-blue-400 bg-blue-500/20 shadow-lg shadow-blue-500/10"
+                                : "border-border/30 hover:border-border/60 bg-background/50"
+                            } ${saldoInsuficiente ? "opacity-60" : ""}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-full bg-blue-500/20">
+                                <Building2 className="w-4 h-4 text-blue-400" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">{caja.nombre}</p>
+                                <p className="text-xs text-muted-foreground">{caja.moneda}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`font-bold text-sm ${saldoInsuficiente ? "text-red-400" : "text-emerald-400"}`}>
+                                {formatGuaranies(Number(caja.monto_actual))}
+                              </p>
+                              {saldoInsuficiente && (
+                                <p className="text-[10px] text-red-400">Saldo insuficiente</p>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4 bg-background/30 rounded-lg border border-border/50">
+                      No tienes cajas de ahorro activas. Crea una desde la seccion Cajas de Ahorro.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Seleccionar tarjeta de crédito */}
+              {origenTipo === "tarjeta_credito" && (
+                <div className="space-y-2">
+                  {tarjetasCredito.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-2">
+                      {tarjetasCredito.map((tarjeta) => {
+                        const isSelected = origenId === tarjeta.id
+                        const disponible = Number(tarjeta.monto_total)
+                        const limite = Number(tarjeta.limite_credito) || 0
+                        const creditoInsuficiente = monto && disponible < Number(monto)
+                        return (
+                          <button
+                            key={tarjeta.id}
+                            type="button"
+                            onClick={() => setOrigenId(tarjeta.id)}
+                            className={`p-3 rounded-lg border-2 transition-all text-left flex items-center justify-between ${
+                              isSelected
+                                ? "border-purple-400 bg-purple-500/20 shadow-lg shadow-purple-500/10"
+                                : "border-border/30 hover:border-border/60 bg-background/50"
+                            } ${creditoInsuficiente ? "opacity-60" : ""}`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-full bg-purple-500/20">
+                                <CreditCard className="w-4 h-4 text-purple-400" />
+                              </div>
+                              <div>
+                                <p className="font-medium text-sm">{tarjeta.nombre}</p>
+                                <p className="text-xs text-muted-foreground">{tarjeta.acreedor}</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <p className={`font-bold text-sm ${creditoInsuficiente ? "text-red-400" : "text-emerald-400"}`}>
+                                {formatGuaranies(disponible)}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">
+                                Limite: {formatGuaranies(limite)}
+                              </p>
+                              {creditoInsuficiente && (
+                                <p className="text-[10px] text-red-400">Credito insuficiente</p>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4 bg-background/30 rounded-lg border border-border/50">
+                      No tienes tarjetas de credito activas. Registra una desde la seccion Deudas.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Resumen del origen seleccionado */}
+              {origenTipo && origenId && monto && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <ArrowRight className="w-4 h-4 text-emerald-400" />
+                  <p className="text-sm text-emerald-400">
+                    Se descontara <span className="font-bold">{formatGuaranies(Number(monto))}</span> de{" "}
+                    <span className="font-bold">
+                      {origenTipo === "caja_ahorro"
+                        ? cajasAhorro.find((c) => c.id === origenId)?.nombre
+                        : tarjetasCredito.find((t) => t.id === origenId)?.nombre}
+                    </span>
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="monto" className="flex items-center gap-2">
               <DollarSign className="w-4 h-4" />
-              Monto (Guaraníes)
+              Monto (Guaranies)
             </Label>
             <Input
               id="monto"
@@ -1237,7 +1526,7 @@ export function EgresoForm() {
           <Button
             type="submit"
             className="w-full"
-            disabled={isLoading || !selectedTipo || !selectedCategoria || !monto || (esPagoDeudas && !selectedDeuda)}
+            disabled={isLoading || !selectedTipo || !selectedCategoria || !monto || (esPagoDeudas && !selectedDeuda) || (origenTipo && !origenId)}
             style={{
               backgroundColor: selectedTipoData?.color || undefined,
             }}
