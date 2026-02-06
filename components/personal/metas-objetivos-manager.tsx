@@ -985,7 +985,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       </TabsTrigger>
           <TabsTrigger value="metas" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
             <Target className="h-4 w-4 text-green-600 group-data-[state=active]:text-white" />
-            <span className="text-green-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Metas y Objetivos</span>
+            <span className="text-green-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Metas y Plan de Acción</span>
             <span className="text-green-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Metas</span>
           </TabsTrigger>
         </TabsList>
@@ -1656,7 +1656,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         <div>
         <h2 className="text-xl font-bold text-green-600 flex items-center gap-2">
                   <Target className="h-5 w-5" />
-                  Mis Metas y Objetivos
+                  Mis Metas y Plan de Acción
                 </h2>
                 <p className="text-muted-foreground">Establece y da seguimiento a tus objetivos personales</p>
               </div>

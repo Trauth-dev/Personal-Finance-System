@@ -102,7 +102,7 @@ const navItemsPersonal = [
   //   icon: PieChart,
   // },
   {
-    title: "Metas y Objetivos",
+    title: "Metas y Plan de Acción",
     href: "/dashboard/personal/metas",
     icon: Target,
   },
