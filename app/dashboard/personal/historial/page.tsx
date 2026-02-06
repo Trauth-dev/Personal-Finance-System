@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, TrendingDown, Calendar, Trash2, AlertCircle, Download, Edit, X, Check, Building2, CreditCard, Wallet } from "lucide-react"
+import { TrendingUp, TrendingDown, Calendar, Trash2, AlertCircle, Download, Edit, X, Check, Building2, CreditCard, Wallet, Landmark, Smartphone, PiggyBank, ArrowRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useEffect, useState } from "react"
 import { usePerfil } from "@/lib/contexts/perfil-context"
@@ -37,6 +37,11 @@ type Ingreso = {
   monto: number
   fecha: string
   created_at: string
+  destino_caja_id: string | null
+}
+
+type DestinoInfo = {
+  [ingresoId: string]: { nombre: string; tipo_cuenta: string | null; banco: string | null }
 }
 
 type Egreso = {
@@ -73,6 +78,7 @@ export default function PersonalHistorialPage() {
   const [editType, setEditType] = useState<"ingreso" | "egreso" | null>(null)
   const [editData, setEditData] = useState<any>(null)
   const [origenesInfo, setOrigenesInfo] = useState<OrigenInfo>({})
+  const [destinosInfo, setDestinosInfo] = useState<DestinoInfo>({})
 
   useEffect(() => {
     if (perfilActual?.id) {
@@ -143,6 +149,32 @@ export default function PersonalHistorialPage() {
       setOrigenesInfo(origenes)
     }
 
+    // Cargar destinos de ingresos
+    if (ingresosData) {
+      const destinos: DestinoInfo = {}
+      const cajasDestinoIds = [...new Set(ingresosData.filter((i) => i.destino_caja_id).map((i) => i.destino_caja_id as string))]
+
+      if (cajasDestinoIds.length > 0) {
+        const { data: cajasData } = await supabase
+          .from("cajas_ahorro")
+          .select("id, nombre, tipo_cuenta, banco")
+          .in("id", cajasDestinoIds)
+
+        if (cajasData) {
+          ingresosData.forEach((i) => {
+            if (i.destino_caja_id) {
+              const caja = cajasData.find((c) => c.id === i.destino_caja_id)
+              if (caja) {
+                destinos[i.id] = { nombre: caja.nombre, tipo_cuenta: caja.tipo_cuenta, banco: caja.banco }
+              }
+            }
+          })
+        }
+      }
+
+      setDestinosInfo(destinos)
+    }
+
     setIsLoading(false)
   }
 
@@ -151,6 +183,40 @@ export default function PersonalHistorialPage() {
 
     const supabase = createClient()
     const table = deleteType === "ingreso" ? "ingresos" : "egresos"
+
+    // Si es un ingreso con destino caja, revertir el deposito
+    if (deleteType === "ingreso") {
+      const ingresoToDelete = ingresos.find((i) => i.id === deleteId)
+      if (ingresoToDelete?.destino_caja_id) {
+        const montoRevertir = Number(ingresoToDelete.monto)
+        const { data: cajaData } = await supabase
+          .from("cajas_ahorro")
+          .select("monto_actual")
+          .eq("id", ingresoToDelete.destino_caja_id)
+          .single()
+
+        if (cajaData) {
+          const nuevoMonto = Math.max(0, Number(cajaData.monto_actual) - montoRevertir)
+          await supabase
+            .from("cajas_ahorro")
+            .update({ monto_actual: nuevoMonto })
+            .eq("id", ingresoToDelete.destino_caja_id)
+
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            await supabase.from("movimientos_caja").insert({
+              caja_id: ingresoToDelete.destino_caja_id,
+              perfil_id: perfilActual?.id,
+              user_id: user.id,
+              tipo: "retiro",
+              monto: montoRevertir,
+              descripcion: `Reversion: eliminacion de ingreso "${ingresoToDelete.tipo_ingreso}"`,
+              fecha: new Date().toISOString().split("T")[0],
+            })
+          }
+        }
+      }
+    }
 
     // Si es un egreso con origen, revertir el descuento
     if (deleteType === "egreso") {
@@ -395,6 +461,28 @@ export default function PersonalHistorialPage() {
                                     {!isIngreso && egreso?.concepto && (
                                       <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-1">{egreso.concepto}</p>
                                     )}
+                                    {/* Destino del ingreso */}
+                                    {isIngreso && destinosInfo[item.id] && (
+                                      <div className="flex items-center gap-1.5 mt-1.5">
+                                        <ArrowRight className="w-3 h-3 text-blue-400" />
+                                        <div className="p-1 rounded bg-blue-500/20">
+                                          {destinosInfo[item.id].tipo_cuenta === "cuenta_bancaria" ? (
+                                            <Landmark className="w-3 h-3 text-blue-400" />
+                                          ) : destinosInfo[item.id].tipo_cuenta === "billetera_digital" ? (
+                                            <Smartphone className="w-3 h-3 text-cyan-400" />
+                                          ) : destinosInfo[item.id].tipo_cuenta === "ahorro_personal" ? (
+                                            <Wallet className="w-3 h-3 text-green-400" />
+                                          ) : (
+                                            <PiggyBank className="w-3 h-3 text-amber-400" />
+                                          )}
+                                        </div>
+                                        <span className="text-[11px] font-medium text-blue-400">
+                                          {destinosInfo[item.id].nombre}
+                                          {destinosInfo[item.id].banco ? ` (${destinosInfo[item.id].banco})` : ""}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {/* Origen del egreso */}
                                     {!isIngreso && origenesInfo[item.id] && (
                                       <div className="flex items-center gap-1.5 mt-1.5">
                                         <div className={`p-1 rounded ${origenesInfo[item.id].tipo === "caja_ahorro" ? "bg-blue-500/20" : "bg-purple-500/20"}`}>
@@ -484,6 +572,26 @@ export default function PersonalHistorialPage() {
                                 <Calendar className="w-3 h-3" />
                                 {formatDateWithoutTimezone(ingreso.fecha)}
                               </p>
+                              {destinosInfo[ingreso.id] && (
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  <ArrowRight className="w-3 h-3 text-blue-400" />
+                                  <div className="p-1 rounded bg-blue-500/20">
+                                    {destinosInfo[ingreso.id].tipo_cuenta === "cuenta_bancaria" ? (
+                                      <Landmark className="w-3 h-3 text-blue-400" />
+                                    ) : destinosInfo[ingreso.id].tipo_cuenta === "billetera_digital" ? (
+                                      <Smartphone className="w-3 h-3 text-cyan-400" />
+                                    ) : destinosInfo[ingreso.id].tipo_cuenta === "ahorro_personal" ? (
+                                      <Wallet className="w-3 h-3 text-green-400" />
+                                    ) : (
+                                      <PiggyBank className="w-3 h-3 text-amber-400" />
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] font-medium text-blue-400">
+                                    {destinosInfo[ingreso.id].nombre}
+                                    {destinosInfo[ingreso.id].banco ? ` (${destinosInfo[ingreso.id].banco})` : ""}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-4">

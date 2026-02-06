@@ -35,6 +35,9 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Trash2,
+  Landmark,
+  Wallet,
+  Smartphone,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatGuaranies } from "@/lib/utils"
@@ -49,6 +52,10 @@ type CajaAhorro = {
   color: string
   prioridad: number
   created_at: string
+  tipo_cuenta: string | null
+  banco: string | null
+  numero_cuenta: string | null
+  moneda: string | null
 }
 
 type MovimientoCaja = {
@@ -69,6 +76,13 @@ const iconosDisponibles = [
   { value: "car", label: "Vehículo", icon: Car },
   { value: "sparkles", label: "Emergencias", icon: Sparkles },
   { value: "target", label: "Objetivo", icon: Target },
+]
+
+const tiposCuenta = [
+  { value: "cuenta_bancaria", label: "Cuenta Bancaria", icon: Landmark },
+  { value: "billetera_digital", label: "Billetera Digital", icon: Smartphone },
+  { value: "ahorro_personal", label: "Ahorro Personal / Efectivo", icon: Wallet },
+  { value: "otro", label: "Otro", icon: PiggyBank },
 ]
 
 const coloresDisponibles = [
@@ -98,6 +112,10 @@ export function CajasAhorroManager() {
     icono: "piggy-bank",
     color: "blue",
     prioridad: "1",
+    tipo_cuenta: "cuenta_bancaria",
+    banco: "",
+    numero_cuenta: "",
+    moneda: "PYG",
   })
 
   const [movimientoData, setMovimientoData] = useState({
@@ -143,11 +161,15 @@ export function CajasAhorroManager() {
       nombre: formData.nombre,
       descripcion: formData.descripcion || null,
       tipo: 'otro',
-      meta_monto: Number.parseFloat(formData.meta_monto),
+      meta_monto: Number.parseFloat(formData.meta_monto || "0"),
       monto_actual: 0,
       icono: formData.icono,
       color: formData.color,
       prioridad: Number.parseInt(formData.prioridad),
+      tipo_cuenta: formData.tipo_cuenta,
+      banco: formData.banco || null,
+      numero_cuenta: formData.numero_cuenta || null,
+      moneda: formData.moneda || "PYG",
     }).select()
 
     if (!error) {
@@ -163,6 +185,10 @@ export function CajasAhorroManager() {
         icono: "piggy-bank",
         color: "blue",
         prioridad: "1",
+        tipo_cuenta: "cuenta_bancaria",
+        banco: "",
+        numero_cuenta: "",
+        moneda: "PYG",
       })
       loadCajas()
     } else {
@@ -298,18 +324,96 @@ export function CajasAhorroManager() {
                   </div>
 
                   <div>
-                    <Label htmlFor="descripcion">Descripción (opcional)</Label>
+                    <Label>Tipo de Cuenta</Label>
+                    <div className="grid grid-cols-2 gap-2 mt-1">
+                      {tiposCuenta.map((tipo) => {
+                        const TipoIcon = tipo.icon
+                        const isSelected = formData.tipo_cuenta === tipo.value
+                        return (
+                          <button
+                            key={tipo.value}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, tipo_cuenta: tipo.value })}
+                            className={`p-3 rounded-lg border-2 transition-all text-left flex items-center gap-2 text-xs ${
+                              isSelected
+                                ? "border-primary bg-primary/10"
+                                : "border-border/50 hover:border-border"
+                            }`}
+                          >
+                            <TipoIcon className={`w-4 h-4 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                            <span className={`font-medium ${isSelected ? "text-primary" : ""}`}>{tipo.label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {formData.tipo_cuenta === "cuenta_bancaria" && (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label htmlFor="banco">Banco</Label>
+                        <Input
+                          id="banco"
+                          value={formData.banco}
+                          onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
+                          placeholder="Ej: Banco Continental"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="numero_cuenta">Nro. Cuenta (opcional)</Label>
+                        <Input
+                          id="numero_cuenta"
+                          value={formData.numero_cuenta}
+                          onChange={(e) => setFormData({ ...formData, numero_cuenta: e.target.value })}
+                          placeholder="Ej: ****1234"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.tipo_cuenta === "billetera_digital" && (
+                    <div>
+                      <Label htmlFor="banco">Nombre de Billetera</Label>
+                      <Input
+                        id="banco"
+                        value={formData.banco}
+                        onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
+                        placeholder="Ej: Tigo Money, Personal Pay"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <Label>Moneda</Label>
+                    <Select
+                      value={formData.moneda}
+                      onValueChange={(value) => setFormData({ ...formData, moneda: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PYG">Guaranies (PYG)</SelectItem>
+                        <SelectItem value="USD">Dolares (USD)</SelectItem>
+                        <SelectItem value="BRL">Reales (BRL)</SelectItem>
+                        <SelectItem value="ARS">Pesos Argentinos (ARS)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="descripcion">Descripcion (opcional)</Label>
                     <Textarea
                       id="descripcion"
                       value={formData.descripcion}
                       onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
                       placeholder="Describe tu objetivo de ahorro"
-                      rows={3}
+                      rows={2}
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="meta_monto">Meta de Ahorro</Label>
+                    <Label htmlFor="meta_monto">Meta de Ahorro (opcional)</Label>
                     <Input
                       id="meta_monto"
                       type="number"
@@ -471,6 +575,31 @@ export function CajasAhorroManager() {
                     </Button>
                   </div>
                   {caja.descripcion && <CardDescription className="mt-2">{caja.descripcion}</CardDescription>}
+                  {/* Info de cuenta */}
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    {caja.tipo_cuenta && (
+                      <Badge variant="outline" className="text-[10px] gap-1 py-0.5">
+                        {caja.tipo_cuenta === "cuenta_bancaria" && <Landmark className="w-3 h-3" />}
+                        {caja.tipo_cuenta === "billetera_digital" && <Smartphone className="w-3 h-3" />}
+                        {caja.tipo_cuenta === "ahorro_personal" && <Wallet className="w-3 h-3" />}
+                        {caja.tipo_cuenta === "otro" && <PiggyBank className="w-3 h-3" />}
+                        {tiposCuenta.find((t) => t.value === caja.tipo_cuenta)?.label || caja.tipo_cuenta}
+                      </Badge>
+                    )}
+                    {caja.banco && (
+                      <Badge variant="secondary" className="text-[10px] py-0.5">
+                        {caja.banco}
+                      </Badge>
+                    )}
+                    {caja.moneda && caja.moneda !== "PYG" && (
+                      <Badge variant="secondary" className="text-[10px] py-0.5">
+                        {caja.moneda}
+                      </Badge>
+                    )}
+                    {caja.numero_cuenta && (
+                      <span className="text-[10px] text-muted-foreground">{caja.numero_cuenta}</span>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   {/* Monto Ahorrado destacado */}
