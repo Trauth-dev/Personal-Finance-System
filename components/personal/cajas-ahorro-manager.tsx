@@ -137,12 +137,6 @@ export function CajasAhorroManager() {
 
     const supabase = createClient()
 
-    console.log("[v0] Creando caja de ahorro:", {
-      perfil_id: perfilActual.id,
-      user_id: perfilActual.user_id,
-      nombre: formData.nombre,
-    })
-
     const { data, error } = await supabase.from("cajas_ahorro").insert({
       perfil_id: perfilActual.id,
       user_id: perfilActual.user_id,
@@ -155,8 +149,6 @@ export function CajasAhorroManager() {
       color: formData.color,
       prioridad: Number.parseInt(formData.prioridad),
     }).select()
-
-    console.log("[v0] Resultado insert caja:", { data, error })
 
     if (!error) {
       toast({
@@ -189,12 +181,6 @@ export function CajasAhorroManager() {
     const supabase = createClient()
     const monto = Number.parseFloat(movimientoData.monto)
 
-    console.log("[v0] Registrando movimiento:", {
-      caja_id: cajaSeleccionada.id,
-      tipo: movimientoData.tipo,
-      monto: monto,
-    })
-
     const { data: movData, error: movimientoError } = await supabase.from("movimientos_caja").insert({
       caja_id: cajaSeleccionada.id,
       tipo: movimientoData.tipo,
@@ -202,8 +188,6 @@ export function CajasAhorroManager() {
       concepto: movimientoData.descripcion || null,
       fecha: new Date().toISOString().split("T")[0],
     }).select()
-
-    console.log("[v0] Resultado insert movimiento:", { movData, movimientoError })
 
     if (movimientoError) {
       toast({

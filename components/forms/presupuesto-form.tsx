@@ -53,9 +53,6 @@ export function PresupuestoForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    console.log("[v0] Iniciando registro de presupuesto")
-    console.log("[v0] Perfil actual:", perfilActual)
-
     if (!perfilActual?.id) {
       setError("No hay perfil activo. Por favor selecciona un perfil.")
       return
@@ -73,20 +70,10 @@ export function PresupuestoForm() {
     const supabase = createClient()
 
     try {
-      console.log("[v0] Obteniendo usuario autenticado...")
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       
-      if (userError) {
-        console.error("[v0] Error al obtener usuario:", userError)
-        throw userError
-      }
-      
-      if (!user) {
-        console.error("[v0] Usuario no autenticado")
-        throw new Error("Usuario no autenticado")
-      }
-
-      console.log("[v0] Usuario autenticado:", user.id)
+      if (userError) throw userError
+      if (!user) throw new Error("Usuario no autenticado")
 
       const porcentajesDecimales = Object.fromEntries(
         Object.entries(porcentajes).map(([key, value]) => [key, value / 100])
@@ -137,12 +124,7 @@ export function PresupuestoForm() {
         upsertError = result.error
       }
 
-      if (upsertError) {
-        console.error("[v0] Error al guardar presupuesto:", upsertError)
-        throw upsertError
-      }
-
-      console.log("[v0] Presupuesto guardado exitosamente:", data)
+      if (upsertError) throw upsertError
 
       setSuccess(true)
       setPresupuesto("")
@@ -153,7 +135,6 @@ export function PresupuestoForm() {
         router.refresh()
       }, 1500)
     } catch (err) {
-      console.error("[v0] Error completo:", err)
       setError(err instanceof Error ? err.message : "Error al registrar presupuesto")
     } finally {
       setIsLoading(false)

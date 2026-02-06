@@ -2152,7 +2152,6 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                       console.error("[v0] Error creando tarea del día:", error)
                       throw error
                     }
-                    console.log("[v0] Tarea del día creada exitosamente:", data)
                   }
                   
                   setShowTareaModal(false)

@@ -22,10 +22,7 @@ export async function PresupuestoCategoriasComparativo({
     ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
   }
 
-  console.log("[v0] Buscando presupuesto - perfilId:", perfilId)
-  console.log("[v0] Rango de fechas:", primerDiaMes, "a", ultimoDiaMes)
-
-  const { data: presupuestos, error: presupuestoError } = await supabase
+  const { data: presupuestos } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
@@ -35,11 +32,6 @@ export async function PresupuestoCategoriasComparativo({
     .limit(1)
 
   const presupuesto = presupuestos?.[0] || null
-
-  console.log("[v0] PresupuestoCategoriasComparativo - Presupuesto:", presupuesto)
-  if (presupuestoError) {
-    console.log("[v0] Error de presupuesto:", presupuestoError)
-  }
 
   // Obtener egresos del mes agrupados por tipo de categoría
   const { data: egresos } = await supabase
@@ -51,12 +43,6 @@ export async function PresupuestoCategoriasComparativo({
     .eq("perfil_id", perfilId)
     .gte("fecha", primerDiaMes)
     .lte("fecha", ultimoDiaMes)
-
-  console.log("[v0] PresupuestoCategoriasComparativo - Egresos:", egresos)
-
-  if (!presupuesto) {
-    console.log("[v0] No hay presupuesto configurado")
-  }
 
   return <PresupuestoCategoriasComparativoClient presupuesto={presupuesto} egresos={egresos || []} />
 }

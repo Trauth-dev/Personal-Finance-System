@@ -44,16 +44,11 @@ export function PresupuestoCategoriasComparativoClient({
   presupuesto: Presupuesto | null
   egresos: Egreso[]
 }) {
-  console.log("[v0] PresupuestoCategoriasComparativo - Presupuesto:", presupuesto)
-  console.log("[v0] PresupuestoCategoriasComparativo - Egresos:", egresos)
-  
   if (!presupuesto) {
-    console.log("[v0] No hay presupuesto configurado")
     return null
   }
 
   const totalPresupuesto = Number(presupuesto.meta_salario)
-  console.log("[v0] Total presupuesto:", totalPresupuesto)
 
   // Calcular total de egresos por categoría
   const egresosPorCategoria = egresos.reduce(
@@ -80,10 +75,8 @@ export function PresupuestoCategoriasComparativoClient({
 
   // Filtrar solo las categorías que tienen presupuesto asignado
   const categoriasActivas = categoriasConDatos.filter(cat => cat.pct > 0)
-  console.log("[v0] Categorías activas:", categoriasActivas)
 
   if (categoriasActivas.length === 0) {
-    console.log("[v0] No hay categorías con presupuesto asignado")
     return null
   }
 
