@@ -608,9 +608,12 @@ export function EgresoForm() {
       setOrigenTipo("")
       setOrigenId("")
 
+      // Recargar saldos de cajas y tarjetas para reflejar el descuento inmediatamente
+      await loadOrigenFondos()
+
       setTimeout(() => {
-        window.location.reload()
-      }, 1000)
+        router.refresh()
+      }, 1500)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrar egreso")
     } finally {

@@ -185,10 +185,12 @@ export function IngresoForm() {
       }
 
       setSuccess(true)
-      setTipoIngreso("")
       setMonto("")
       setFecha(getTodayDate())
       setDestinoCajaId("")
+
+      // Recargar cajas para reflejar el nuevo saldo inmediatamente
+      await loadCajasDestino()
 
       setTimeout(() => {
         router.refresh()
