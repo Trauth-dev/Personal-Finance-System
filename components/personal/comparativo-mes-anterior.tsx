@@ -5,21 +5,21 @@ import { createClient } from "@/lib/supabase/server"
 
 interface Props {
   perfilId: string
+  fechaInicio: string
+  fechaFin: string
 }
 
-export async function ComparativoMesAnterior({ perfilId }: Props) {
+export async function ComparativoMesAnterior({ perfilId, fechaInicio, fechaFin }: Props) {
   const supabase = await createClient()
   
-  // Usar la fecha de Paraguay en lugar de new Date()
-  const now = getParaguayDate()
+  // Mes actual (el mes seleccionado)
+  const primerDiaMesActual = fechaInicio
+  const ultimoDiaMesActual = fechaFin
   
-  // Mes actual
-  const primerDiaMesActual = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-  const ultimoDiaMesActual = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
-  
-  // Mes anterior
-  const primerDiaMesAnterior = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0]
-  const ultimoDiaMesAnterior = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0]
+  // Calcular mes anterior basado en las fechas recibidas
+  const fechaBase = new Date(fechaInicio + "T00:00:00")
+  const primerDiaMesAnterior = new Date(fechaBase.getFullYear(), fechaBase.getMonth() - 1, 1).toISOString().split("T")[0]
+  const ultimoDiaMesAnterior = new Date(fechaBase.getFullYear(), fechaBase.getMonth(), 0).toISOString().split("T")[0]
 
   // Datos mes actual
   const { data: presupuestoActualData } = await supabase

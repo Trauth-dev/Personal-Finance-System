@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { 
   Target, Plus, CheckCircle2, Circle, Calendar, TrendingUp, 
   Award, Flame, ChevronLeft, ChevronRight, Trash2, Edit, 
-  ListTodo, BarChart3, Clock, Star, Zap, Trophy
+  ListTodo, BarChart3, Clock, Star, Zap, Trophy, Repeat, RefreshCw
 } from "lucide-react"
 
 interface Meta {
@@ -66,6 +66,28 @@ interface TareaMeta {
   orden: number
 }
 
+interface HabitoRecurrente {
+  id: string
+  nombre: string
+  descripcion: string | null
+  intervalo_dias: number
+  fecha_inicio: string
+  fecha_fin: string | null
+  color: string
+  icono: string
+  activo: boolean
+  ultima_completada: string | null
+  proxima_ocurrencia: string | null
+  created_at: string
+}
+
+interface RegistroHabitoRecurrente {
+  id: string
+  habito_id: string
+  fecha: string
+  completado: boolean
+}
+
 interface MetasObjetivosManagerProps {
   perfilId: string
 }
@@ -94,6 +116,18 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("tareas")
   const [userId, setUserId] = useState<string | null>(null)
+  
+  // Estados para hábitos recurrentes (Tareas Programadas)
+  const [habitosRecurrentes, setHabitosRecurrentes] = useState<HabitoRecurrente[]>([])
+  const [registrosHabitosRecurrentes, setRegistrosHabitosRecurrentes] = useState<Record<string, boolean>>({})
+  const [showHabitoRecurrenteModal, setShowHabitoRecurrenteModal] = useState(false)
+  const [verDiasFuturos, setVerDiasFuturos] = useState(false)
+  const [tareaAEliminar, setTareaAEliminar] = useState<string | null>(null)
+  const [habitoRecurrenteForm, setHabitoRecurrenteForm] = useState({
+    nombre: "",
+    descripcion: "",
+    intervalo_dias: 1,
+  })
   
   // Estados para tareas del día
   const [showTareaModal, setShowTareaModal] = useState(false)
@@ -187,6 +221,39 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         }
         setTareasPorFecha(agrupadasPorFecha)
         setTareasDelDia(tareasUltimos5DiasRes.data.filter(t => t.fecha_limite === hoyStr))
+      }
+      
+      // Cargar tareas programadas (hábitos recurrentes)
+      const { data: habitosRecData } = await supabase
+        .from("habitos_recurrentes")
+        .select("*")
+        .eq("perfil_id", perfilId)
+        .eq("activo", true)
+        .order("created_at", { ascending: false })
+      
+      if (habitosRecData) {
+        setHabitosRecurrentes(habitosRecData)
+        
+        // Cargar registros de las últimas 2 semanas
+        if (habitosRecData.length > 0) {
+          const habitoIds = habitosRecData.map((h) => h.id)
+          const haceDosSemanas = new Date()
+          haceDosSemanas.setDate(haceDosSemanas.getDate() - 14)
+          const fechaDesde = haceDosSemanas.toISOString().split("T")[0]
+          
+          const { data: registrosRec } = await supabase
+            .from("registro_habitos_recurrentes")
+            .select("*")
+            .in("habito_id", habitoIds)
+            .gte("fecha", fechaDesde)
+          
+          const registrosMap: Record<string, boolean> = {}
+          registrosRec?.forEach((r) => {
+            const clave = `${r.habito_id}-${r.fecha}`
+            registrosMap[clave] = r.completado
+          })
+          setRegistrosHabitosRecurrentes(registrosMap)
+        }
       }
     } catch (error) {
       console.error("Error cargando datos:", error)
@@ -542,6 +609,159 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     })
   }
   
+  // Funciones para hábitos recurrentes
+  const guardarHabitoRecurrente = async () => {
+    try {
+      if (!userId) return
+      
+      const hoy = new Date().toISOString().split("T")[0]
+      const { error } = await supabase.from("habitos_recurrentes").insert({
+        perfil_id: perfilId,
+        user_id: userId,
+        nombre: habitoRecurrenteForm.nombre,
+        descripcion: habitoRecurrenteForm.descripcion || null,
+        intervalo_dias: habitoRecurrenteForm.intervalo_dias,
+        fecha_inicio: hoy,
+        proxima_ocurrencia: hoy,
+      })
+      
+      if (error) throw error
+      
+      setShowHabitoRecurrenteModal(false)
+      setHabitoRecurrenteForm({ nombre: "", descripcion: "", intervalo_dias: 1 })
+      cargarDatos()
+    } catch (error) {
+      console.error("Error guardando hábito recurrente:", error)
+    }
+  }
+  
+  const toggleTareaProgramada = async (habitoId: string, fecha: string, completado: boolean) => {
+    try {
+      const { data: existingRecord } = await supabase
+        .from("registro_habitos_recurrentes")
+        .select("id")
+        .eq("habito_id", habitoId)
+        .eq("fecha", fecha)
+        .single()
+      
+      if (existingRecord) {
+        await supabase
+          .from("registro_habitos_recurrentes")
+          .update({ completado })
+          .eq("id", existingRecord.id)
+      } else {
+        if (!userId) return
+        await supabase.from("registro_habitos_recurrentes").insert({
+          habito_id: habitoId,
+          perfil_id: perfilId,
+          user_id: userId,
+          fecha: fecha,
+          completado,
+        })
+      }
+      
+      // Actualizar última completada y próxima ocurrencia si se completó
+      if (completado) {
+        const habito = habitosRecurrentes.find((h) => h.id === habitoId)
+        if (habito) {
+          const fechaActual = new Date(fecha)
+          const proximaFecha = new Date(fechaActual)
+          proximaFecha.setDate(proximaFecha.getDate() + habito.intervalo_dias)
+          await supabase
+            .from("habitos_recurrentes")
+            .update({ 
+              ultima_completada: fecha, 
+              proxima_ocurrencia: proximaFecha.toISOString().split("T")[0] 
+            })
+            .eq("id", habitoId)
+        }
+      }
+      
+      const clave = `${habitoId}-${fecha}`
+      setRegistrosHabitosRecurrentes((prev) => ({ ...prev, [clave]: completado }))
+      cargarDatos()
+    } catch (error) {
+      console.error("Error actualizando tarea programada:", error)
+    }
+  }
+  
+  const confirmarEliminarTarea = (id: string) => {
+    setTareaAEliminar(id)
+  }
+  
+  const eliminarTareaProgramada = async () => {
+    if (!tareaAEliminar) return
+    try {
+      await supabase.from("habitos_recurrentes").update({ activo: false }).eq("id", tareaAEliminar)
+      setTareaAEliminar(null)
+      cargarDatos()
+    } catch (error) {
+      console.error("Error eliminando tarea programada:", error)
+    }
+  }
+  
+  const getIntervaloLabel = (dias: number) => {
+    if (dias === 1) return "Diario"
+    if (dias === 7) return "Semanal"
+    if (dias === 30) return "Mensual"
+    return `Cada ${dias} días`
+  }
+  
+  // Función para calcular ocurrencias de una tarea en un rango de fechas
+  const calcularOcurrencias = (tarea: HabitoRecurrente, fechaInicio: Date, fechaFin: Date) => {
+    const ocurrencias: { fecha: string; diaNombre: string }[] = []
+    const inicio = new Date(tarea.fecha_inicio)
+    let fechaActual = new Date(Math.max(inicio.getTime(), fechaInicio.getTime()))
+    
+    while (fechaActual <= fechaFin) {
+      if (fechaActual >= inicio && (!tarea.fecha_fin || fechaActual <= new Date(tarea.fecha_fin))) {
+        const fechaStr = fechaActual.toISOString().split("T")[0]
+        const diaNombre = fechaActual.toLocaleDateString("es-PY", { weekday: "long" })
+        ocurrencias.push({ fecha: fechaStr, diaNombre: diaNombre.charAt(0).toUpperCase() + diaNombre.slice(1) })
+      }
+      fechaActual.setDate(fechaActual.getDate() + tarea.intervalo_dias)
+    }
+    
+    return ocurrencias
+  }
+  
+  // Obtener tareas agrupadas por día
+  const getTareasPorDia = () => {
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+    
+    const inicioDeSemana = new Date(hoy)
+    const diaSemana = hoy.getDay()
+    inicioDeSemana.setDate(hoy.getDate() - diaSemana)
+    
+    const finDeSemana = new Date(inicioDeSemana)
+    finDeSemana.setDate(inicioDeSemana.getDate() + (verDiasFuturos ? 13 : 6))
+    
+    const tareasPorDia: Record<string, { tarea: HabitoRecurrente; fecha: string; diaNombre: string; completada: boolean }[]> = {}
+    
+    habitosRecurrentes.forEach((tarea) => {
+      const ocurrencias = calcularOcurrencias(tarea, inicioDeSemana, finDeSemana)
+      ocurrencias.forEach((ocurrencia) => {
+        if (!tareasPorDia[ocurrencia.fecha]) {
+          tareasPorDia[ocurrencia.fecha] = []
+        }
+        const clave = `${tarea.id}-${ocurrencia.fecha}`
+        const completada = registrosHabitosRecurrentes[clave] || false
+        tareasPorDia[ocurrencia.fecha].push({ 
+          tarea, 
+          fecha: ocurrencia.fecha, 
+          diaNombre: ocurrencia.diaNombre,
+          completada 
+        })
+      })
+    })
+    
+    return tareasPorDia
+  }
+  
+  const tareasPorDia = getTareasPorDia()
+  const diasConTareas = Object.keys(tareasPorDia).sort()
+  
   // Calcular estadísticas
   const calcularEstadisticasHabitos = () => {
     const hoy = new Date()
@@ -747,20 +967,25 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       
       {/* Tabs principales */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 bg-muted/50 h-auto p-1">
+        <TabsList className="grid w-full grid-cols-4 bg-muted/50 h-auto p-1">
           <TabsTrigger value="tareas" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-blue-600 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
             <CheckCircle2 className="h-4 w-4 text-blue-600 group-data-[state=active]:text-white" />
             <span className="text-blue-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Tareas del Día</span>
             <span className="text-blue-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Tareas</span>
           </TabsTrigger>
-          <TabsTrigger value="habitos" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-amber-500 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
-            <ListTodo className="h-4 w-4 text-amber-600 group-data-[state=active]:text-white" />
-            <span className="text-amber-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Hábitos Diarios</span>
-            <span className="text-amber-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Hábitos</span>
-          </TabsTrigger>
+      <TabsTrigger value="habitos" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-amber-500 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
+        <ListTodo className="h-4 w-4 text-amber-600 group-data-[state=active]:text-white" />
+        <span className="text-amber-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Hábitos Diarios</span>
+        <span className="text-amber-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Hábitos</span>
+      </TabsTrigger>
+      <TabsTrigger value="recurrentes" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-cyan-600 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
+        <Repeat className="h-4 w-4 text-cyan-600 group-data-[state=active]:text-white" />
+        <span className="text-cyan-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Tareas Programadas</span>
+        <span className="text-cyan-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Programadas</span>
+      </TabsTrigger>
           <TabsTrigger value="metas" className="flex items-center justify-center gap-1 sm:gap-2 data-[state=active]:bg-green-600 data-[state=active]:text-white group px-2 py-2 sm:py-2.5">
             <Target className="h-4 w-4 text-green-600 group-data-[state=active]:text-white" />
-            <span className="text-green-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Metas y Objetivos</span>
+            <span className="text-green-600 group-data-[state=active]:text-white font-medium text-xs sm:text-sm hidden sm:inline">Metas y Plan de Acción</span>
             <span className="text-green-600 group-data-[state=active]:text-white font-medium text-xs sm:hidden">Metas</span>
           </TabsTrigger>
         </TabsList>
@@ -1294,13 +1519,144 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               </CardContent>
             </Card>
           )}
-        </TabsContent>
-          <TabsContent value="metas" className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-green-600 flex items-center gap-2">
+  </TabsContent>
+      
+      {/* Tab de Tareas Programadas */}
+      <TabsContent value="recurrentes" className="space-y-4">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h2 className="text-xl font-bold text-cyan-600 flex items-center gap-2">
+              <Repeat className="h-5 w-5" />
+              Tareas Programadas
+            </h2>
+            <p className="text-sm text-muted-foreground">Programa tareas que se repiten cada ciertos días</p>
+          </div>
+          <Button onClick={() => setShowHabitoRecurrenteModal(true)} className="bg-cyan-600 hover:bg-cyan-700">
+            <Plus className="h-4 h-4 mr-2" />
+            Nueva Tarea
+          </Button>
+        </div>
+        
+        {/* Toggle para ver días futuros */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant={!verDiasFuturos ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVerDiasFuturos(false)}
+            className={!verDiasFuturos ? "bg-cyan-600 hover:bg-cyan-700" : ""}
+          >
+            Semana Actual
+          </Button>
+          <Button
+            variant={verDiasFuturos ? "default" : "outline"}
+            size="sm"
+            onClick={() => setVerDiasFuturos(true)}
+            className={verDiasFuturos ? "bg-cyan-600 hover:bg-cyan-700" : ""}
+          >
+            Próxima Semana
+          </Button>
+        </div>
+        
+        {/* Lista de tareas por día */}
+        {habitosRecurrentes.length === 0 ? (
+          <Card className="border-2 border-dashed border-cyan-300">
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Repeat className="w-12 h-12 text-cyan-400 mb-4" />
+              <h3 className="text-lg font-semibold text-cyan-700 dark:text-cyan-300 mb-2">Sin tareas programadas</h3>
+              <p className="text-muted-foreground text-center mb-4">
+                Crea tu primera tarea programada para organizar actividades recurrentes
+              </p>
+              <Button onClick={() => setShowHabitoRecurrenteModal(true)} className="bg-cyan-600 hover:bg-cyan-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Crear Primera Tarea
+              </Button>
+            </CardContent>
+          </Card>
+        ) : diasConTareas.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Calendar className="w-12 h-12 text-cyan-400 mb-4" />
+              <p className="text-muted-foreground text-center">
+                No hay tareas programadas para {verDiasFuturos ? "la próxima semana" : "esta semana"}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {diasConTareas.map((fecha) => {
+              const tareas = tareasPorDia[fecha]
+              const diaFecha = new Date(fecha + "T00:00:00")
+              const hoy = new Date()
+              hoy.setHours(0, 0, 0, 0)
+              const esPasado = diaFecha < hoy
+              const esHoy = diaFecha.getTime() === hoy.getTime()
+              
+              return (
+                <Card key={fecha} className={`border-2 ${esHoy ? "border-cyan-500 bg-cyan-50/50 dark:bg-cyan-950/20" : esPasado ? "opacity-60" : ""}`}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-cyan-600" />
+                        <h3 className="font-semibold text-cyan-700 dark:text-cyan-300">
+                          {tareas[0].diaNombre}
+                        </h3>
+                        <span className="text-sm text-muted-foreground">
+                          {diaFecha.toLocaleDateString("es-PY", { day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                        {esHoy && (
+                          <Badge className="bg-cyan-600 text-white">Hoy</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {tareas.map(({ tarea, fecha: fechaTarea, completada }) => (
+                      <div key={`${tarea.id}-${fechaTarea}`} className="flex items-center justify-between p-3 rounded-lg border bg-white dark:bg-slate-900">
+                        <div className="flex items-center gap-3 flex-1">
+                          <Checkbox
+                            checked={completada}
+                            onCheckedChange={(checked) => toggleTareaProgramada(tarea.id, fechaTarea, checked as boolean)}
+                            className="border-cyan-500 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
+                            disabled={esPasado && !completada}
+                          />
+                          <div className="flex-1">
+                            <p className={`font-medium ${completada ? "line-through text-muted-foreground" : ""}`}>
+                              {tarea.nombre}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="border-cyan-500 text-cyan-700 dark:text-cyan-300 text-xs">
+                                {getIntervaloLabel(tarea.intervalo_dias)}
+                              </Badge>
+                              {tarea.descripcion && (
+                                <span className="text-xs text-muted-foreground">{tarea.descripcion}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => confirmarEliminarTarea(tarea.id)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </TabsContent>
+      
+      <TabsContent value="metas" className="space-y-4">
+        <div className="flex items-center justify-between">
+        <div>
+        <h2 className="text-xl font-bold text-green-600 flex items-center gap-2">
                   <Target className="h-5 w-5" />
-                  Mis Metas y Objetivos
+                  Mis Metas y Plan de Acción
                 </h2>
                 <p className="text-muted-foreground">Establece y da seguimiento a tus objetivos personales</p>
               </div>
@@ -1796,7 +2152,6 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                       console.error("[v0] Error creando tarea del día:", error)
                       throw error
                     }
-                    console.log("[v0] Tarea del día creada exitosamente:", data)
                   }
                   
                   setShowTareaModal(false)
@@ -1862,6 +2217,88 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               className="bg-red-500 hover:bg-red-600"
             >
               Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      
+      {/* Modal de Tarea Programada */}
+      <Dialog open={showHabitoRecurrenteModal} onOpenChange={setShowHabitoRecurrenteModal}>
+        <DialogContent className="glass-effect max-w-md max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle className="text-cyan-700">Nueva Tarea Programada</DialogTitle>
+            <DialogDescription>Crea una tarea que se repite automáticamente</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); guardarHabitoRecurrente(); }} className="space-y-3">
+            <div>
+              <Label htmlFor="nombre-recurrente">Nombre de la tarea</Label>
+              <Input
+                id="nombre-recurrente"
+                value={habitoRecurrenteForm.nombre}
+                onChange={(e) => setHabitoRecurrenteForm({ ...habitoRecurrenteForm, nombre: e.target.value })}
+                placeholder="Ej: Limpiar Patio, Revisar Notebook..."
+                required
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="descripcion-recurrente">Descripción (opcional)</Label>
+              <Textarea
+                id="descripcion-recurrente"
+                value={habitoRecurrenteForm.descripcion}
+                onChange={(e) => setHabitoRecurrenteForm({ ...habitoRecurrenteForm, descripcion: e.target.value })}
+                placeholder="Detalles adicionales"
+                rows={2}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="intervalo-recurrente">Repetir cada</Label>
+              <Select
+                value={habitoRecurrenteForm.intervalo_dias.toString()}
+                onValueChange={(value) =>
+                  setHabitoRecurrenteForm({ ...habitoRecurrenteForm, intervalo_dias: parseInt(value) })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Diario (cada día)</SelectItem>
+                  <SelectItem value="2">Cada 2 días</SelectItem>
+                  <SelectItem value="3">Cada 3 días</SelectItem>
+                  <SelectItem value="7">Semanal (cada 7 días)</SelectItem>
+                  <SelectItem value="14">Cada 2 semanas</SelectItem>
+                  <SelectItem value="30">Mensual (cada 30 días)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" onClick={() => setShowHabitoRecurrenteModal(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white">
+                Crear Tarea
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* AlertDialog para confirmar eliminación */}
+      <AlertDialog open={tareaAEliminar !== null} onOpenChange={(open) => !open && setTareaAEliminar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Finalizar esta tarea programada?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará todas las ocurrencias futuras de esta tarea. Las ocurrencias ya completadas se mantendrán en el historial.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={eliminarTareaProgramada} className="bg-red-600 hover:bg-red-700">
+              Finalizar Tarea
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

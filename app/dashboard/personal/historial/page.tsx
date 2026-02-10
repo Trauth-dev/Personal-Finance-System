@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { TrendingUp, TrendingDown, Calendar, Trash2, AlertCircle, Download, Edit, X, Check } from "lucide-react"
+import { TrendingUp, TrendingDown, Calendar, Trash2, AlertCircle, Download, Edit, X, Check, Building2, CreditCard, Wallet, Landmark, Smartphone, PiggyBank, ArrowRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useEffect, useState } from "react"
 import { usePerfil } from "@/lib/contexts/perfil-context"
@@ -37,6 +37,11 @@ type Ingreso = {
   monto: number
   fecha: string
   created_at: string
+  destino_caja_id: string | null
+}
+
+type DestinoInfo = {
+  [ingresoId: string]: { nombre: string; tipo_cuenta: string | null; banco: string | null }
 }
 
 type Egreso = {
@@ -47,6 +52,8 @@ type Egreso = {
   created_at: string
   tipo_categoria_id: string | null
   categoria_id: string | null
+  origen_tipo: string | null
+  origen_id: string | null
   tipos_categoria_egreso?: {
     nombre: string
     color: string
@@ -54,6 +61,10 @@ type Egreso = {
   categorias_egreso?: {
     nombre: string
   }
+}
+
+type OrigenInfo = {
+  [egresoId: string]: { nombre: string; tipo: string }
 }
 
 export default function PersonalHistorialPage() {
@@ -66,6 +77,8 @@ export default function PersonalHistorialPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [editType, setEditType] = useState<"ingreso" | "egreso" | null>(null)
   const [editData, setEditData] = useState<any>(null)
+  const [origenesInfo, setOrigenesInfo] = useState<OrigenInfo>({})
+  const [destinosInfo, setDestinosInfo] = useState<DestinoInfo>({})
 
   useEffect(() => {
     if (perfilActual?.id) {
@@ -97,6 +110,71 @@ export default function PersonalHistorialPage() {
 
     setIngresos(ingresosData || [])
     setEgresos(egresosData || [])
+
+    // Cargar nombres de origenes de fondos
+    if (egresosData) {
+      const origenes: OrigenInfo = {}
+      const cajasIds = [...new Set(egresosData.filter((e) => e.origen_tipo === "caja_ahorro" && e.origen_id).map((e) => e.origen_id))]
+      const tarjetasIds = [...new Set(egresosData.filter((e) => e.origen_tipo === "tarjeta_credito" && e.origen_id).map((e) => e.origen_id))]
+
+      // Crear mapas de nombres
+      const cajasMap: Record<string, string> = {}
+      const tarjetasMap: Record<string, string> = {}
+
+      if (cajasIds.length > 0) {
+        const { data: cajasData } = await supabase
+          .from("cajas_ahorro")
+          .select("id, nombre")
+          .in("id", cajasIds)
+        if (cajasData) cajasData.forEach((c) => { cajasMap[c.id] = c.nombre })
+      }
+
+      if (tarjetasIds.length > 0) {
+        const { data: tarjetasData } = await supabase
+          .from("deudas")
+          .select("id, nombre")
+          .in("id", tarjetasIds)
+        if (tarjetasData) tarjetasData.forEach((t) => { tarjetasMap[t.id] = t.nombre })
+      }
+
+      // Mapear cada egreso con su origen
+      egresosData.forEach((e) => {
+        if (e.origen_tipo === "caja_ahorro" && e.origen_id && cajasMap[e.origen_id]) {
+          origenes[e.id] = { nombre: cajasMap[e.origen_id], tipo: "caja_ahorro" }
+        } else if (e.origen_tipo === "tarjeta_credito" && e.origen_id && tarjetasMap[e.origen_id]) {
+          origenes[e.id] = { nombre: tarjetasMap[e.origen_id], tipo: "tarjeta_credito" }
+        }
+      })
+
+      setOrigenesInfo(origenes)
+    }
+
+    // Cargar destinos de ingresos
+    if (ingresosData) {
+      const destinos: DestinoInfo = {}
+      const cajasDestinoIds = [...new Set(ingresosData.filter((i) => i.destino_caja_id).map((i) => i.destino_caja_id as string))]
+
+      if (cajasDestinoIds.length > 0) {
+        const { data: cajasData } = await supabase
+          .from("cajas_ahorro")
+          .select("id, nombre, tipo_cuenta, banco")
+          .in("id", cajasDestinoIds)
+
+        if (cajasData) {
+          ingresosData.forEach((i) => {
+            if (i.destino_caja_id) {
+              const caja = cajasData.find((c) => c.id === i.destino_caja_id)
+              if (caja) {
+                destinos[i.id] = { nombre: caja.nombre, tipo_cuenta: caja.tipo_cuenta, banco: caja.banco }
+              }
+            }
+          })
+        }
+      }
+
+      setDestinosInfo(destinos)
+    }
+
     setIsLoading(false)
   }
 
@@ -105,6 +183,92 @@ export default function PersonalHistorialPage() {
 
     const supabase = createClient()
     const table = deleteType === "ingreso" ? "ingresos" : "egresos"
+
+    // Si es un ingreso con destino caja, revertir el deposito
+    if (deleteType === "ingreso") {
+      const ingresoToDelete = ingresos.find((i) => i.id === deleteId)
+      if (ingresoToDelete?.destino_caja_id) {
+        const montoRevertir = Number(ingresoToDelete.monto)
+        const { data: cajaData } = await supabase
+          .from("cajas_ahorro")
+          .select("monto_actual")
+          .eq("id", ingresoToDelete.destino_caja_id)
+          .single()
+
+        if (cajaData) {
+          const nuevoMonto = Math.max(0, Number(cajaData.monto_actual) - montoRevertir)
+          await supabase
+            .from("cajas_ahorro")
+            .update({ monto_actual: nuevoMonto })
+            .eq("id", ingresoToDelete.destino_caja_id)
+
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            await supabase.from("movimientos_caja").insert({
+              caja_id: ingresoToDelete.destino_caja_id,
+              perfil_id: perfilActual?.id,
+              user_id: user.id,
+              tipo: "retiro",
+              monto: montoRevertir,
+              descripcion: `Reversion: eliminacion de ingreso "${ingresoToDelete.tipo_ingreso}"`,
+              fecha: new Date().toISOString().split("T")[0],
+            })
+          }
+        }
+      }
+    }
+
+    // Si es un egreso con origen, revertir el descuento
+    if (deleteType === "egreso") {
+      const egresoToDelete = egresos.find((e) => e.id === deleteId)
+      if (egresoToDelete?.origen_tipo && egresoToDelete?.origen_id) {
+        const montoRevertir = Number(egresoToDelete.monto)
+
+        if (egresoToDelete.origen_tipo === "caja_ahorro") {
+          // Devolver dinero a la caja de ahorro
+          const { data: cajaData } = await supabase
+            .from("cajas_ahorro")
+            .select("monto_actual")
+            .eq("id", egresoToDelete.origen_id)
+            .single()
+
+          if (cajaData) {
+            await supabase
+              .from("cajas_ahorro")
+              .update({ monto_actual: Number(cajaData.monto_actual) + montoRevertir })
+              .eq("id", egresoToDelete.origen_id)
+
+            // Registrar movimiento de deposito (reversion)
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+              await supabase.from("movimientos_caja").insert({
+                caja_id: egresoToDelete.origen_id,
+                perfil_id: perfilActual?.id,
+                user_id: user.id,
+                tipo: "deposito",
+                monto: montoRevertir,
+                descripcion: `Reversion por eliminacion de egreso`,
+                fecha: new Date().toISOString().split("T")[0],
+              })
+            }
+          }
+        } else if (egresoToDelete.origen_tipo === "tarjeta_credito") {
+          // Devolver credito disponible a la tarjeta
+          const { data: tarjetaData } = await supabase
+            .from("deudas")
+            .select("monto_total")
+            .eq("id", egresoToDelete.origen_id)
+            .single()
+
+          if (tarjetaData) {
+            await supabase
+              .from("deudas")
+              .update({ monto_total: Number(tarjetaData.monto_total) + montoRevertir })
+              .eq("id", egresoToDelete.origen_id)
+          }
+        }
+      }
+    }
 
     const { error } = await supabase.from(table).delete().eq("id", deleteId)
 
@@ -297,6 +461,42 @@ export default function PersonalHistorialPage() {
                                     {!isIngreso && egreso?.concepto && (
                                       <p className="text-xs sm:text-sm text-muted-foreground mt-1 line-clamp-1">{egreso.concepto}</p>
                                     )}
+                                    {/* Destino del ingreso */}
+                                    {isIngreso && destinosInfo[item.id] && (
+                                      <div className="flex items-center gap-1.5 mt-1.5">
+                                        <ArrowRight className="w-3 h-3 text-blue-400" />
+                                        <div className="p-1 rounded bg-blue-500/20">
+                                          {destinosInfo[item.id].tipo_cuenta === "cuenta_bancaria" ? (
+                                            <Landmark className="w-3 h-3 text-blue-400" />
+                                          ) : destinosInfo[item.id].tipo_cuenta === "billetera_digital" ? (
+                                            <Smartphone className="w-3 h-3 text-cyan-400" />
+                                          ) : destinosInfo[item.id].tipo_cuenta === "ahorro_personal" ? (
+                                            <Wallet className="w-3 h-3 text-green-400" />
+                                          ) : (
+                                            <PiggyBank className="w-3 h-3 text-amber-400" />
+                                          )}
+                                        </div>
+                                        <span className="text-[11px] font-medium text-blue-400">
+                                          {destinosInfo[item.id].nombre}
+                                          {destinosInfo[item.id].banco ? ` (${destinosInfo[item.id].banco})` : ""}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {/* Origen del egreso */}
+                                    {!isIngreso && origenesInfo[item.id] && (
+                                      <div className="flex items-center gap-1.5 mt-1.5">
+                                        <div className={`p-1 rounded ${origenesInfo[item.id].tipo === "caja_ahorro" ? "bg-blue-500/20" : "bg-purple-500/20"}`}>
+                                          {origenesInfo[item.id].tipo === "caja_ahorro" ? (
+                                            <Building2 className="w-3 h-3 text-blue-400" />
+                                          ) : (
+                                            <CreditCard className="w-3 h-3 text-purple-400" />
+                                          )}
+                                        </div>
+                                        <span className={`text-[11px] font-medium ${origenesInfo[item.id].tipo === "caja_ahorro" ? "text-blue-400" : "text-purple-400"}`}>
+                                          {origenesInfo[item.id].nombre}
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 pl-13 sm:pl-0">
@@ -372,6 +572,26 @@ export default function PersonalHistorialPage() {
                                 <Calendar className="w-3 h-3" />
                                 {formatDateWithoutTimezone(ingreso.fecha)}
                               </p>
+                              {destinosInfo[ingreso.id] && (
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  <ArrowRight className="w-3 h-3 text-blue-400" />
+                                  <div className="p-1 rounded bg-blue-500/20">
+                                    {destinosInfo[ingreso.id].tipo_cuenta === "cuenta_bancaria" ? (
+                                      <Landmark className="w-3 h-3 text-blue-400" />
+                                    ) : destinosInfo[ingreso.id].tipo_cuenta === "billetera_digital" ? (
+                                      <Smartphone className="w-3 h-3 text-cyan-400" />
+                                    ) : destinosInfo[ingreso.id].tipo_cuenta === "ahorro_personal" ? (
+                                      <Wallet className="w-3 h-3 text-green-400" />
+                                    ) : (
+                                      <PiggyBank className="w-3 h-3 text-amber-400" />
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] font-medium text-blue-400">
+                                    {destinosInfo[ingreso.id].nombre}
+                                    {destinosInfo[ingreso.id].banco ? ` (${destinosInfo[ingreso.id].banco})` : ""}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-4">
@@ -450,6 +670,20 @@ export default function PersonalHistorialPage() {
                               </div>
                               {egreso.concepto && (
                                 <p className="text-sm text-muted-foreground mt-1">{egreso.concepto}</p>
+                              )}
+                              {origenesInfo[egreso.id] && (
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  <div className={`p-1 rounded ${origenesInfo[egreso.id].tipo === "caja_ahorro" ? "bg-blue-500/20" : "bg-purple-500/20"}`}>
+                                    {origenesInfo[egreso.id].tipo === "caja_ahorro" ? (
+                                      <Building2 className="w-3 h-3 text-blue-400" />
+                                    ) : (
+                                      <CreditCard className="w-3 h-3 text-purple-400" />
+                                    )}
+                                  </div>
+                                  <span className={`text-[11px] font-medium ${origenesInfo[egreso.id].tipo === "caja_ahorro" ? "text-blue-400" : "text-purple-400"}`}>
+                                    {origenesInfo[egreso.id].nombre}
+                                  </span>
+                                </div>
                               )}
                             </div>
                           </div>

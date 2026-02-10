@@ -98,13 +98,16 @@ export default async function DashboardPersonalPage({
 
   const balance = totalIngresos - totalEgresos
 
-  const { data: presupuesto } = await supabase
+  const { data: presupuestos } = await supabase
     .from("presupuesto_mensual")
     .select("meta_salario")
     .eq("perfil_id", perfilPersonal.id)
     .gte("fecha", primerDiaMes)
     .lte("fecha", ultimoDiaMes)
-    .maybeSingle()
+    .order("fecha", { ascending: false })
+    .limit(1)
+
+  const presupuesto = presupuestos?.[0] || null
 
   const metaSalario = presupuesto?.meta_salario || 0
   const porcentajeCompletado = metaSalario > 0 ? (totalIngresos / Number(metaSalario)) * 100 : 0
