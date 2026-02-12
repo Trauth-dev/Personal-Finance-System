@@ -122,7 +122,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [registrosHabitosRecurrentes, setRegistrosHabitosRecurrentes] = useState<Record<string, boolean>>({})
   const [showHabitoRecurrenteModal, setShowHabitoRecurrenteModal] = useState(false)
   const [verDiasFuturos, setVerDiasFuturos] = useState(false)
-  const [tareaAEliminar, setTareaAEliminar] = useState<string | null>(null)
+  const [ocurrenciasExcluidas, setOcurrenciasExcluidas] = useState<Set<string>>(new Set())
+  const [tareaAEliminar, setTareaAEliminar] = useState<{ id: string; fecha: string; nombre: string } | null>(null)
   const [tareaAFinalizar, setTareaAFinalizar] = useState<HabitoRecurrente | null>(null)
   const [fechaFinTarea, setFechaFinTarea] = useState("")
   const [habitoRecurrenteForm, setHabitoRecurrenteForm] = useState({
@@ -250,11 +251,17 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             .gte("fecha", fechaDesde)
           
           const registrosMap: Record<string, boolean> = {}
+          const excluidos = new Set<string>()
           registrosRec?.forEach((r) => {
             const clave = `${r.habito_id}-${r.fecha}`
-            registrosMap[clave] = r.completado
+            if (r.notas === "__EXCLUIDO__") {
+              excluidos.add(clave)
+            } else {
+              registrosMap[clave] = r.completado
+            }
           })
           setRegistrosHabitosRecurrentes(registrosMap)
+          setOcurrenciasExcluidas(excluidos)
         }
       }
     } catch (error) {
@@ -687,38 +694,46 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     }
   }
   
-  const confirmarEliminarTarea = (id: string) => {
-    setTareaAEliminar(id)
+  const confirmarEliminarTarea = (id: string, fecha: string, nombre: string) => {
+    setTareaAEliminar({ id, fecha, nombre })
   }
   
+  // Eliminar = solo quita la ocurrencia de ESE dia especifico
+  // Registra un "completado = false" especial para excluir esa fecha
   const eliminarTareaProgramada = async () => {
     if (!tareaAEliminar) return
     try {
-      await supabase.from("habitos_recurrentes").update({ activo: false }).eq("id", tareaAEliminar)
+      // Insertar un registro con completado=false para excluir esa fecha
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      await supabase
+        .from("registro_habitos_recurrentes")
+        .upsert({
+          habito_id: tareaAEliminar.id,
+          perfil_id: perfilActivo,
+          user_id: user.id,
+          fecha: tareaAEliminar.fecha,
+          completado: false,
+          notas: "__EXCLUIDO__"
+        }, { onConflict: "habito_id,fecha" })
+      
       setTareaAEliminar(null)
       cargarDatos()
     } catch (error) {
-      console.error("Error eliminando tarea programada:", error)
+      console.error("Error eliminando ocurrencia de tarea:", error)
     }
   }
   
+  // Finalizar = desactiva la tarea ENTERA, desaparece de todos los dias
   const finalizarTareaProgramada = async () => {
     if (!tareaAFinalizar) return
     try {
-      if (fechaFinTarea) {
-        // Establecer fecha fin - la tarea dejara de aparecer despues de esa fecha
-        await supabase
-          .from("habitos_recurrentes")
-          .update({ fecha_fin: fechaFinTarea })
-          .eq("id", tareaAFinalizar.id)
-      } else {
-        // Finalizar inmediatamente (fecha fin = hoy)
-        const hoy = new Date().toISOString().split("T")[0]
-        await supabase
-          .from("habitos_recurrentes")
-          .update({ fecha_fin: hoy })
-          .eq("id", tareaAFinalizar.id)
-      }
+      await supabase
+        .from("habitos_recurrentes")
+        .update({ activo: false })
+        .eq("id", tareaAFinalizar.id)
+
       setTareaAFinalizar(null)
       setFechaFinTarea("")
       cargarDatos()
@@ -1650,6 +1665,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               const diaIndex = Math.round((fechaOc.getTime() - inicioSemana.getTime()) / (1000 * 60 * 60 * 24))
               if (diaIndex >= 0 && diaIndex < 7) {
                 const clave = `${tarea.id}-${oc.fecha}`
+                // No mostrar ocurrencias excluidas (eliminadas de un dia especifico)
+                if (ocurrenciasExcluidas.has(clave)) return
                 const completada = registrosHabitosRecurrentes[clave] || false
                 tareasPorDiaSemana[diaIndex].push({ tarea, fecha: oc.fecha, completada })
               }
@@ -1753,7 +1770,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                                 </button>
                                 <span className="text-border/40">|</span>
                                 <button
-                                  onClick={() => confirmarEliminarTarea(tarea.id)}
+                                  onClick={() => confirmarEliminarTarea(tarea.id, fechaTarea, tarea.nombre)}
                                   className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-medium"
                                 >
                                   Eliminar
@@ -2431,13 +2448,13 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       </Dialog>
       
       {/* AlertDialog para confirmar eliminación */}
-      {/* Modal Finalizar Tarea */}
+      {/* Modal Finalizar Tarea - Desactiva la tarea de TODOS los dias */}
       <Dialog open={tareaAFinalizar !== null} onOpenChange={(open) => { if (!open) { setTareaAFinalizar(null); setFechaFinTarea(""); } }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-amber-500">Finalizar Tarea</DialogTitle>
+            <DialogTitle className="text-amber-500">Finalizar Tarea Completa</DialogTitle>
             <DialogDescription>
-              Establece una fecha de finalizacion o termina la tarea inmediatamente.
+              Esta accion finalizara la tarea y desaparecera de todos los dias (pasados y futuros).
             </DialogDescription>
           </DialogHeader>
           {tareaAFinalizar && (
@@ -2447,24 +2464,11 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                 <p className="text-xs text-muted-foreground mt-1">
                   Frecuencia: {getIntervaloLabel(tareaAFinalizar.intervalo_dias)}
                 </p>
-                {tareaAFinalizar.fecha_fin && (
-                  <p className="text-xs text-amber-400 mt-1">
-                    Fecha fin actual: {new Date(tareaAFinalizar.fecha_fin + "T12:00:00").toLocaleDateString("es-PY")}
-                  </p>
-                )}
               </div>
 
-              <div>
-                <Label htmlFor="fecha-fin-tarea">Fecha de finalizacion (opcional)</Label>
-                <Input
-                  id="fecha-fin-tarea"
-                  type="date"
-                  value={fechaFinTarea}
-                  onChange={(e) => setFechaFinTarea(e.target.value)}
-                  className="mt-1"
-                />
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Si no eliges fecha, la tarea se finalizara hoy mismo.
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <p className="text-xs text-amber-400">
+                  Al finalizar, esta tarea dejara de aparecer en el calendario semanal por completo.
                 </p>
               </div>
 
@@ -2476,7 +2480,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                   onClick={finalizarTareaProgramada}
                   className="bg-amber-600 hover:bg-amber-700 text-white"
                 >
-                  {fechaFinTarea ? "Establecer Fecha Fin" : "Finalizar Ahora"}
+                  Finalizar Tarea
                 </Button>
               </DialogFooter>
             </div>
@@ -2487,15 +2491,23 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       <AlertDialog open={tareaAEliminar !== null} onOpenChange={(open) => !open && setTareaAEliminar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Finalizar esta tarea programada?</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar tarea de este dia</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará todas las ocurrencias futuras de esta tarea. Las ocurrencias ya completadas se mantendrán en el historial.
+              {tareaAEliminar && (
+                <>
+                  Se eliminara <span className="font-semibold">{tareaAEliminar.nombre}</span> solo del dia{" "}
+                  <span className="font-semibold">
+                    {new Date(tareaAEliminar.fecha + "T12:00:00").toLocaleDateString("es-PY", { weekday: "long", day: "numeric", month: "short" })}
+                  </span>.
+                  Las demas ocurrencias de la tarea no se veran afectadas.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={eliminarTareaProgramada} className="bg-red-600 hover:bg-red-700">
-              Finalizar Tarea
+              Eliminar de este dia
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
