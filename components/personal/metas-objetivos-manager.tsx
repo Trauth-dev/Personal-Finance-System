@@ -123,6 +123,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [showHabitoRecurrenteModal, setShowHabitoRecurrenteModal] = useState(false)
   const [verDiasFuturos, setVerDiasFuturos] = useState(false)
   const [tareaAEliminar, setTareaAEliminar] = useState<string | null>(null)
+  const [tareaAFinalizar, setTareaAFinalizar] = useState<HabitoRecurrente | null>(null)
+  const [fechaFinTarea, setFechaFinTarea] = useState("")
   const [habitoRecurrenteForm, setHabitoRecurrenteForm] = useState({
     nombre: "",
     descripcion: "",
@@ -234,12 +236,12 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       if (habitosRecData) {
         setHabitosRecurrentes(habitosRecData)
         
-        // Cargar registros de las últimas 2 semanas
+        // Cargar registros de las ultimas 3 semanas (para cubrir semana anterior completa)
         if (habitosRecData.length > 0) {
           const habitoIds = habitosRecData.map((h) => h.id)
-          const haceDosSemanas = new Date()
-          haceDosSemanas.setDate(haceDosSemanas.getDate() - 14)
-          const fechaDesde = haceDosSemanas.toISOString().split("T")[0]
+          const haceTresSemanas = new Date()
+          haceTresSemanas.setDate(haceTresSemanas.getDate() - 21)
+          const fechaDesde = haceTresSemanas.toISOString().split("T")[0]
           
           const { data: registrosRec } = await supabase
             .from("registro_habitos_recurrentes")
@@ -700,6 +702,31 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     }
   }
   
+  const finalizarTareaProgramada = async () => {
+    if (!tareaAFinalizar) return
+    try {
+      if (fechaFinTarea) {
+        // Establecer fecha fin - la tarea dejara de aparecer despues de esa fecha
+        await supabase
+          .from("habitos_recurrentes")
+          .update({ fecha_fin: fechaFinTarea })
+          .eq("id", tareaAFinalizar.id)
+      } else {
+        // Finalizar inmediatamente (fecha fin = hoy)
+        const hoy = new Date().toISOString().split("T")[0]
+        await supabase
+          .from("habitos_recurrentes")
+          .update({ fecha_fin: hoy })
+          .eq("id", tareaAFinalizar.id)
+      }
+      setTareaAFinalizar(null)
+      setFechaFinTarea("")
+      cargarDatos()
+    } catch (error) {
+      console.error("Error finalizando tarea programada:", error)
+    }
+  }
+
   const getIntervaloLabel = (dias: number) => {
     if (dias === 1) return "Diario"
     if (dias === 7) return "Semanal"
@@ -1688,16 +1715,15 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                       {tareasDia.length > 0 ? (
                         <div className="space-y-3">
                           {tareasDia.map(({ tarea, fecha: fechaTarea, completada }) => (
-                            <div key={`${tarea.id}-${fechaTarea}`} className="group">
+                            <div key={`${tarea.id}-${fechaTarea}`} className="pb-2.5 border-b border-border/10 last:border-b-0 last:pb-0">
                               <div className="flex items-start gap-1.5">
                                 <button
                                   onClick={() => toggleTareaProgramada(tarea.id, fechaTarea, !completada)}
-                                  disabled={esPasado && !completada}
-                                  className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all ${
+                                  className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all cursor-pointer ${
                                     completada
                                       ? "bg-cyan-600 border-cyan-600"
                                       : "border-muted-foreground/40 hover:border-cyan-500"
-                                  } ${esPasado && !completada ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                                  }`}
                                 >
                                   {completada && (
                                     <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -1714,11 +1740,21 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                                   {getIntervaloLabel(tarea.intervalo_dias)}
                                 </span>
                               </div>
-                              {/* Boton eliminar en hover */}
-                              <div className="ml-5 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {/* Botones siempre visibles */}
+                              <div className="ml-5 mt-1 flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setTareaAFinalizar(tarea)
+                                    setFechaFinTarea(tarea.fecha_fin || "")
+                                  }}
+                                  className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors font-medium"
+                                >
+                                  Finalizar
+                                </button>
+                                <span className="text-border/40">|</span>
                                 <button
                                   onClick={() => confirmarEliminarTarea(tarea.id)}
-                                  className="text-[10px] text-red-400 hover:text-red-500 transition-colors"
+                                  className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-medium"
                                 >
                                   Eliminar
                                 </button>
@@ -2395,6 +2431,59 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       </Dialog>
       
       {/* AlertDialog para confirmar eliminación */}
+      {/* Modal Finalizar Tarea */}
+      <Dialog open={tareaAFinalizar !== null} onOpenChange={(open) => { if (!open) { setTareaAFinalizar(null); setFechaFinTarea(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-amber-500">Finalizar Tarea</DialogTitle>
+            <DialogDescription>
+              Establece una fecha de finalizacion o termina la tarea inmediatamente.
+            </DialogDescription>
+          </DialogHeader>
+          {tareaAFinalizar && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
+                <p className="font-medium text-sm">{tareaAFinalizar.nombre}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Frecuencia: {getIntervaloLabel(tareaAFinalizar.intervalo_dias)}
+                </p>
+                {tareaAFinalizar.fecha_fin && (
+                  <p className="text-xs text-amber-400 mt-1">
+                    Fecha fin actual: {new Date(tareaAFinalizar.fecha_fin + "T12:00:00").toLocaleDateString("es-PY")}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="fecha-fin-tarea">Fecha de finalizacion (opcional)</Label>
+                <Input
+                  id="fecha-fin-tarea"
+                  type="date"
+                  value={fechaFinTarea}
+                  onChange={(e) => setFechaFinTarea(e.target.value)}
+                  className="mt-1"
+                />
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Si no eliges fecha, la tarea se finalizara hoy mismo.
+                </p>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="outline" onClick={() => { setTareaAFinalizar(null); setFechaFinTarea(""); }}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={finalizarTareaProgramada}
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {fechaFinTarea ? "Establecer Fecha Fin" : "Finalizar Ahora"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={tareaAEliminar !== null} onOpenChange={(open) => !open && setTareaAEliminar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
