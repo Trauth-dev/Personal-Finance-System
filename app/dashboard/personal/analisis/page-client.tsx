@@ -142,6 +142,46 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
     const ahorroActual = totalIngresosActual - totalEgresosActual
     const ahorroAnterior = totalIngresosAnterior - totalEgresosAnterior
 
+    // Calcular evolución de los últimos 6 meses (incluyendo el mes seleccionado)
+    const evolucion = []
+    for (let i = 5; i >= 0; i--) {
+      const mesEvolucion = new Date(year, month - 1 - i, 1)
+      const yearEv = mesEvolucion.getFullYear()
+      const monthEv = mesEvolucion.getMonth() + 1
+      
+      const primerDia = new Date(yearEv, monthEv - 1, 1).toISOString().split("T")[0]
+      const ultimoDia = new Date(yearEv, monthEv, 0).toISOString().split("T")[0]
+      
+      // Obtener ingresos del mes
+      const { data: ingresosEv } = await supabase
+        .from("ingresos")
+        .select("monto")
+        .eq("perfil_id", perfilId)
+        .gte("fecha", primerDia)
+        .lte("fecha", ultimoDia)
+      
+      const totalIngresosEv = ingresosEv?.reduce((sum, i) => sum + Number(i.monto), 0) || 0
+      
+      // Obtener egresos del mes
+      const { data: egresosEv } = await supabase
+        .from("egresos")
+        .select("monto")
+        .eq("perfil_id", perfilId)
+        .gte("fecha", primerDia)
+        .lte("fecha", ultimoDia)
+      
+      const totalEgresosEv = egresosEv?.reduce((sum, e) => sum + Number(e.monto), 0) || 0
+      
+      const balanceEv = totalIngresosEv - totalEgresosEv
+      
+      evolucion.push({
+        mes: monthNames[monthEv - 1].substring(0, 3),
+        ingresos: totalIngresosEv,
+        egresos: totalEgresosEv,
+        balance: balanceEv,
+      })
+    }
+
     setAnalisisData({
       mesActual: {
         mes: mesActualNombre,
@@ -158,6 +198,7 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
         ahorro: ahorroAnterior,
       },
       categorias,
+      evolucion,
     })
 
     setLoading(false)

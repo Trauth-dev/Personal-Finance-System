@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { formatGuaranies } from "@/lib/utils"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, LineChart, Line, Area, AreaChart } from "recharts"
 import { TrendingUp, TrendingDown, DollarSign, Target, AlertCircle, Wallet, PiggyBank, CreditCard } from "lucide-react"
 
 interface AnalisisData {
@@ -25,6 +25,12 @@ interface AnalisisData {
     mesActual: number
     mesAnterior: number
     cambio: number
+  }>
+  evolucion?: Array<{
+    mes: string
+    ingresos: number
+    egresos: number
+    balance: number
   }>
 }
 
@@ -227,6 +233,91 @@ export function AnalisisMensualComparativo({ data }: Props) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Gráfico de Evolución Financiera (últimos meses) */}
+      {data.evolucion && data.evolucion.length > 0 && (
+        <Card className="border-2 border-slate-200">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-slate-800">Evolución Financiera</CardTitle>
+            <CardDescription>Tendencia de ingresos, egresos y balance neto en los últimos meses</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={350}>
+              <AreaChart data={data.evolucion} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <defs>
+                  <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorEgresos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis 
+                  dataKey="mes" 
+                  tick={{ fill: '#475569', fontSize: 12 }}
+                  tickMargin={10}
+                />
+                <YAxis 
+                  tickFormatter={(value) => {
+                    const absValue = Math.abs(value)
+                    if (absValue >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+                    if (absValue >= 1000) return `${(value / 1000).toFixed(0)}K`
+                    return value.toString()
+                  }}
+                  tick={{ fill: '#475569', fontSize: 12 }}
+                />
+                <Tooltip 
+                  formatter={(value: number) => formatGuaranies(value)}
+                  contentStyle={{ 
+                    backgroundColor: '#ffffff', 
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '12px'
+                  }}
+                />
+                <Legend 
+                  wrapperStyle={{ paddingTop: '10px' }}
+                  iconType="circle"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="ingresos" 
+                  stroke="#10b981" 
+                  strokeWidth={2.5}
+                  fillOpacity={1} 
+                  fill="url(#colorIngresos)" 
+                  name="Ingresos"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="egresos" 
+                  stroke="#ef4444" 
+                  strokeWidth={2.5}
+                  fillOpacity={1} 
+                  fill="url(#colorEgresos)" 
+                  name="Egresos"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="balance" 
+                  stroke="#3b82f6" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorBalance)" 
+                  name="Balance Neto"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Gráfico de Barras Comparativo por Categoría */}
       <Card className="border-2 border-slate-200">
