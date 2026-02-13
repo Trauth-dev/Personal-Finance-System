@@ -1688,103 +1688,196 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
 
           return (
             <>
-              {/* Tabs de dias */}
-              <div className="flex gap-0 overflow-x-auto">
-                {diasSemana.map((dia, i) => {
-                  const esHoyDia = dia.fecha.getTime() === hoy.getTime()
-                  return (
-                    <div
-                      key={i}
-                      className={`flex-1 min-w-[80px] text-center py-2 px-1 text-sm font-bold rounded-t-lg border-b-2 transition-colors ${
-                        esHoyDia
-                          ? `${COLORES_DIAS[i]} border-transparent`
-                          : "bg-muted/50 text-muted-foreground border-border/30"
-                      }`}
-                    >
-                      {dia.nombreCorto}
-                    </div>
-                  )
-                })}
+              {/* Vista Desktop: Tabs + Grid de columnas */}
+              <div className="hidden md:block">
+                {/* Tabs de dias */}
+                <div className="flex gap-0">
+                  {diasSemana.map((dia, i) => {
+                    const esHoyDia = dia.fecha.getTime() === hoy.getTime()
+                    return (
+                      <div
+                        key={i}
+                        className={`flex-1 text-center py-2 px-1 text-sm font-bold rounded-t-lg border-b-2 transition-colors ${
+                          esHoyDia
+                            ? `${COLORES_DIAS[i]} border-transparent`
+                            : "bg-muted/50 text-muted-foreground border-border/30"
+                        }`}
+                      >
+                        {dia.nombreCorto}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Grid de columnas */}
+                <div className="grid grid-cols-7 border border-border/30 rounded-b-lg overflow-hidden min-h-[300px]">
+                  {diasSemana.map((dia, i) => {
+                    const tareasDia = tareasPorDiaSemana[i]
+                    const esHoyDia = dia.fecha.getTime() === hoy.getTime()
+
+                    return (
+                      <div
+                        key={i}
+                        className={`border-r last:border-r-0 border-border/20 p-2 flex flex-col gap-0 ${
+                          esHoyDia ? "bg-cyan-500/5" : "bg-card"
+                        }`}
+                      >
+                        <p className={`text-xs font-semibold mb-2 ${esHoyDia ? "text-cyan-400" : "text-muted-foreground"}`}>
+                          {dia.nombre}
+                        </p>
+
+                        {tareasDia.length > 0 ? (
+                          <div className="space-y-3">
+                            {tareasDia.map(({ tarea, fecha: fechaTarea, completada }) => (
+                              <div key={`${tarea.id}-${fechaTarea}`} className="pb-2.5 border-b border-border/10 last:border-b-0 last:pb-0">
+                                <div className="flex items-start gap-1.5">
+                                  <button
+                                    onClick={() => toggleTareaProgramada(tarea.id, fechaTarea, !completada)}
+                                    className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all cursor-pointer ${
+                                      completada
+                                        ? "bg-cyan-600 border-cyan-600"
+                                        : "border-muted-foreground/40 hover:border-cyan-500"
+                                    }`}
+                                  >
+                                    {completada && (
+                                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <span className={`text-xs font-medium leading-tight ${completada ? "line-through text-muted-foreground/50" : ""}`}>
+                                    {tarea.nombre}
+                                  </span>
+                                </div>
+                                <div className="ml-5 mt-1">
+                                  <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-medium ${getBadgeColor(tarea.intervalo_dias)}`}>
+                                    {getIntervaloLabel(tarea.intervalo_dias)}
+                                  </span>
+                                </div>
+                                <div className="ml-5 mt-1 flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setTareaAFinalizar(tarea)
+                                      setFechaFinTarea(tarea.fecha_fin || "")
+                                    }}
+                                    className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors font-medium"
+                                  >
+                                    Finalizar
+                                  </button>
+                                  <span className="text-border/40">|</span>
+                                  <button
+                                    onClick={() => confirmarEliminarTarea(tarea.id, fechaTarea, tarea.nombre)}
+                                    className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-medium"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground/40 italic mt-2">Sin tareas</p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
 
-              {/* Grid de columnas */}
-              <div className="grid grid-cols-7 border border-border/30 rounded-b-lg overflow-hidden min-h-[300px]">
+              {/* Vista Movil: Cards por dia */}
+              <div className="md:hidden space-y-3">
                 {diasSemana.map((dia, i) => {
                   const tareasDia = tareasPorDiaSemana[i]
                   const esHoyDia = dia.fecha.getTime() === hoy.getTime()
-                  const esPasado = dia.fecha < hoy
+                  
+                  // Saltar dias sin tareas en movil
+                  if (tareasDia.length === 0) return null
 
                   return (
-                    <div
-                      key={i}
-                      className={`border-r last:border-r-0 border-border/20 p-2 flex flex-col gap-0 ${
-                        esHoyDia
-                          ? "bg-cyan-500/5"
-                          : "bg-card"
-                      }`}
-                    >
-                      {/* Nombre del dia en la columna */}
-                      <p className={`text-xs font-semibold mb-2 ${esHoyDia ? "text-cyan-400" : "text-muted-foreground"}`}>
-                        {dia.nombre}
-                      </p>
-
-                      {/* Tareas del dia */}
-                      {tareasDia.length > 0 ? (
-                        <div className="space-y-3">
-                          {tareasDia.map(({ tarea, fecha: fechaTarea, completada }) => (
-                            <div key={`${tarea.id}-${fechaTarea}`} className="pb-2.5 border-b border-border/10 last:border-b-0 last:pb-0">
-                              <div className="flex items-start gap-1.5">
-                                <button
-                                  onClick={() => toggleTareaProgramada(tarea.id, fechaTarea, !completada)}
-                                  className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all cursor-pointer ${
-                                    completada
-                                      ? "bg-cyan-600 border-cyan-600"
-                                      : "border-muted-foreground/40 hover:border-cyan-500"
-                                  }`}
-                                >
-                                  {completada && (
-                                    <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  )}
-                                </button>
-                                <span className={`text-xs font-medium leading-tight ${completada ? "line-through text-muted-foreground/50" : ""}`}>
+                    <Card key={i} className={`${esHoyDia ? "border-2 border-cyan-500" : "border-border"}`}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`px-3 py-1 rounded-md text-sm font-bold ${COLORES_DIAS[i]}`}>
+                              {dia.nombreCorto}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold">{dia.nombre}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {dia.fecha.toLocaleDateString("es-PY", { day: "numeric", month: "short" })}
+                              </p>
+                            </div>
+                          </div>
+                          {esHoyDia && (
+                            <Badge className="bg-cyan-600 text-white">Hoy</Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {tareasDia.map(({ tarea, fecha: fechaTarea, completada }) => (
+                          <div key={`${tarea.id}-${fechaTarea}`} className="p-3 rounded-lg border bg-card">
+                            <div className="flex items-start gap-3">
+                              <button
+                                onClick={() => toggleTareaProgramada(tarea.id, fechaTarea, !completada)}
+                                className={`mt-0.5 w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all cursor-pointer ${
+                                  completada
+                                    ? "bg-cyan-600 border-cyan-600"
+                                    : "border-muted-foreground/40"
+                                }`}
+                              >
+                                {completada && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium ${completada ? "line-through text-muted-foreground" : ""}`}>
                                   {tarea.nombre}
-                                </span>
-                              </div>
-                              <div className="ml-5 mt-1">
-                                <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-medium ${getBadgeColor(tarea.intervalo_dias)}`}>
-                                  {getIntervaloLabel(tarea.intervalo_dias)}
-                                </span>
-                              </div>
-                              {/* Botones siempre visibles */}
-                              <div className="ml-5 mt-1 flex items-center gap-2">
-                                <button
-                                  onClick={() => {
-                                    setTareaAFinalizar(tarea)
-                                    setFechaFinTarea(tarea.fecha_fin || "")
-                                  }}
-                                  className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors font-medium"
-                                >
-                                  Finalizar
-                                </button>
-                                <span className="text-border/40">|</span>
-                                <button
-                                  onClick={() => confirmarEliminarTarea(tarea.id, fechaTarea, tarea.nombre)}
-                                  className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-medium"
-                                >
-                                  Eliminar
-                                </button>
+                                </p>
+                                <div className="mt-2">
+                                  <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium ${getBadgeColor(tarea.intervalo_dias)}`}>
+                                    {getIntervaloLabel(tarea.intervalo_dias)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 mt-2">
+                                  <button
+                                    onClick={() => {
+                                      setTareaAFinalizar(tarea)
+                                      setFechaFinTarea(tarea.fecha_fin || "")
+                                    }}
+                                    className="text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium"
+                                  >
+                                    Finalizar
+                                  </button>
+                                  <span className="text-border/40">|</span>
+                                  <button
+                                    onClick={() => confirmarEliminarTarea(tarea.id, fechaTarea, tarea.nombre)}
+                                    className="text-xs text-red-400 hover:text-red-300 transition-colors font-medium"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-[11px] text-muted-foreground/40 italic mt-2">Sin tareas</p>
-                      )}
-                    </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
                   )
                 })}
+
+                {/* Mensaje si no hay tareas en la semana */}
+                {diasSemana.every((dia, i) => tareasPorDiaSemana[i].length === 0) && (
+                  <Card className="border-dashed">
+                    <CardContent className="flex flex-col items-center justify-center py-8">
+                      <Calendar className="w-10 h-10 text-muted-foreground mb-3" />
+                      <p className="text-sm text-muted-foreground text-center">
+                        No hay tareas programadas para {verDiasFuturos ? "la proxima semana" : "esta semana"}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               {habitosRecurrentes.length === 0 && (
