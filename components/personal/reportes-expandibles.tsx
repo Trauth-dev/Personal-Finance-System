@@ -5,9 +5,10 @@ interface ReportesExpandiblesProps {
   perfilId: string
   fechaInicio?: string
   fechaFin?: string
+  cajaId?: string
 }
 
-export async function ReportesExpandibles({ perfilId, fechaInicio, fechaFin }: ReportesExpandiblesProps) {
+export async function ReportesExpandibles({ perfilId, fechaInicio, fechaFin, cajaId }: ReportesExpandiblesProps) {
   const supabase = await createClient()
 
   let primerDiaMes = fechaInicio
@@ -19,7 +20,7 @@ export async function ReportesExpandibles({ perfilId, fechaInicio, fechaFin }: R
     ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
   }
 
-  const { data: egresosConCategoria } = await supabase
+  let egresosQuery = supabase
     .from("egresos")
     .select(
       `
@@ -42,6 +43,12 @@ export async function ReportesExpandibles({ perfilId, fechaInicio, fechaFin }: R
     .gte("fecha", primerDiaMes)
     .lte("fecha", ultimoDiaMes)
     .order("monto", { ascending: false })
+
+  if (cajaId) {
+    egresosQuery = egresosQuery.eq("origen_tipo", "caja_ahorro").eq("origen_id", cajaId)
+  }
+
+  const { data: egresosConCategoria } = await egresosQuery
 
   const gastosPorCategoria: Record<
     string,
@@ -70,7 +77,7 @@ export async function ReportesExpandibles({ perfilId, fechaInicio, fechaFin }: R
     gastosPorCategoria[tipoCategoria.id].gastos.push({
       monto: Number(egreso.monto),
       concepto: egreso.concepto || "Sin concepto",
-      descripcion: egreso.categorias_egreso?.nombre || "Sin descripción",
+      descripcion: egreso.categorias_egreso?.nombre || "Sin descripcion",
       fecha: egreso.fecha,
     })
   })
@@ -84,8 +91,8 @@ export async function ReportesExpandibles({ perfilId, fechaInicio, fechaFin }: R
       ?.map((egreso) => ({
         monto: Number(egreso.monto),
         concepto: egreso.concepto || "Sin concepto",
-        categoria: egreso.tipos_categoria_egreso?.nombre || "Sin categoría",
-        descripcion: egreso.categorias_egreso?.nombre || "Sin descripción",
+        categoria: egreso.tipos_categoria_egreso?.nombre || "Sin categoria",
+        descripcion: egreso.categorias_egreso?.nombre || "Sin descripcion",
         color: egreso.tipos_categoria_egreso?.color || "#6366f1",
         fecha: egreso.fecha,
       }))
