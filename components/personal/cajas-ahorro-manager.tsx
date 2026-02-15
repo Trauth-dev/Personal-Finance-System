@@ -124,6 +124,17 @@ export function CajasAhorroManager() {
     descripcion: "",
   })
 
+  // Helpers para separador de miles
+  const formatMiles = (value: string) => {
+    const num = value.replace(/\D/g, "")
+    if (!num) return ""
+    return Number(num).toLocaleString("es-PY")
+  }
+
+  const parseMiles = (value: string) => {
+    return value.replace(/\D/g, "")
+  }
+
   useEffect(() => {
     if (perfilActual) {
       loadCajas()
@@ -416,12 +427,11 @@ export function CajasAhorroManager() {
                     <Label htmlFor="meta_monto">Meta de Ahorro (opcional)</Label>
                     <Input
                       id="meta_monto"
-                      type="number"
-                      step="0.01"
-                      value={formData.meta_monto}
-                      onChange={(e) => setFormData({ ...formData, meta_monto: e.target.value })}
-                      placeholder="0.00"
-                      required
+                      type="text"
+                      inputMode="numeric"
+                      value={formatMiles(formData.meta_monto)}
+                      onChange={(e) => setFormData({ ...formData, meta_monto: parseMiles(e.target.value) })}
+                      placeholder="Ej: 5.000.000"
                     />
                   </div>
 
@@ -682,16 +692,16 @@ export function CajasAhorroManager() {
           </DialogHeader>
           <form onSubmit={handleMovimiento} className="space-y-3">
             <div>
-              <Label htmlFor="monto">Monto</Label>
-              <Input
-                id="monto"
-                type="number"
-                step="0.01"
-                value={movimientoData.monto}
-                onChange={(e) => setMovimientoData({ ...movimientoData, monto: e.target.value })}
-                placeholder="0.00"
-                required
-              />
+                  <Label htmlFor="monto">Monto</Label>
+                  <Input
+                    id="monto"
+                    type="text"
+                    inputMode="numeric"
+                    value={formatMiles(movimientoData.monto)}
+                    onChange={(e) => setMovimientoData({ ...movimientoData, monto: parseMiles(e.target.value) })}
+                    placeholder="Ej: 500.000"
+                    required
+                  />
             </div>
 
             <div>
