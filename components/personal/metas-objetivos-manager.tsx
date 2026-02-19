@@ -122,7 +122,10 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [registrosHabitosRecurrentes, setRegistrosHabitosRecurrentes] = useState<Record<string, boolean>>({})
   const [showHabitoRecurrenteModal, setShowHabitoRecurrenteModal] = useState(false)
   const [verDiasFuturos, setVerDiasFuturos] = useState(false)
-  const [tareaAEliminar, setTareaAEliminar] = useState<string | null>(null)
+  const [ocurrenciasExcluidas, setOcurrenciasExcluidas] = useState<Set<string>>(new Set())
+  const [tareaAEliminar, setTareaAEliminar] = useState<{ id: string; fecha: string; nombre: string } | null>(null)
+  const [tareaAFinalizar, setTareaAFinalizar] = useState<HabitoRecurrente | null>(null)
+  const [fechaFinTarea, setFechaFinTarea] = useState("")
   const [habitoRecurrenteForm, setHabitoRecurrenteForm] = useState({
     nombre: "",
     descripcion: "",
@@ -234,12 +237,12 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       if (habitosRecData) {
         setHabitosRecurrentes(habitosRecData)
         
-        // Cargar registros de las últimas 2 semanas
+        // Cargar registros de las ultimas 3 semanas (para cubrir semana anterior completa)
         if (habitosRecData.length > 0) {
           const habitoIds = habitosRecData.map((h) => h.id)
-          const haceDosSemanas = new Date()
-          haceDosSemanas.setDate(haceDosSemanas.getDate() - 14)
-          const fechaDesde = haceDosSemanas.toISOString().split("T")[0]
+          const haceTresSemanas = new Date()
+          haceTresSemanas.setDate(haceTresSemanas.getDate() - 21)
+          const fechaDesde = haceTresSemanas.toISOString().split("T")[0]
           
           const { data: registrosRec } = await supabase
             .from("registro_habitos_recurrentes")
@@ -248,11 +251,17 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             .gte("fecha", fechaDesde)
           
           const registrosMap: Record<string, boolean> = {}
+          const excluidos = new Set<string>()
           registrosRec?.forEach((r) => {
             const clave = `${r.habito_id}-${r.fecha}`
-            registrosMap[clave] = r.completado
+            if (r.notas === "__EXCLUIDO__") {
+              excluidos.add(clave)
+            } else {
+              registrosMap[clave] = r.completado
+            }
           })
           setRegistrosHabitosRecurrentes(registrosMap)
+          setOcurrenciasExcluidas(excluidos)
         }
       }
     } catch (error) {
@@ -685,21 +694,54 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     }
   }
   
-  const confirmarEliminarTarea = (id: string) => {
-    setTareaAEliminar(id)
+  const confirmarEliminarTarea = (id: string, fecha: string, nombre: string) => {
+    setTareaAEliminar({ id, fecha, nombre })
   }
   
+  // Eliminar = solo quita la ocurrencia de ESE dia especifico
+  // Registra un "completado = false" especial para excluir esa fecha
   const eliminarTareaProgramada = async () => {
     if (!tareaAEliminar) return
     try {
-      await supabase.from("habitos_recurrentes").update({ activo: false }).eq("id", tareaAEliminar)
+      // Insertar un registro con completado=false para excluir esa fecha
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      await supabase
+        .from("registro_habitos_recurrentes")
+        .upsert({
+          habito_id: tareaAEliminar.id,
+          perfil_id: perfilActivo,
+          user_id: user.id,
+          fecha: tareaAEliminar.fecha,
+          completado: false,
+          notas: "__EXCLUIDO__"
+        }, { onConflict: "habito_id,fecha" })
+      
       setTareaAEliminar(null)
       cargarDatos()
     } catch (error) {
-      console.error("Error eliminando tarea programada:", error)
+      console.error("Error eliminando ocurrencia de tarea:", error)
     }
   }
   
+  // Finalizar = desactiva la tarea ENTERA, desaparece de todos los dias
+  const finalizarTareaProgramada = async () => {
+    if (!tareaAFinalizar) return
+    try {
+      await supabase
+        .from("habitos_recurrentes")
+        .update({ activo: false })
+        .eq("id", tareaAFinalizar.id)
+
+      setTareaAFinalizar(null)
+      setFechaFinTarea("")
+      cargarDatos()
+    } catch (error) {
+      console.error("Error finalizando tarea programada:", error)
+    }
+  }
+
   const getIntervaloLabel = (dias: number) => {
     if (dias === 1) return "Diario"
     if (dias === 7) return "Semanal"
@@ -1523,132 +1565,339 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       
       {/* Tab de Tareas Programadas */}
       <TabsContent value="recurrentes" className="space-y-4">
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h2 className="text-xl font-bold text-cyan-600 flex items-center gap-2">
-              <Repeat className="h-5 w-5" />
-              Tareas Programadas
-            </h2>
-            <p className="text-sm text-muted-foreground">Programa tareas que se repiten cada ciertos días</p>
+        {/* Navegacion Semana Actual / Proxima Semana */}
+        <div className="flex items-center justify-center gap-3 mb-1">
+          <button
+            onClick={() => setVerDiasFuturos(false)}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronLeft className="h-5 w-5" />
+          </button>
+          <div className="flex items-center gap-3 text-sm font-medium">
+            <button
+              onClick={() => setVerDiasFuturos(false)}
+              className={`transition-colors ${!verDiasFuturos ? "text-foreground" : "text-muted-foreground hover:text-foreground cursor-pointer"}`}
+            >
+              Semana Actual
+            </button>
+            <span className="text-muted-foreground/40">-</span>
+            <button
+              onClick={() => setVerDiasFuturos(true)}
+              className={`transition-colors ${verDiasFuturos ? "text-foreground" : "text-muted-foreground hover:text-foreground cursor-pointer"}`}
+            >
+              Proxima Semana
+            </button>
           </div>
-          <Button onClick={() => setShowHabitoRecurrenteModal(true)} className="bg-cyan-600 hover:bg-cyan-700">
-            <Plus className="h-4 h-4 mr-2" />
+          <button
+            onClick={() => setVerDiasFuturos(true)}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Header: Titulo + Boton Nueva Tarea */}
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              Tareas Recurrentes
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Aqui puedes visualizar todas tus tareas pendientes programadas para la semana.
+            </p>
+          </div>
+          <Button onClick={() => setShowHabitoRecurrenteModal(true)} className="bg-cyan-600 hover:bg-cyan-700 shrink-0">
+            <Plus className="h-4 w-4 mr-2" />
             Nueva Tarea
           </Button>
         </div>
-        
-        {/* Toggle para ver días futuros */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant={!verDiasFuturos ? "default" : "outline"}
-            size="sm"
-            onClick={() => setVerDiasFuturos(false)}
-            className={!verDiasFuturos ? "bg-cyan-600 hover:bg-cyan-700" : ""}
-          >
-            Semana Actual
-          </Button>
-          <Button
-            variant={verDiasFuturos ? "default" : "outline"}
-            size="sm"
-            onClick={() => setVerDiasFuturos(true)}
-            className={verDiasFuturos ? "bg-cyan-600 hover:bg-cyan-700" : ""}
-          >
-            Próxima Semana
-          </Button>
-        </div>
-        
-        {/* Lista de tareas por día */}
-        {habitosRecurrentes.length === 0 ? (
-          <Card className="border-2 border-dashed border-cyan-300">
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Repeat className="w-12 h-12 text-cyan-400 mb-4" />
-              <h3 className="text-lg font-semibold text-cyan-700 dark:text-cyan-300 mb-2">Sin tareas programadas</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                Crea tu primera tarea programada para organizar actividades recurrentes
-              </p>
-              <Button onClick={() => setShowHabitoRecurrenteModal(true)} className="bg-cyan-600 hover:bg-cyan-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Crear Primera Tarea
-              </Button>
-            </CardContent>
-          </Card>
-        ) : diasConTareas.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Calendar className="w-12 h-12 text-cyan-400 mb-4" />
-              <p className="text-muted-foreground text-center">
-                No hay tareas programadas para {verDiasFuturos ? "la próxima semana" : "esta semana"}
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {diasConTareas.map((fecha) => {
-              const tareas = tareasPorDia[fecha]
-              const diaFecha = new Date(fecha + "T00:00:00")
-              const hoy = new Date()
-              hoy.setHours(0, 0, 0, 0)
-              const esPasado = diaFecha < hoy
-              const esHoy = diaFecha.getTime() === hoy.getTime()
-              
-              return (
-                <Card key={fecha} className={`border-2 ${esHoy ? "border-cyan-500 bg-cyan-50/50 dark:bg-cyan-950/20" : esPasado ? "opacity-60" : ""}`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-5 h-5 text-cyan-600" />
-                        <h3 className="font-semibold text-cyan-700 dark:text-cyan-300">
-                          {tareas[0].diaNombre}
-                        </h3>
-                        <span className="text-sm text-muted-foreground">
-                          {diaFecha.toLocaleDateString("es-PY", { day: "numeric", month: "short", year: "numeric" })}
-                        </span>
-                        {esHoy && (
-                          <Badge className="bg-cyan-600 text-white">Hoy</Badge>
+
+        {/* Vista semanal en columnas */}
+        {(() => {
+          const hoy = new Date()
+          hoy.setHours(0, 0, 0, 0)
+
+          // Calcular inicio de la semana (Domingo)
+          const inicioSemana = new Date(hoy)
+          const diaSemanaHoy = hoy.getDay()
+          inicioSemana.setDate(hoy.getDate() - diaSemanaHoy)
+
+          if (verDiasFuturos) {
+            inicioSemana.setDate(inicioSemana.getDate() + 7)
+          }
+
+          const diasSemana: { fecha: Date; nombre: string; nombreCorto: string }[] = []
+          const NOMBRES_DIAS = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"]
+          const COLORES_DIAS = [
+            "bg-red-500/80 text-white",
+            "bg-blue-500/80 text-white",
+            "bg-slate-500/80 text-white",
+            "bg-slate-600/80 text-white",
+            "bg-emerald-500/80 text-white",
+            "bg-amber-600/80 text-white",
+            "bg-purple-500/80 text-white",
+          ]
+
+          for (let i = 0; i < 7; i++) {
+            const fecha = new Date(inicioSemana)
+            fecha.setDate(inicioSemana.getDate() + i)
+            const nombreDia = fecha.toLocaleDateString("es-PY", { weekday: "long" })
+            diasSemana.push({
+              fecha,
+              nombre: nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1),
+              nombreCorto: NOMBRES_DIAS[i],
+            })
+          }
+
+          // Agrupar tareas por cada dia de la semana
+          const tareasPorDiaSemana: Record<number, { tarea: HabitoRecurrente; fecha: string; completada: boolean }[]> = {}
+          for (let i = 0; i < 7; i++) {
+            tareasPorDiaSemana[i] = []
+          }
+
+          const finSemana = new Date(inicioSemana)
+          finSemana.setDate(inicioSemana.getDate() + 6)
+
+          habitosRecurrentes.forEach((tarea) => {
+            const ocurrencias = calcularOcurrencias(tarea, inicioSemana, finSemana)
+            ocurrencias.forEach((oc) => {
+              const fechaOc = new Date(oc.fecha + "T12:00:00")
+              const diaIndex = Math.round((fechaOc.getTime() - inicioSemana.getTime()) / (1000 * 60 * 60 * 24))
+              if (diaIndex >= 0 && diaIndex < 7) {
+                const clave = `${tarea.id}-${oc.fecha}`
+                // No mostrar ocurrencias excluidas (eliminadas de un dia especifico)
+                if (ocurrenciasExcluidas.has(clave)) return
+                const completada = registrosHabitosRecurrentes[clave] || false
+                tareasPorDiaSemana[diaIndex].push({ tarea, fecha: oc.fecha, completada })
+              }
+            })
+          })
+
+          const COLORES_BADGE: Record<number, string> = {
+            1: "bg-blue-600 text-white",
+            2: "bg-orange-500 text-white",
+            3: "bg-cyan-600 text-white",
+            7: "bg-green-600 text-white",
+            14: "bg-purple-600 text-white",
+            30: "bg-red-600 text-white",
+          }
+
+          const getBadgeColor = (dias: number) => {
+            return COLORES_BADGE[dias] || "bg-slate-600 text-white"
+          }
+
+          return (
+            <>
+              {/* Vista Desktop: Tabs + Grid de columnas */}
+              <div className="hidden md:block">
+                {/* Tabs de dias */}
+                <div className="flex gap-0">
+                  {diasSemana.map((dia, i) => {
+                    const esHoyDia = dia.fecha.getTime() === hoy.getTime()
+                    return (
+                      <div
+                        key={i}
+                        className={`flex-1 text-center py-2 px-1 text-sm font-bold rounded-t-lg border-b-2 transition-colors ${
+                          esHoyDia
+                            ? `${COLORES_DIAS[i]} border-transparent`
+                            : "bg-muted/50 text-muted-foreground border-border/30"
+                        }`}
+                      >
+                        {dia.nombreCorto}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Grid de columnas */}
+                <div className="grid grid-cols-7 border border-border/30 rounded-b-lg overflow-hidden min-h-[300px]">
+                  {diasSemana.map((dia, i) => {
+                    const tareasDia = tareasPorDiaSemana[i]
+                    const esHoyDia = dia.fecha.getTime() === hoy.getTime()
+
+                    return (
+                      <div
+                        key={i}
+                        className={`border-r last:border-r-0 border-border/20 p-2 flex flex-col gap-0 ${
+                          esHoyDia ? "bg-cyan-500/5" : "bg-card"
+                        }`}
+                      >
+                        <p className={`text-xs font-semibold mb-2 ${esHoyDia ? "text-cyan-400" : "text-muted-foreground"}`}>
+                          {dia.nombre}
+                        </p>
+
+                        {tareasDia.length > 0 ? (
+                          <div className="space-y-3">
+                            {tareasDia.map(({ tarea, fecha: fechaTarea, completada }) => (
+                              <div key={`${tarea.id}-${fechaTarea}`} className="pb-2.5 border-b border-border/10 last:border-b-0 last:pb-0">
+                                <div className="flex items-start gap-1.5">
+                                  <button
+                                    onClick={() => toggleTareaProgramada(tarea.id, fechaTarea, !completada)}
+                                    className={`mt-0.5 w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center transition-all cursor-pointer ${
+                                      completada
+                                        ? "bg-cyan-600 border-cyan-600"
+                                        : "border-muted-foreground/40 hover:border-cyan-500"
+                                    }`}
+                                  >
+                                    {completada && (
+                                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <span className={`text-xs font-medium leading-tight ${completada ? "line-through text-muted-foreground/50" : ""}`}>
+                                    {tarea.nombre}
+                                  </span>
+                                </div>
+                                <div className="ml-5 mt-1">
+                                  <span className={`inline-block text-[10px] px-2 py-0.5 rounded-full font-medium ${getBadgeColor(tarea.intervalo_dias)}`}>
+                                    {getIntervaloLabel(tarea.intervalo_dias)}
+                                  </span>
+                                </div>
+                                <div className="ml-5 mt-1 flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setTareaAFinalizar(tarea)
+                                      setFechaFinTarea(tarea.fecha_fin || "")
+                                    }}
+                                    className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors font-medium"
+                                  >
+                                    Finalizar
+                                  </button>
+                                  <span className="text-border/40">|</span>
+                                  <button
+                                    onClick={() => confirmarEliminarTarea(tarea.id, fechaTarea, tarea.nombre)}
+                                    className="text-[10px] text-red-400 hover:text-red-300 transition-colors font-medium"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground/40 italic mt-2">Sin tareas</p>
                         )}
                       </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    {tareas.map(({ tarea, fecha: fechaTarea, completada }) => (
-                      <div key={`${tarea.id}-${fechaTarea}`} className="flex items-center justify-between p-3 rounded-lg border bg-white dark:bg-slate-900">
-                        <div className="flex items-center gap-3 flex-1">
-                          <Checkbox
-                            checked={completada}
-                            onCheckedChange={(checked) => toggleTareaProgramada(tarea.id, fechaTarea, checked as boolean)}
-                            className="border-cyan-500 data-[state=checked]:bg-cyan-600 data-[state=checked]:border-cyan-600"
-                            disabled={esPasado && !completada}
-                          />
-                          <div className="flex-1">
-                            <p className={`font-medium ${completada ? "line-through text-muted-foreground" : ""}`}>
-                              {tarea.nombre}
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="border-cyan-500 text-cyan-700 dark:text-cyan-300 text-xs">
-                                {getIntervaloLabel(tarea.intervalo_dias)}
-                              </Badge>
-                              {tarea.descripcion && (
-                                <span className="text-xs text-muted-foreground">{tarea.descripcion}</span>
-                              )}
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Vista Movil: Cards por dia */}
+              <div className="md:hidden space-y-3">
+                {diasSemana.map((dia, i) => {
+                  const tareasDia = tareasPorDiaSemana[i]
+                  const esHoyDia = dia.fecha.getTime() === hoy.getTime()
+                  
+                  // Saltar dias sin tareas en movil
+                  if (tareasDia.length === 0) return null
+
+                  return (
+                    <Card key={i} className={`${esHoyDia ? "border-2 border-cyan-500" : "border-border"}`}>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className={`px-3 py-1 rounded-md text-sm font-bold ${COLORES_DIAS[i]}`}>
+                              {dia.nombreCorto}
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold">{dia.nombre}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {dia.fecha.toLocaleDateString("es-PY", { day: "numeric", month: "short" })}
+                              </p>
                             </div>
                           </div>
+                          {esHoyDia && (
+                            <Badge className="bg-cyan-600 text-white">Hoy</Badge>
+                          )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => confirmarEliminarTarea(tarea.id)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {tareasDia.map(({ tarea, fecha: fechaTarea, completada }) => (
+                          <div key={`${tarea.id}-${fechaTarea}`} className="p-3 rounded-lg border bg-card">
+                            <div className="flex items-start gap-3">
+                              <button
+                                onClick={() => toggleTareaProgramada(tarea.id, fechaTarea, !completada)}
+                                className={`mt-0.5 w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center transition-all cursor-pointer ${
+                                  completada
+                                    ? "bg-cyan-600 border-cyan-600"
+                                    : "border-muted-foreground/40"
+                                }`}
+                              >
+                                {completada && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium ${completada ? "line-through text-muted-foreground" : ""}`}>
+                                  {tarea.nombre}
+                                </p>
+                                <div className="mt-2">
+                                  <span className={`inline-block text-xs px-2.5 py-1 rounded-full font-medium ${getBadgeColor(tarea.intervalo_dias)}`}>
+                                    {getIntervaloLabel(tarea.intervalo_dias)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 mt-2">
+                                  <button
+                                    onClick={() => {
+                                      setTareaAFinalizar(tarea)
+                                      setFechaFinTarea(tarea.fecha_fin || "")
+                                    }}
+                                    className="text-xs text-amber-400 hover:text-amber-300 transition-colors font-medium"
+                                  >
+                                    Finalizar
+                                  </button>
+                                  <span className="text-border/40">|</span>
+                                  <button
+                                    onClick={() => confirmarEliminarTarea(tarea.id, fechaTarea, tarea.nombre)}
+                                    className="text-xs text-red-400 hover:text-red-300 transition-colors font-medium"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+
+                {/* Mensaje si no hay tareas en la semana */}
+                {diasSemana.every((dia, i) => tareasPorDiaSemana[i].length === 0) && (
+                  <Card className="border-dashed">
+                    <CardContent className="flex flex-col items-center justify-center py-8">
+                      <Calendar className="w-10 h-10 text-muted-foreground mb-3" />
+                      <p className="text-sm text-muted-foreground text-center">
+                        No hay tareas programadas para {verDiasFuturos ? "la proxima semana" : "esta semana"}
+                      </p>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              {habitosRecurrentes.length === 0 && (
+                <Card className="border-2 border-dashed border-cyan-500/30">
+                  <CardContent className="flex flex-col items-center justify-center py-12">
+                    <Repeat className="w-12 h-12 text-cyan-400 mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">Sin tareas programadas</h3>
+                    <p className="text-muted-foreground text-center mb-4">
+                      Crea tu primera tarea programada para organizar actividades recurrentes
+                    </p>
+                    <Button onClick={() => setShowHabitoRecurrenteModal(true)} className="bg-cyan-600 hover:bg-cyan-700">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Crear Primera Tarea
+                    </Button>
                   </CardContent>
                 </Card>
-              )
-            })}
-          </div>
-        )}
+              )}
+            </>
+          )
+        })()}
       </TabsContent>
       
       <TabsContent value="metas" className="space-y-4">
@@ -2224,12 +2473,12 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       
       {/* Modal de Tarea Programada */}
       <Dialog open={showHabitoRecurrenteModal} onOpenChange={setShowHabitoRecurrenteModal}>
-        <DialogContent className="glass-effect max-w-md max-h-[90vh]">
+        <DialogContent className="max-w-md max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle className="text-cyan-700">Nueva Tarea Programada</DialogTitle>
-            <DialogDescription>Crea una tarea que se repite automáticamente</DialogDescription>
+            <DialogTitle className="text-cyan-500">Nueva Tarea Programada</DialogTitle>
+            <DialogDescription>Crea una tarea que se repite automaticamente</DialogDescription>
           </DialogHeader>
-          <form onSubmit={(e) => { e.preventDefault(); guardarHabitoRecurrente(); }} className="space-y-3">
+          <form onSubmit={(e) => { e.preventDefault(); guardarHabitoRecurrente(); }} className="space-y-4">
             <div>
               <Label htmlFor="nombre-recurrente">Nombre de la tarea</Label>
               <Input
@@ -2242,7 +2491,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             </div>
 
             <div>
-              <Label htmlFor="descripcion-recurrente">Descripción (opcional)</Label>
+              <Label htmlFor="descripcion-recurrente">Descripcion (opcional)</Label>
               <Textarea
                 id="descripcion-recurrente"
                 value={habitoRecurrenteForm.descripcion}
@@ -2253,32 +2502,37 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             </div>
 
             <div>
-              <Label htmlFor="intervalo-recurrente">Repetir cada</Label>
-              <Select
-                value={habitoRecurrenteForm.intervalo_dias.toString()}
-                onValueChange={(value) =>
-                  setHabitoRecurrenteForm({ ...habitoRecurrenteForm, intervalo_dias: parseInt(value) })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Diario (cada día)</SelectItem>
-                  <SelectItem value="2">Cada 2 días</SelectItem>
-                  <SelectItem value="3">Cada 3 días</SelectItem>
-                  <SelectItem value="7">Semanal (cada 7 días)</SelectItem>
-                  <SelectItem value="14">Cada 2 semanas</SelectItem>
-                  <SelectItem value="30">Mensual (cada 30 días)</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>Repetir cada</Label>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {[
+                  { value: 1, label: "Diario" },
+                  { value: 2, label: "Cada 2 dias" },
+                  { value: 3, label: "Cada 3 dias" },
+                  { value: 7, label: "Semanal" },
+                  { value: 14, label: "Cada 2 sem." },
+                  { value: 30, label: "Mensual" },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setHabitoRecurrenteForm({ ...habitoRecurrenteForm, intervalo_dias: opt.value })}
+                    className={`p-2.5 rounded-lg border-2 text-xs font-medium text-center transition-all ${
+                      habitoRecurrenteForm.intervalo_dias === opt.value
+                        ? "border-cyan-500 bg-cyan-500/20 text-cyan-400"
+                        : "border-border/50 hover:border-border text-muted-foreground"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setShowHabitoRecurrenteModal(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white">
+              <Button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white" disabled={!habitoRecurrenteForm.nombre.trim()}>
                 Crear Tarea
               </Button>
             </DialogFooter>
@@ -2287,18 +2541,66 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       </Dialog>
       
       {/* AlertDialog para confirmar eliminación */}
+      {/* Modal Finalizar Tarea - Desactiva la tarea de TODOS los dias */}
+      <Dialog open={tareaAFinalizar !== null} onOpenChange={(open) => { if (!open) { setTareaAFinalizar(null); setFechaFinTarea(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-amber-500">Finalizar Tarea Completa</DialogTitle>
+            <DialogDescription>
+              Esta accion finalizara la tarea y desaparecera de todos los dias (pasados y futuros).
+            </DialogDescription>
+          </DialogHeader>
+          {tareaAFinalizar && (
+            <div className="space-y-4">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
+                <p className="font-medium text-sm">{tareaAFinalizar.nombre}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Frecuencia: {getIntervaloLabel(tareaAFinalizar.intervalo_dias)}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                <p className="text-xs text-amber-400">
+                  Al finalizar, esta tarea dejara de aparecer en el calendario semanal por completo.
+                </p>
+              </div>
+
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="outline" onClick={() => { setTareaAFinalizar(null); setFechaFinTarea(""); }}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={finalizarTareaProgramada}
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  Finalizar Tarea
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={tareaAEliminar !== null} onOpenChange={(open) => !open && setTareaAEliminar(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Finalizar esta tarea programada?</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar tarea de este dia</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta acción eliminará todas las ocurrencias futuras de esta tarea. Las ocurrencias ya completadas se mantendrán en el historial.
+              {tareaAEliminar && (
+                <>
+                  Se eliminara <span className="font-semibold">{tareaAEliminar.nombre}</span> solo del dia{" "}
+                  <span className="font-semibold">
+                    {new Date(tareaAEliminar.fecha + "T12:00:00").toLocaleDateString("es-PY", { weekday: "long", day: "numeric", month: "short" })}
+                  </span>.
+                  Las demas ocurrencias de la tarea no se veran afectadas.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={eliminarTareaProgramada} className="bg-red-600 hover:bg-red-700">
-              Finalizar Tarea
+              Eliminar de este dia
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

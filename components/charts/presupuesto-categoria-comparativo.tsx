@@ -6,10 +6,12 @@ export async function PresupuestoCategoriasComparativo({
   perfilId,
   fechaInicio,
   fechaFin,
+  cajaId,
 }: {
   perfilId: string
   fechaInicio?: string
   fechaFin?: string
+  cajaId?: string
 }) {
   const supabase = await createClient()
 
@@ -34,7 +36,7 @@ export async function PresupuestoCategoriasComparativo({
   const presupuesto = presupuestos?.[0] || null
 
   // Obtener egresos del mes agrupados por tipo de categoría
-  const { data: egresos } = await supabase
+  let egresosQuery = supabase
     .from("egresos")
     .select(`
       monto,
@@ -43,6 +45,12 @@ export async function PresupuestoCategoriasComparativo({
     .eq("perfil_id", perfilId)
     .gte("fecha", primerDiaMes)
     .lte("fecha", ultimoDiaMes)
+
+  if (cajaId) {
+    egresosQuery = egresosQuery.eq("origen_tipo", "caja_ahorro").eq("origen_id", cajaId)
+  }
+
+  const { data: egresos } = await egresosQuery
 
   return <PresupuestoCategoriasComparativoClient presupuesto={presupuesto} egresos={egresos || []} />
 }

@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { formatGuaranies } from "@/lib/utils"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from "recharts"
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell, Area, AreaChart, PieChart, Pie } from "recharts"
 import { TrendingUp, TrendingDown, DollarSign, Target, AlertCircle, Wallet, PiggyBank, CreditCard } from "lucide-react"
 
 interface AnalisisData {
@@ -25,6 +25,12 @@ interface AnalisisData {
     mesActual: number
     mesAnterior: number
     cambio: number
+  }>
+  evolucion?: Array<{
+    mes: string
+    ingresos: number
+    egresos: number
+    balance: number
   }>
 }
 
@@ -228,46 +234,245 @@ export function AnalisisMensualComparativo({ data }: Props) {
         </Card>
       </div>
 
-      {/* Gráfico de Barras Comparativo por Categoría */}
-      <Card className="border-2 border-slate-200">
-        <CardHeader>
-          <CardTitle className="text-lg font-bold text-slate-800">Gastos por Categoría - Comparativo</CardTitle>
-          <CardDescription>Comparación del mes actual vs mes anterior</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={400}>
-            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis 
-                dataKey="categoria" 
-                angle={-45} 
-                textAnchor="end" 
-                height={80}
-                tick={{ fill: '#475569', fontSize: 12 }}
-              />
-              <YAxis 
-                tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
-                tick={{ fill: '#475569', fontSize: 12 }}
-              />
-              <Tooltip 
-                formatter={(value: number) => formatGuaranies(value)}
-                contentStyle={{ 
-                  backgroundColor: '#ffffff', 
-                  border: '2px solid #e2e8f0',
-                  borderRadius: '8px',
-                  padding: '12px'
-                }}
-              />
-              <Legend 
-                wrapperStyle={{ paddingTop: '20px' }}
-                iconType="circle"
-              />
-              <Bar dataKey="Mes Anterior" fill="#94a3b8" radius={[8, 8, 0, 0]} />
-              <Bar dataKey="Mes Actual" fill="#3b82f6" radius={[8, 8, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {/* Gráfico de Evolución Financiera (últimos meses) */}
+      {data.evolucion && data.evolucion.length > 0 && (
+        <Card className="border-2 border-slate-200">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-slate-800">Evolución Financiera</CardTitle>
+            <CardDescription>Tendencia de ingresos, egresos y balance neto en los últimos meses</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={350}>
+              <AreaChart data={data.evolucion} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
+                <defs>
+                  <linearGradient id="colorIngresos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorEgresos" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0.1}/>
+                  </linearGradient>
+                  <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis 
+                  dataKey="mes" 
+                  tick={{ fill: '#475569', fontSize: 12 }}
+                  tickMargin={10}
+                />
+                <YAxis 
+                  tickFormatter={(value) => {
+                    const absValue = Math.abs(value)
+                    if (absValue >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+                    if (absValue >= 1000) return `${(value / 1000).toFixed(0)}K`
+                    return value.toString()
+                  }}
+                  tick={{ fill: '#475569', fontSize: 12 }}
+                />
+                <Tooltip 
+                  formatter={(value: number) => formatGuaranies(value)}
+                  contentStyle={{ 
+                    backgroundColor: '#ffffff', 
+                    border: '2px solid #e2e8f0',
+                    borderRadius: '8px',
+                    padding: '12px'
+                  }}
+                />
+                <Legend 
+                  wrapperStyle={{ paddingTop: '10px' }}
+                  iconType="circle"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="ingresos" 
+                  stroke="#10b981" 
+                  strokeWidth={2.5}
+                  fillOpacity={1} 
+                  fill="url(#colorIngresos)" 
+                  name="Ingresos"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="egresos" 
+                  stroke="#ef4444" 
+                  strokeWidth={2.5}
+                  fillOpacity={1} 
+                  fill="url(#colorEgresos)" 
+                  name="Egresos"
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="balance" 
+                  stroke="#3b82f6" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorBalance)" 
+                  name="Balance Neto"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Gráficos: Anillo + Barras Horizontales */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Gráfico de Anillo - Distribución de Gastos */}
+        {(() => {
+          const DONUT_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"]
+          const totalGastos = categorias.reduce((sum, cat) => sum + cat.mesActual, 0)
+          const donutData = categorias
+            .filter((cat) => cat.mesActual > 0)
+            .map((cat) => ({
+              name: cat.nombre,
+              value: cat.mesActual,
+              porcentaje: totalGastos > 0 ? ((cat.mesActual / totalGastos) * 100).toFixed(1) : "0",
+            }))
+            .sort((a, b) => b.value - a.value)
+
+          return (
+            <Card className="border-2 border-slate-200">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold text-slate-800">Distribucion de Gastos</CardTitle>
+                <CardDescription>Proporcion por categoria - {mesActual.mes}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {donutData.length > 0 ? (
+                  <div className="flex flex-col items-center">
+                    <ResponsiveContainer width="100%" height={280}>
+                      <PieChart>
+                        <Pie
+                          data={donutData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={70}
+                          outerRadius={110}
+                          paddingAngle={3}
+                          dataKey="value"
+                          stroke="none"
+                        >
+                          {donutData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value: number) => formatGuaranies(value)}
+                          contentStyle={{
+                            backgroundColor: '#0f172a',
+                            border: '1px solid #334155',
+                            borderRadius: '8px',
+                            padding: '10px 14px',
+                            color: '#f8fafc',
+                          }}
+                          itemStyle={{ color: '#f8fafc' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* Leyenda personalizada */}
+                    <div className="w-full space-y-2 mt-2">
+                      {donutData.map((item, index) => (
+                        <div key={item.name} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-muted/30">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full shrink-0"
+                              style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }}
+                            />
+                            <span className="text-sm text-foreground">{item.name}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs text-muted-foreground">{item.porcentaje}%</span>
+                            <span className="text-sm font-semibold text-foreground">{formatGuaranies(item.value)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-[280px]">
+                    <p className="text-muted-foreground text-sm">Sin gastos registrados</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })()}
+
+        {/* Gráfico de Barras Horizontales - Comparativo profesional */}
+        <Card className="border-2 border-slate-200">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-slate-800">Comparativo por Categoria</CardTitle>
+            <CardDescription>Mes actual vs mes anterior</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={Math.max(280, chartData.length * 70 + 60)}>
+                <BarChart
+                  data={chartData}
+                  layout="vertical"
+                  margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                  <XAxis
+                    type="number"
+                    tickFormatter={(value) => {
+                      if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`
+                      if (value >= 1000) return `${(value / 1000).toFixed(0)}K`
+                      return value.toString()
+                    }}
+                    tick={{ fill: '#64748b', fontSize: 11 }}
+                    axisLine={{ stroke: '#cbd5e1' }}
+                  />
+                  <YAxis
+                    type="category"
+                    dataKey="categoria"
+                    width={110}
+                    tick={{ fill: '#e2e8f0', fontSize: 12, fontWeight: 500 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    formatter={(value: number) => formatGuaranies(value)}
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #334155',
+                      borderRadius: '8px',
+                      padding: '10px 14px',
+                      color: '#f8fafc',
+                    }}
+                    itemStyle={{ color: '#f8fafc' }}
+                    cursor={{ fill: 'rgba(148, 163, 184, 0.08)' }}
+                  />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '16px' }}
+                    iconType="circle"
+                    iconSize={10}
+                  />
+                  <Bar
+                    dataKey="Mes Anterior"
+                    fill="#475569"
+                    radius={[0, 6, 6, 0]}
+                    barSize={14}
+                  />
+                  <Bar
+                    dataKey="Mes Actual"
+                    fill="#3b82f6"
+                    radius={[0, 6, 6, 0]}
+                    barSize={14}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[280px]">
+                <p className="text-muted-foreground text-sm">Sin datos para comparar</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Tabla de Cambios por Categoría */}
       <Card className="border-2 border-slate-200">

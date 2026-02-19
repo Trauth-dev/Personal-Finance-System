@@ -9,6 +9,7 @@ import {
   ArrowDownRight,
   CheckCircle2,
   AlertTriangle,
+  PiggyBank,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
@@ -27,7 +28,7 @@ export const revalidate = 0
 export default async function DashboardPersonalPage({
   searchParams,
 }: {
-  searchParams: { month?: string }
+  searchParams: { month?: string; caja?: string }
 }) {
   const supabase = await createClient()
 
@@ -63,6 +64,20 @@ export default async function DashboardPersonalPage({
     )
   }
 
+  // Cargar cajas de ahorro activas
+  const { data: cajasData } = await supabase
+    .from("cajas_ahorro")
+    .select("id, nombre, tipo, banco, monto_actual, color, icono")
+    .eq("perfil_id", perfilPersonal.id)
+    .eq("activa", true)
+    .order("nombre")
+
+  const cajas = cajasData || []
+  const cajaSeleccionada = searchParams.caja || null
+
+  // Validar que la caja seleccionada exista
+  const cajaValida = cajaSeleccionada && cajas.some((c) => c.id === cajaSeleccionada) ? cajaSeleccionada : null
+
   const now = getParaguayDate()
   let selectedYear = now.getFullYear()
   let selectedMonth = now.getMonth()
@@ -78,22 +93,33 @@ export default async function DashboardPersonalPage({
 
   const currentMonthValue = `${selectedYear}-${(selectedMonth + 1).toString().padStart(2, "0")}`
 
-  const { data: ingresos } = await supabase
+  // --- Queries con filtro por caja ---
+  let ingresosQuery = supabase
     .from("ingresos")
     .select("monto")
     .eq("perfil_id", perfilPersonal.id)
     .gte("fecha", primerDiaMes)
     .lte("fecha", ultimoDiaMes)
 
+  if (cajaValida) {
+    ingresosQuery = ingresosQuery.eq("destino_caja_id", cajaValida)
+  }
+
+  const { data: ingresos } = await ingresosQuery
   const totalIngresos = ingresos?.reduce((sum, item) => sum + Number(item.monto), 0) || 0
 
-  const { data: egresos } = await supabase
+  let egresosQuery = supabase
     .from("egresos")
     .select("monto")
     .eq("perfil_id", perfilPersonal.id)
     .gte("fecha", primerDiaMes)
     .lte("fecha", ultimoDiaMes)
 
+  if (cajaValida) {
+    egresosQuery = egresosQuery.eq("origen_tipo", "caja_ahorro").eq("origen_id", cajaValida)
+  }
+
+  const { data: egresos } = await egresosQuery
   const totalEgresos = egresos?.reduce((sum, item) => sum + Number(item.monto), 0) || 0
 
   const balance = totalIngresos - totalEgresos
@@ -108,52 +134,63 @@ export default async function DashboardPersonalPage({
     .limit(1)
 
   const presupuesto = presupuestos?.[0] || null
-
   const metaSalario = presupuesto?.meta_salario || 0
-  const porcentajeCompletado = metaSalario > 0 ? (totalIngresos / Number(metaSalario)) * 100 : 0
 
+  // --- Mes anterior con filtro por caja ---
   const primerDiaMesAnterior = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split("T")[0]
   const ultimoDiaMesAnterior = new Date(selectedYear, selectedMonth, 0).toISOString().split("T")[0]
 
-  const { data: ingresosMesAnterior } = await supabase
+  let ingresosAntQuery = supabase
     .from("ingresos")
     .select("monto")
     .eq("perfil_id", perfilPersonal.id)
     .gte("fecha", primerDiaMesAnterior)
     .lte("fecha", ultimoDiaMesAnterior)
 
+  if (cajaValida) {
+    ingresosAntQuery = ingresosAntQuery.eq("destino_caja_id", cajaValida)
+  }
+
+  const { data: ingresosMesAnterior } = await ingresosAntQuery
   const totalIngresosMesAnterior = ingresosMesAnterior?.reduce((sum, item) => sum + Number(item.monto), 0) || 0
   const cambioIngresos =
     totalIngresosMesAnterior > 0 ? ((totalIngresos - totalIngresosMesAnterior) / totalIngresosMesAnterior) * 100 : 0
 
-  const { data: egresosMesAnterior } = await supabase
+  let egresosAntQuery = supabase
     .from("egresos")
     .select("monto")
     .eq("perfil_id", perfilPersonal.id)
     .gte("fecha", primerDiaMesAnterior)
     .lte("fecha", ultimoDiaMesAnterior)
 
-  const totalEgresosMesAnterior = egresosMesAnterior?.reduce((sum, item) => sum + Number(item.monto), 0) || 0
+  if (cajaValida) {
+    egresosAntQuery = egresosAntQuery.eq("origen_tipo", "caja_ahorro").eq("origen_id", cajaValida)
+  }
 
+  const { data: egresosMesAnterior } = await egresosAntQuery
+  const totalEgresosMesAnterior = egresosMesAnterior?.reduce((sum, item) => sum + Number(item.monto), 0) || 0
   const cambioEgresos =
     totalEgresosMesAnterior > 0 ? ((totalEgresos - totalEgresosMesAnterior) / totalEgresosMesAnterior) * 100 : 0
 
-  const tasaAhorro = totalIngresos > 0 ? ((totalIngresos - totalEgresos) / totalIngresos) * 100 : 0
-
-  const diasTranscurridos = now.getDate()
-  const promedioDiarioGastos = diasTranscurridos > 0 ? totalEgresos / diasTranscurridos : 0
-  const diasRestantes = new Date(selectedYear, selectedMonth + 1, 0).getDate() - diasTranscurridos
-  const proyeccionGastosMes = totalEgresos + promedioDiarioGastos * diasRestantes
-
-  const totalTransacciones = (ingresos?.length || 0) + (egresos?.length || 0)
-  const promedioTransaccion = totalTransacciones > 0 ? (totalIngresos + totalEgresos) / totalTransacciones : 0
+  // Nombre de la caja seleccionada
+  const cajaNombre = cajaValida ? cajas.find((c) => c.id === cajaValida)?.nombre : null
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100">
       <DashboardHeader title="Dashboard Personal" description="Resumen de tus finanzas personales" />
 
-      <DashboardPersonalClient initialMonth={currentMonthValue}>
+      <DashboardPersonalClient initialMonth={currentMonthValue} cajas={cajas}>
         <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+          {/* Indicador de filtro activo */}
+          {cajaNombre && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30">
+              <PiggyBank className="w-4 h-4 text-cyan-500" />
+              <p className="text-sm text-cyan-400 font-medium">
+                Mostrando datos filtrados por: <span className="font-bold">{cajaNombre}</span>
+              </p>
+            </div>
+          )}
+
           <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
               <CardHeader className="pb-3">
@@ -217,7 +254,7 @@ export default async function DashboardPersonalPage({
                   {formatGuaranies(balance)}
                 </div>
                 <p className="text-xs text-slate-600 mt-1 font-medium">
-                  {balance >= 0 ? "Superávit" : "Déficit"} del mes
+                  {balance >= 0 ? "Superavit" : "Deficit"} del mes
                 </p>
               </CardContent>
             </Card>
@@ -261,15 +298,16 @@ export default async function DashboardPersonalPage({
             perfilId={perfilPersonal.id}
             fechaInicio={primerDiaMes}
             fechaFin={ultimoDiaMes}
+            cajaId={cajaValida || undefined}
           />
 
           <div className="grid gap-4 md:gap-6 grid-cols-1 lg:grid-cols-3">
-            <SuperavitCard perfilId={perfilPersonal.id} fechaInicio={primerDiaMes} fechaFin={ultimoDiaMes} />
-            <TasaAhorroDonut perfilId={perfilPersonal.id} fechaInicio={primerDiaMes} fechaFin={ultimoDiaMes} />
-            <GastosCategoriaBars perfilId={perfilPersonal.id} fechaInicio={primerDiaMes} fechaFin={ultimoDiaMes} />
+            <SuperavitCard perfilId={perfilPersonal.id} fechaInicio={primerDiaMes} fechaFin={ultimoDiaMes} cajaId={cajaValida || undefined} />
+            <TasaAhorroDonut perfilId={perfilPersonal.id} fechaInicio={primerDiaMes} fechaFin={ultimoDiaMes} cajaId={cajaValida || undefined} />
+            <GastosCategoriaBars perfilId={perfilPersonal.id} fechaInicio={primerDiaMes} fechaFin={ultimoDiaMes} cajaId={cajaValida || undefined} />
           </div>
 
-          <ReportesExpandibles perfilId={perfilPersonal.id} fechaInicio={primerDiaMes} fechaFin={ultimoDiaMes} />
+          <ReportesExpandibles perfilId={perfilPersonal.id} fechaInicio={primerDiaMes} fechaFin={ultimoDiaMes} cajaId={cajaValida || undefined} />
 
           <LogrosFinancieros />
         </div>

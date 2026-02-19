@@ -6,9 +6,10 @@ interface GastosCategoriaBarsProps {
   perfilId: string
   fechaInicio?: string
   fechaFin?: string
+  cajaId?: string
 }
 
-export async function GastosCategoriaBars({ perfilId, fechaInicio, fechaFin }: GastosCategoriaBarsProps) {
+export async function GastosCategoriaBars({ perfilId, fechaInicio, fechaFin, cajaId }: GastosCategoriaBarsProps) {
   const supabase = await createClient()
 
   let primerDiaMes = fechaInicio
@@ -20,7 +21,7 @@ export async function GastosCategoriaBars({ perfilId, fechaInicio, fechaFin }: G
     ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
   }
 
-  const { data: egresos } = await supabase
+  let egresosQuery = supabase
     .from("egresos")
     .select(
       `
@@ -34,11 +35,17 @@ export async function GastosCategoriaBars({ perfilId, fechaInicio, fechaFin }: G
     .gte("fecha", primerDiaMes)
     .lte("fecha", ultimoDiaMes)
 
+  if (cajaId) {
+    egresosQuery = egresosQuery.eq("origen_tipo", "caja_ahorro").eq("origen_id", cajaId)
+  }
+
+  const { data: egresos } = await egresosQuery
+
   const categorias: { [key: string]: number } = {}
   let totalEgresos = 0
 
   egresos?.forEach((egreso) => {
-    const categoria = egreso.tipos_categoria_egreso?.nombre || "Sin categoría"
+    const categoria = egreso.tipos_categoria_egreso?.nombre || "Sin categoria"
     const monto = Number(egreso.monto)
     categorias[categoria] = (categorias[categoria] || 0) + monto
     totalEgresos += monto
