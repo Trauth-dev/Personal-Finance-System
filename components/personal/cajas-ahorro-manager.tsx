@@ -38,6 +38,8 @@ import {
   Landmark,
   Wallet,
   Smartphone,
+  Pencil,
+  AlertTriangle,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { formatGuaranies } from "@/lib/utils"
@@ -101,7 +103,22 @@ export function CajasAhorroManager() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isMovimientoDialogOpen, setIsMovimientoDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
+  const [cajaAEliminar, setCajaAEliminar] = useState<CajaAhorro | null>(null)
   const [cajaSeleccionada, setCajaSeleccionada] = useState<CajaAhorro | null>(null)
+  const [editData, setEditData] = useState({
+    nombre: "",
+    descripcion: "",
+    meta_monto: "",
+    icono: "piggy-bank",
+    color: "blue",
+    prioridad: "1",
+    tipo_cuenta: "cuenta_bancaria",
+    banco: "",
+    numero_cuenta: "",
+    moneda: "PYG",
+  })
   const { perfilActual } = usePerfil()
   const { toast } = useToast()
 
@@ -275,7 +292,65 @@ export function CajasAhorroManager() {
         title: "Caja eliminada",
         description: "La caja de ahorro ha sido eliminada",
       })
+      setIsDeleteConfirmOpen(false)
+      setCajaAEliminar(null)
       loadCajas()
+    }
+  }
+
+  const openEditDialog = (caja: CajaAhorro) => {
+    setEditData({
+      nombre: caja.nombre,
+      descripcion: caja.descripcion || "",
+      meta_monto: caja.meta_monto > 0 ? String(caja.meta_monto) : "",
+      icono: caja.icono || "piggy-bank",
+      color: caja.color || "blue",
+      prioridad: String(caja.prioridad || 1),
+      tipo_cuenta: caja.tipo_cuenta || "cuenta_bancaria",
+      banco: caja.banco || "",
+      numero_cuenta: caja.numero_cuenta || "",
+      moneda: caja.moneda || "PYG",
+    })
+    setCajaSeleccionada(caja)
+    setIsEditDialogOpen(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!cajaSeleccionada) return
+
+    const supabase = createClient()
+
+    const { error } = await supabase
+      .from("cajas_ahorro")
+      .update({
+        nombre: editData.nombre,
+        descripcion: editData.descripcion || null,
+        meta_monto: Number.parseFloat(editData.meta_monto || "0"),
+        icono: editData.icono,
+        color: editData.color,
+        prioridad: Number.parseInt(editData.prioridad),
+        tipo_cuenta: editData.tipo_cuenta,
+        banco: editData.banco || null,
+        numero_cuenta: editData.numero_cuenta || null,
+        moneda: editData.moneda || "PYG",
+      })
+      .eq("id", cajaSeleccionada.id)
+
+    if (!error) {
+      toast({
+        title: "Caja actualizada",
+        description: `"${editData.nombre}" se ha editado exitosamente`,
+      })
+      setIsEditDialogOpen(false)
+      setCajaSeleccionada(null)
+      loadCajas()
+    } else {
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la caja de ahorro",
+        variant: "destructive",
+      })
     }
   }
 
@@ -575,14 +650,27 @@ export function CajasAhorroManager() {
                         <Badge className={`${prioridadColor} text-white mt-1`}>{prioridadLabel}</Badge>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(caja.id)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEditDialog(caja)}
+                        className="text-muted-foreground hover:text-blue-500 h-8 w-8"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => {
+                          setCajaAEliminar(caja)
+                          setIsDeleteConfirmOpen(true)
+                        }}
+                        className="text-destructive hover:text-destructive h-8 w-8"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
                   </div>
                   {caja.descripcion && <CardDescription className="mt-2">{caja.descripcion}</CardDescription>}
                   {/* Info de cuenta */}
@@ -678,6 +766,7 @@ export function CajasAhorroManager() {
         </div>
       )}
 
+      {/* Dialog de Movimiento */}
       <Dialog open={isMovimientoDialogOpen} onOpenChange={setIsMovimientoDialogOpen}>
         <DialogContent className="glass-effect max-w-md max-h-[90vh]">
           <DialogHeader>
@@ -705,7 +794,7 @@ export function CajasAhorroManager() {
             </div>
 
             <div>
-              <Label htmlFor="descripcion_movimiento">Descripción (opcional)</Label>
+              <Label htmlFor="descripcion_movimiento">Descripcion (opcional)</Label>
               <Textarea
                 id="descripcion_movimiento"
                 value={movimientoData.descripcion}
@@ -722,6 +811,236 @@ export function CajasAhorroManager() {
               <Button type="submit">{movimientoData.tipo === "deposito" ? "Depositar" : "Retirar"}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Edicion */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="glass-effect max-w-md max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-blue-500" />
+              Editar Caja de Ahorro
+            </DialogTitle>
+            <DialogDescription>Modifica los datos de tu caja. El monto ahorrado no se altera.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="edit_nombre">Nombre de la Caja</Label>
+              <Input
+                id="edit_nombre"
+                value={editData.nombre}
+                onChange={(e) => setEditData({ ...editData, nombre: e.target.value })}
+                placeholder="Ej: Vacaciones, Casa, Emergencias"
+                required
+              />
+            </div>
+
+            <div>
+              <Label>Tipo de Cuenta</Label>
+              <div className="grid grid-cols-2 gap-2 mt-1">
+                {tiposCuenta.map((tipo) => {
+                  const TipoIcon = tipo.icon
+                  const isSelected = editData.tipo_cuenta === tipo.value
+                  return (
+                    <button
+                      key={tipo.value}
+                      type="button"
+                      onClick={() => setEditData({ ...editData, tipo_cuenta: tipo.value })}
+                      className={`p-3 rounded-lg border-2 transition-all text-left flex items-center gap-2 text-xs ${
+                        isSelected
+                          ? "border-primary bg-primary/10"
+                          : "border-border/50 hover:border-border"
+                      }`}
+                    >
+                      <TipoIcon className={`w-4 h-4 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className={`font-medium ${isSelected ? "text-primary" : ""}`}>{tipo.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {editData.tipo_cuenta === "cuenta_bancaria" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="edit_banco">Banco</Label>
+                  <Input
+                    id="edit_banco"
+                    value={editData.banco}
+                    onChange={(e) => setEditData({ ...editData, banco: e.target.value })}
+                    placeholder="Ej: Banco Continental"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit_numero_cuenta">Nro. Cuenta (opcional)</Label>
+                  <Input
+                    id="edit_numero_cuenta"
+                    value={editData.numero_cuenta}
+                    onChange={(e) => setEditData({ ...editData, numero_cuenta: e.target.value })}
+                    placeholder="Ej: ****1234"
+                  />
+                </div>
+              </div>
+            )}
+
+            {editData.tipo_cuenta === "billetera_digital" && (
+              <div>
+                <Label htmlFor="edit_billetera">Nombre de Billetera</Label>
+                <Input
+                  id="edit_billetera"
+                  value={editData.banco}
+                  onChange={(e) => setEditData({ ...editData, banco: e.target.value })}
+                  placeholder="Ej: Tigo Money, Personal Pay"
+                />
+              </div>
+            )}
+
+            <div>
+              <Label>Moneda</Label>
+              <Select
+                value={editData.moneda}
+                onValueChange={(value) => setEditData({ ...editData, moneda: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PYG">Guaranies (PYG)</SelectItem>
+                  <SelectItem value="USD">Dolares (USD)</SelectItem>
+                  <SelectItem value="BRL">Reales (BRL)</SelectItem>
+                  <SelectItem value="ARS">Pesos Argentinos (ARS)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label htmlFor="edit_descripcion">Descripcion (opcional)</Label>
+              <Textarea
+                id="edit_descripcion"
+                value={editData.descripcion}
+                onChange={(e) => setEditData({ ...editData, descripcion: e.target.value })}
+                placeholder="Describe tu objetivo de ahorro"
+                rows={2}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit_meta_monto">Meta de Ahorro (opcional)</Label>
+              <Input
+                id="edit_meta_monto"
+                type="text"
+                inputMode="numeric"
+                value={formatMiles(editData.meta_monto)}
+                onChange={(e) => setEditData({ ...editData, meta_monto: parseMiles(e.target.value) })}
+                placeholder="Ej: 5.000.000"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="edit_icono">Icono</Label>
+                <Select
+                  value={editData.icono}
+                  onValueChange={(value) => setEditData({ ...editData, icono: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {iconosDisponibles.map((icono) => {
+                      const Icon = icono.icon
+                      return (
+                        <SelectItem key={icono.value} value={icono.value}>
+                          <div className="flex items-center gap-2">
+                            <Icon className="w-4 h-4" />
+                            {icono.label}
+                          </div>
+                        </SelectItem>
+                      )
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="edit_color">Color</Label>
+                <Select
+                  value={editData.color}
+                  onValueChange={(value) => setEditData({ ...editData, color: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {coloresDisponibles.map((color) => (
+                      <SelectItem key={color.value} value={color.value}>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded ${color.class}`} />
+                          {color.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="edit_prioridad">Prioridad</Label>
+              <Select
+                value={editData.prioridad}
+                onValueChange={(value) => setEditData({ ...editData, prioridad: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Alta</SelectItem>
+                  <SelectItem value="2">Media</SelectItem>
+                  <SelectItem value="3">Baja</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit">Guardar Cambios</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Confirmacion de Eliminacion */}
+      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <DialogContent className="glass-effect max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="w-5 h-5" />
+              Eliminar Caja de Ahorro
+            </DialogTitle>
+            <DialogDescription>
+              {"Esta accion no se puede deshacer. Se eliminara la caja "}
+              <span className="font-semibold text-foreground">{cajaAEliminar?.nombre}</span>
+              {" y todos sus movimientos asociados."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => {
+              setIsDeleteConfirmOpen(false)
+              setCajaAEliminar(null)
+            }}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => cajaAEliminar && handleDelete(cajaAEliminar.id)}
+            >
+              Eliminar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
