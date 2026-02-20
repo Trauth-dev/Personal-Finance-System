@@ -728,7 +728,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         .from("registro_habitos_recurrentes")
         .upsert({
           habito_id: tareaAEliminar.id,
-          perfil_id: perfilActivo,
+          perfil_id: perfilId,
           user_id: user.id,
           fecha: tareaAEliminar.fecha,
           completado: false,
