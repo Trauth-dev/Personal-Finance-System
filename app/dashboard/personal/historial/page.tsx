@@ -54,6 +54,8 @@ type Egreso = {
   categoria_id: string | null
   origen_tipo: string | null
   origen_id: string | null
+  deuda_id: string | null
+  numero_cuota: number | null
   tipos_categoria_egreso?: {
     nombre: string
     color: string
@@ -268,6 +270,43 @@ export default function PersonalHistorialPage() {
           }
         }
       }
+
+      // Si el egreso es un pago de deuda (prestamo o tarjeta), revertir monto_pagado
+      if (egresoToDelete?.deuda_id) {
+        const montoRevertir = Number(egresoToDelete.monto)
+        const { data: deudaData } = await supabase
+          .from("deudas")
+          .select("monto_pagado, cuotas_pagadas, monto_total, tipo_deuda, limite_credito")
+          .eq("id", egresoToDelete.deuda_id)
+          .single()
+
+        if (deudaData) {
+          const nuevoMontoPagado = Math.max(0, Number(deudaData.monto_pagado) - montoRevertir)
+          const nuevasCuotas = egresoToDelete.numero_cuota
+            ? Math.max(0, Number(deudaData.cuotas_pagadas) - 1)
+            : Number(deudaData.cuotas_pagadas)
+
+          let nuevoMontoTotal = Number(deudaData.monto_total)
+          if (deudaData.tipo_deuda === "tarjeta_credito") {
+            // Para tarjetas: al revertir un pago, se reduce el disponible
+            nuevoMontoTotal = Math.max(0, Number(deudaData.monto_total) - montoRevertir)
+          }
+
+          const estaPagada = deudaData.tipo_deuda === "tarjeta_credito"
+            ? nuevoMontoTotal >= (Number(deudaData.limite_credito) || 0)
+            : nuevoMontoPagado >= nuevoMontoTotal
+
+          await supabase
+            .from("deudas")
+            .update({
+              monto_total: nuevoMontoTotal,
+              monto_pagado: nuevoMontoPagado,
+              cuotas_pagadas: nuevasCuotas,
+              estado: estaPagada ? "pagada" : "activa",
+            })
+            .eq("id", egresoToDelete.deuda_id)
+        }
+      }
     }
 
     const { error } = await supabase.from(table).delete().eq("id", deleteId)
@@ -307,6 +346,96 @@ export default function PersonalHistorialPage() {
       }
     }
 
+    // Si es un egreso vinculado a una deuda y cambio el monto, ajustar la deuda
+    if (editType === "egreso") {
+      const egresoOriginal = egresos.find((e) => e.id === editId)
+      if (egresoOriginal?.deuda_id && Number(editData.monto) !== Number(egresoOriginal.monto)) {
+        const diferencia = Number(editData.monto) - Number(egresoOriginal.monto)
+
+        const { data: deudaData } = await supabase
+          .from("deudas")
+          .select("monto_pagado, monto_total, tipo_deuda, limite_credito")
+          .eq("id", egresoOriginal.deuda_id)
+          .single()
+
+        if (deudaData) {
+          const nuevoMontoPagado = Math.max(0, Number(deudaData.monto_pagado) + diferencia)
+          let nuevoMontoTotal = Number(deudaData.monto_total)
+
+          if (deudaData.tipo_deuda === "tarjeta_credito") {
+            nuevoMontoTotal = Math.max(0, Number(deudaData.monto_total) + diferencia)
+          }
+
+          const estaPagada = deudaData.tipo_deuda === "tarjeta_credito"
+            ? nuevoMontoTotal >= (Number(deudaData.limite_credito) || 0)
+            : nuevoMontoPagado >= nuevoMontoTotal
+
+          await supabase
+            .from("deudas")
+            .update({
+              monto_total: nuevoMontoTotal,
+              monto_pagado: nuevoMontoPagado,
+              estado: estaPagada ? "pagada" : "activa",
+            })
+            .eq("id", egresoOriginal.deuda_id)
+        }
+      }
+
+      // Si el egreso tenia origen (caja/tarjeta) y cambio el monto, ajustar el origen
+      if (egresoOriginal?.origen_tipo && egresoOriginal?.origen_id && Number(editData.monto) !== Number(egresoOriginal.monto)) {
+        const diferencia = Number(editData.monto) - Number(egresoOriginal.monto)
+
+        if (egresoOriginal.origen_tipo === "caja_ahorro") {
+          const { data: cajaData } = await supabase
+            .from("cajas_ahorro")
+            .select("monto_actual")
+            .eq("id", egresoOriginal.origen_id)
+            .single()
+
+          if (cajaData) {
+            await supabase
+              .from("cajas_ahorro")
+              .update({ monto_actual: Math.max(0, Number(cajaData.monto_actual) - diferencia) })
+              .eq("id", egresoOriginal.origen_id)
+          }
+        } else if (egresoOriginal.origen_tipo === "tarjeta_credito") {
+          const { data: tarjetaData } = await supabase
+            .from("deudas")
+            .select("monto_total")
+            .eq("id", egresoOriginal.origen_id)
+            .single()
+
+          if (tarjetaData) {
+            await supabase
+              .from("deudas")
+              .update({ monto_total: Math.max(0, Number(tarjetaData.monto_total) - diferencia) })
+              .eq("id", egresoOriginal.origen_id)
+          }
+        }
+      }
+    }
+
+    // Si es un ingreso con destino caja y cambio el monto, ajustar la caja
+    if (editType === "ingreso") {
+      const ingresoOriginal = ingresos.find((i) => i.id === editId)
+      if (ingresoOriginal?.destino_caja_id && Number(editData.monto) !== Number(ingresoOriginal.monto)) {
+        const diferencia = Number(editData.monto) - Number(ingresoOriginal.monto)
+
+        const { data: cajaData } = await supabase
+          .from("cajas_ahorro")
+          .select("monto_actual")
+          .eq("id", ingresoOriginal.destino_caja_id)
+          .single()
+
+        if (cajaData) {
+          await supabase
+            .from("cajas_ahorro")
+            .update({ monto_actual: Math.max(0, Number(cajaData.monto_actual) + diferencia) })
+            .eq("id", ingresoOriginal.destino_caja_id)
+        }
+      }
+    }
+
     const { error } = await supabase.from(table).update(updateData).eq("id", editId)
 
     if (!error) {
@@ -315,7 +444,7 @@ export default function PersonalHistorialPage() {
       setEditType(null)
       setEditData(null)
     } else {
-      console.error("[v0] Error al guardar edición:", error)
+      console.error("[v0] Error al guardar edicion:", error)
       alert("Error al guardar los cambios. Por favor intenta nuevamente.")
     }
   }
