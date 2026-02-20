@@ -860,16 +860,14 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
 
           {/* Botones de acciones */}
           <div className="flex flex-wrap gap-2 pt-2">
-            {pagosDeuda.length > 0 && (
-              <Button
-                size="sm"
-                onClick={() => setShowDetallesDeuda(showDetallesDeuda === deuda.id ? null : deuda.id)}
-                className="gap-1 bg-green-600 hover:bg-green-700 text-white"
-              >
-                <FileText className="w-4 h-4" />
-                Detalles ({pagosDeuda.length})
-              </Button>
-            )}
+            <Button
+              size="sm"
+              onClick={() => setShowDetallesDeuda(showDetallesDeuda === deuda.id ? null : deuda.id)}
+              className="gap-1 bg-green-600 hover:bg-green-700 text-white"
+            >
+              <FileText className="w-4 h-4" />
+              {pagosDeuda.length > 0 ? `Detalles (${pagosDeuda.length})` : "Detalles"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -890,17 +888,26 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           </div>
 
           {/* Panel de Detalles de Pagos */}
-          {showDetallesDeuda === deuda.id && pagosDeuda.length > 0 && (
+          {showDetallesDeuda === deuda.id && (
             <div className="border-t border-green-500/30 pt-4 mt-2 space-y-3">
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-green-400" />
                 <span className="text-sm font-semibold text-green-400">
                   Historial de Pagos Realizados
                 </span>
-                <span className="text-xs text-muted-foreground ml-auto">
-                  Total: {formatGuaranies(pagosDeuda.reduce((s, p) => s + Number(p.monto), 0))}
-                </span>
+                {pagosDeuda.length > 0 && (
+                  <span className="text-xs text-muted-foreground ml-auto">
+                    Total: {formatGuaranies(pagosDeuda.reduce((s, p) => s + Number(p.monto), 0))}
+                  </span>
+                )}
               </div>
+              {pagosDeuda.length === 0 ? (
+                <div className="text-center py-4 text-sm text-muted-foreground">
+                  <Receipt className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>No hay pagos registrados para esta deuda</p>
+                  <p className="text-xs mt-1">Los pagos se registran desde la seccion de Carga de Datos</p>
+                </div>
+              ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
                 {pagosDeuda.map((pago) => (
                   <div
@@ -1005,6 +1012,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           )}
         </CardContent>
