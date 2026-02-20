@@ -32,6 +32,10 @@ import {
   Receipt,
   Building2,
   Pencil,
+  FileText,
+  AlertTriangle,
+  Save,
+  X,
 } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
 import { formatGuaranies } from "@/lib/utils"
@@ -320,6 +324,13 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   const [deleteConfirmDeuda, setDeleteConfirmDeuda] = useState<Deuda | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
+  const [showDetallesDeuda, setShowDetallesDeuda] = useState<string | null>(null)
+  const [editingPago, setEditingPago] = useState<string | null>(null)
+  const [editPagoMonto, setEditPagoMonto] = useState("")
+  const [editPagoConcepto, setEditPagoConcepto] = useState("")
+  const [deletingPago, setDeletingPago] = useState<PagoDeuda | null>(null)
+  const [showDeletePagoConfirm, setShowDeletePagoConfirm] = useState(false)
+
   const [tipoDeuda, setTipoDeuda] = useState<"prestamo" | "tarjeta_credito">("prestamo")
 
   const [formData, setFormData] = useState({
@@ -550,6 +561,120 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     }
   }
 
+  // --- Funciones para editar/eliminar pagos individuales ---
+  const startEditPago = (pago: PagoDeuda) => {
+    setEditingPago(pago.id)
+    setEditPagoMonto(formatNumberWithSeparators(pago.monto))
+    setEditPagoConcepto(pago.concepto || "")
+  }
+
+  const cancelEditPago = () => {
+    setEditingPago(null)
+    setEditPagoMonto("")
+    setEditPagoConcepto("")
+  }
+
+  const handleSaveEditPago = async (pago: PagoDeuda) => {
+    const nuevoMonto = Number(parseFormattedNumber(editPagoMonto))
+    if (!nuevoMonto || nuevoMonto <= 0) {
+      toast.error("El monto debe ser mayor a 0")
+      return
+    }
+
+    const diferencia = nuevoMonto - Number(pago.monto)
+
+    // Actualizar el egreso
+    const { error: errorEgreso } = await supabase
+      .from("egresos")
+      .update({
+        monto: nuevoMonto,
+        concepto: editPagoConcepto || pago.concepto,
+      })
+      .eq("id", pago.id)
+
+    if (errorEgreso) {
+      toast.error("Error al actualizar el pago")
+      return
+    }
+
+    // Si cambio el monto, ajustar la deuda
+    if (diferencia !== 0 && pago.deuda_id) {
+      const deuda = deudas.find((d) => d.id === pago.deuda_id)
+      if (deuda) {
+        const nuevoMontoPagado = Math.max(0, Number(deuda.monto_pagado) + diferencia)
+        let nuevoMontoTotal = Number(deuda.monto_total)
+
+        if (deuda.tipo_deuda === "tarjeta_credito") {
+          nuevoMontoTotal = Math.max(0, Number(deuda.monto_total) + diferencia)
+        }
+
+        await supabase
+          .from("deudas")
+          .update({
+            monto_total: nuevoMontoTotal,
+            monto_pagado: nuevoMontoPagado,
+          })
+          .eq("id", pago.deuda_id)
+      }
+    }
+
+    toast.success("Pago actualizado exitosamente")
+    cancelEditPago()
+    fetchDeudas()
+    fetchPagos()
+  }
+
+  const confirmDeletePago = (pago: PagoDeuda) => {
+    setDeletingPago(pago)
+    setShowDeletePagoConfirm(true)
+  }
+
+  const handleDeletePago = async () => {
+    if (!deletingPago) return
+
+    const montoRevertir = Number(deletingPago.monto)
+
+    // Revertir en la deuda
+    if (deletingPago.deuda_id) {
+      const deuda = deudas.find((d) => d.id === deletingPago.deuda_id)
+      if (deuda) {
+        const nuevoMontoPagado = Math.max(0, Number(deuda.monto_pagado) - montoRevertir)
+        const nuevasCuotas = deletingPago.numero_cuota
+          ? Math.max(0, Number(deuda.cuotas_pagadas) - 1)
+          : Number(deuda.cuotas_pagadas)
+
+        let nuevoMontoTotal = Number(deuda.monto_total)
+        if (deuda.tipo_deuda === "tarjeta_credito") {
+          nuevoMontoTotal = Math.max(0, Number(deuda.monto_total) - montoRevertir)
+        }
+
+        await supabase
+          .from("deudas")
+          .update({
+            monto_total: nuevoMontoTotal,
+            monto_pagado: nuevoMontoPagado,
+            cuotas_pagadas: nuevasCuotas,
+            estado: nuevoMontoPagado >= nuevoMontoTotal && deuda.tipo_deuda !== "tarjeta_credito" ? "pagada" : "activa",
+          })
+          .eq("id", deletingPago.deuda_id)
+      }
+    }
+
+    // Eliminar el egreso
+    const { error } = await supabase.from("egresos").delete().eq("id", deletingPago.id)
+
+    if (error) {
+      toast.error("Error al eliminar el pago")
+      return
+    }
+
+    toast.success("Pago eliminado exitosamente")
+    setShowDeletePagoConfirm(false)
+    setDeletingPago(null)
+    fetchDeudas()
+    fetchPagos()
+  }
+
   const getPrioridadColor = (prioridad: string) => {
     const colors = {
       urgente: "bg-red-500",
@@ -733,36 +858,18 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
             </div>
           )}
 
-          {/* Historial de pagos */}
-          {pagosDeuda.length > 0 && (
-            <div className="border-t pt-4 mt-4">
-              <button
-                onClick={() => setSelectedDeudaDetail(selectedDeudaDetail === deuda.id ? null : deuda.id)}
-                className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full"
+          {/* Botones de acciones */}
+          <div className="flex flex-wrap gap-2 pt-2">
+            {pagosDeuda.length > 0 && (
+              <Button
+                size="sm"
+                onClick={() => setShowDetallesDeuda(showDetallesDeuda === deuda.id ? null : deuda.id)}
+                className="gap-1 bg-green-600 hover:bg-green-700 text-white"
               >
-                <Eye className="w-4 h-4" />
-                <span>Ver historial de pagos ({pagosDeuda.length})</span>
-              </button>
-
-              {selectedDeudaDetail === deuda.id && (
-                <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
-                  {pagosDeuda.map((pago) => (
-                    <div key={pago.id} className="flex justify-between items-center p-2 rounded-lg bg-muted/30 text-sm">
-                      <div>
-                        <p className="font-medium">{formatGuaranies(Number(pago.monto))}</p>
-                        {pago.numero_cuota && (
-                          <p className="text-xs text-muted-foreground">Cuota #{pago.numero_cuota}</p>
-                        )}
-                      </div>
-                      <p className="text-muted-foreground">{new Date(pago.fecha).toLocaleDateString("es-ES")}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-2 pt-2">
+                <FileText className="w-4 h-4" />
+                Detalles ({pagosDeuda.length})
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -781,6 +888,125 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
               Eliminar
             </Button>
           </div>
+
+          {/* Panel de Detalles de Pagos */}
+          {showDetallesDeuda === deuda.id && pagosDeuda.length > 0 && (
+            <div className="border-t border-green-500/30 pt-4 mt-2 space-y-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-green-400" />
+                <span className="text-sm font-semibold text-green-400">
+                  Historial de Pagos Realizados
+                </span>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  Total: {formatGuaranies(pagosDeuda.reduce((s, p) => s + Number(p.monto), 0))}
+                </span>
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {pagosDeuda.map((pago) => (
+                  <div
+                    key={pago.id}
+                    className="p-3 rounded-lg bg-muted/30 border border-border/50"
+                  >
+                    {editingPago === pago.id ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs">Monto</Label>
+                            <Input
+                              type="text"
+                              inputMode="numeric"
+                              value={editPagoMonto}
+                              onChange={(e) => {
+                                const val = e.target.value.replace(/[^0-9]/g, "")
+                                setEditPagoMonto(formatNumberWithSeparators(val))
+                              }}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Concepto</Label>
+                            <Input
+                              type="text"
+                              value={editPagoConcepto}
+                              onChange={(e) => setEditPagoConcepto(e.target.value)}
+                              placeholder="Concepto..."
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={cancelEditPago}
+                            className="h-7 text-xs gap-1"
+                          >
+                            <X className="w-3 h-3" />
+                            Cancelar
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveEditPago(pago)}
+                            className="h-7 text-xs gap-1 bg-green-600 hover:bg-green-700 text-white"
+                          >
+                            <Save className="w-3 h-3" />
+                            Guardar
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">
+                              {formatGuaranies(Number(pago.monto))}
+                            </span>
+                            {pago.numero_cuota && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                                Cuota #{pago.numero_cuota}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(pago.fecha).toLocaleDateString("es-ES", {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              })}
+                            </span>
+                            {pago.concepto && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                - {pago.concepto}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => startEditPago(pago)}
+                            className="h-7 w-7 text-muted-foreground hover:text-blue-400"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => confirmDeletePago(pago)}
+                            className="h-7 w-7 text-muted-foreground hover:text-red-400"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     )
@@ -1000,8 +1226,9 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           <DialogHeader>
             <DialogTitle className="text-red-500">Confirmar Eliminación</DialogTitle>
             <DialogDescription>
-              ¿Estás seguro de que deseas eliminar la deuda <strong>"{deleteConfirmDeuda?.nombre}"</strong>? Esta acción
-              no se puede deshacer y se perderá todo el historial de pagos asociado.
+              {"Esta accion no se puede deshacer. Se eliminara la deuda "}
+              <strong>{deleteConfirmDeuda?.nombre}</strong>
+              {" y todos sus pagos asociados."}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
@@ -1015,7 +1242,44 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
               Cancelar
             </Button>
             <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={handleDeleteDeuda}>
-              Sí, Eliminar
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Confirmacion Eliminar Pago Individual */}
+      <Dialog open={showDeletePagoConfirm} onOpenChange={setShowDeletePagoConfirm}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-500">
+              <AlertTriangle className="w-5 h-5" />
+              Eliminar Pago
+            </DialogTitle>
+            <DialogDescription>
+              {"Se eliminara el pago de "}
+              <strong className="text-foreground">
+                {deletingPago ? formatGuaranies(Number(deletingPago.monto)) : ""}
+              </strong>
+              {deletingPago?.numero_cuota ? ` (Cuota #${deletingPago.numero_cuota})` : ""}
+              {". El monto se revertira en la deuda correspondiente y en el historial de egresos."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDeletePagoConfirm(false)
+                setDeletingPago(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleDeletePago}
+            >
+              Eliminar Pago
             </Button>
           </DialogFooter>
         </DialogContent>
