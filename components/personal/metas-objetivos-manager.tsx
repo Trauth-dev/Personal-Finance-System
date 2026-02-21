@@ -92,6 +92,20 @@ interface MetasObjetivosManagerProps {
   perfilId: string
 }
 
+// Helper para obtener fecha actual en Paraguay (UTC-3)
+const getParaguayDate = () => {
+  const now = new Date()
+  const paraguayOffset = -3 * 60 // UTC-3 en minutos
+  const localOffset = now.getTimezoneOffset()
+  const diff = paraguayOffset - (-localOffset)
+  const paraguayTime = new Date(now.getTime() + diff * 60 * 1000)
+  return paraguayTime
+}
+
+const getParaguayDateString = () => {
+  return getParaguayDate().toISOString().split("T")[0]
+}
+
 const COLORES_HABITOS = [
   "#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", 
   "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
@@ -130,6 +144,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     nombre: "",
     descripcion: "",
     intervalo_dias: 1,
+    fecha_inicio: getParaguayDateString(),
+    fecha_fin: "",
   })
   
   // Estados para tareas del día
@@ -151,7 +167,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     descripcion: "",
     tipo: "mensual" as "semanal" | "mensual" | "anual",
     prioridad: "media" as "baja" | "media" | "alta",
-    fecha_inicio: new Date().toISOString().split("T")[0],
+    fecha_inicio: getParaguayDateString(),
     fecha_fin: ""
   })
   
@@ -164,7 +180,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   })
   
   // Estado para navegación de calendario
-  const [currentDate, setCurrentDate] = useState(new Date())
+  const [currentDate, setCurrentDate] = useState(getParaguayDate())
   const [viewMode, setViewMode] = useState<"semana" | "mes">("semana")
   
   // Nueva tarea para meta
@@ -183,13 +199,13 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) setUserId(user.id)
       
-      const hoy = new Date()
+      const hoy = getParaguayDate()
       const hace5Dias = new Date(hoy)
       hace5Dias.setDate(hoy.getDate() - 5)
       const hace6Dias = new Date(hoy)
       hace6Dias.setDate(hoy.getDate() - 6)
       
-      const hoyStr = hoy.toISOString().split("T")[0]
+      const hoyStr = getParaguayDateString()
       const hace5DiasStr = hace5Dias.toISOString().split("T")[0]
       const hace6DiasStr = hace6Dias.toISOString().split("T")[0]
       
@@ -240,7 +256,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         // Cargar registros de las ultimas 3 semanas (para cubrir semana anterior completa)
         if (habitosRecData.length > 0) {
           const habitoIds = habitosRecData.map((h) => h.id)
-          const haceTresSemanas = new Date()
+          const haceTresSemanas = getParaguayDate()
           haceTresSemanas.setDate(haceTresSemanas.getDate() - 21)
           const fechaDesde = haceTresSemanas.toISOString().split("T")[0]
           
@@ -603,7 +619,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       descripcion: "",
       tipo: "mensual",
       prioridad: "media",
-      fecha_inicio: new Date().toISOString().split("T")[0],
+      fecha_inicio: getParaguayDateString(),
       fecha_fin: ""
     })
   }
@@ -623,21 +639,22 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     try {
       if (!userId) return
       
-      const hoy = new Date().toISOString().split("T")[0]
+      const fechaInicio = habitoRecurrenteForm.fecha_inicio || getParaguayDateString()
       const { error } = await supabase.from("habitos_recurrentes").insert({
         perfil_id: perfilId,
         user_id: userId,
         nombre: habitoRecurrenteForm.nombre,
         descripcion: habitoRecurrenteForm.descripcion || null,
         intervalo_dias: habitoRecurrenteForm.intervalo_dias,
-        fecha_inicio: hoy,
-        proxima_ocurrencia: hoy,
+        fecha_inicio: fechaInicio,
+        fecha_fin: habitoRecurrenteForm.fecha_fin || null,
+        proxima_ocurrencia: fechaInicio,
       })
       
       if (error) throw error
       
       setShowHabitoRecurrenteModal(false)
-      setHabitoRecurrenteForm({ nombre: "", descripcion: "", intervalo_dias: 1 })
+      setHabitoRecurrenteForm({ nombre: "", descripcion: "", intervalo_dias: 1, fecha_inicio: getParaguayDateString(), fecha_fin: "" })
       cargarDatos()
     } catch (error) {
       console.error("Error guardando hábito recurrente:", error)
@@ -711,7 +728,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         .from("registro_habitos_recurrentes")
         .upsert({
           habito_id: tareaAEliminar.id,
-          perfil_id: perfilActivo,
+          perfil_id: perfilId,
           user_id: user.id,
           fecha: tareaAEliminar.fecha,
           completado: false,
@@ -769,7 +786,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   
   // Obtener tareas agrupadas por día
   const getTareasPorDia = () => {
-    const hoy = new Date()
+    const hoy = getParaguayDate()
     hoy.setHours(0, 0, 0, 0)
     
     const inicioDeSemana = new Date(hoy)
@@ -806,7 +823,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   
   // Calcular estadísticas
   const calcularEstadisticasHabitos = () => {
-    const hoy = new Date()
+    const hoy = getParaguayDate()
     const inicioSemana = new Date(hoy)
     inicioSemana.setDate(hoy.getDate() - hoy.getDay())
     
@@ -841,7 +858,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     if (habitos.length === 0) return 0
     
     let racha = 0
-    const hoy = new Date()
+    const hoy = getParaguayDate()
     
     for (let i = 0; i < 365; i++) {
       const fecha = new Date(hoy)
@@ -1061,7 +1078,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               {Object.keys(tareasPorFecha).sort((a, b) => b.localeCompare(a)).map((fecha) => {
                 const tareas = tareasPorFecha[fecha]
                 const fechaObj = new Date(fecha + "T12:00:00")
-                const esHoy = fecha === new Date().toISOString().split("T")[0]
+                const esHoy = fecha === getParaguayDateString()
                 
                 return (
                   <Card key={fecha} className={`border-blue-200 ${esHoy ? "ring-2 ring-blue-400" : ""}`}>
@@ -1231,7 +1248,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                       <tr>
                         <th className="text-left p-2 min-w-[200px]">Hábito</th>
                         {getWeekDates(currentDate).map((fecha, idx) => {
-                          const isToday = formatDate(fecha) === formatDate(new Date())
+                          const isToday = formatDate(fecha) === getParaguayDateString()
                           return (
                             <th key={idx} className={`text-center p-2 min-w-[80px] ${isToday ? "bg-primary/20 rounded-t-lg" : ""}`}>
                               <div className="text-xs text-muted-foreground">{DIAS_SEMANA[getDiaSemanaIndex(fecha)]}</div>
@@ -1272,8 +1289,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                               const fechaStr = formatDate(fecha)
                               const debeCompletar = debeCompletarHabito(habito, fecha)
                               const completado = isHabitoCompletado(habito.id, fechaStr)
-                              const isToday = fechaStr === formatDate(new Date())
-                              const isFuture = fecha > new Date()
+                              const isToday = fechaStr === getParaguayDateString()
+                              const isFuture = fecha > getParaguayDate()
                               
                               return (
                                 <td key={idx} className={`text-center p-2 ${isToday ? "bg-primary/20" : ""}`}>
@@ -1338,7 +1355,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                         <td className="p-2 font-semibold">Progreso del día</td>
                         {getWeekDates(currentDate).map((fecha, idx) => {
                           const progreso = calcularProgresoDia(fecha)
-                          const isToday = formatDate(fecha) === formatDate(new Date())
+                          const isToday = formatDate(fecha) === getParaguayDateString()
                           return (
                             <td key={idx} className={`text-center p-2 ${isToday ? "bg-primary/20 rounded-b-lg" : ""}`}>
                               <div className={`text-sm font-bold ${
@@ -1366,7 +1383,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                         <div className="flex gap-4">
                           {week.map((fecha, idx) => {
                             const isCurrentMonth = fecha.getMonth() === currentDate.getMonth()
-                            const isToday = formatDate(fecha) === formatDate(new Date())
+                            const isToday = formatDate(fecha) === getParaguayDateString()
                             return (
                               <div 
                                 key={idx} 
@@ -1397,7 +1414,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                                 const isCurrentMonth = fecha.getMonth() === currentDate.getMonth()
                                 const debeCompletar = debeCompletarHabito(habito, fecha)
                                 const completado = isHabitoCompletado(habito.id, fechaStr)
-                                const isFuture = fecha > new Date()
+                                const isFuture = fecha > getParaguayDate()
                                 
                                 return (
                                   <div key={idx} className={`min-w-[60px] flex justify-center ${!isCurrentMonth ? "opacity-30" : ""}`}>
@@ -1445,8 +1462,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                 <div className="grid grid-cols-7 gap-4">
                   {getWeekDates(currentDate).map((fecha, idx) => {
                     const progreso = calcularProgresoDia(fecha)
-                    const isToday = formatDate(fecha) === formatDate(new Date())
-                    const isFuture = fecha > new Date()
+                    const isToday = formatDate(fecha) === getParaguayDateString()
+                    const isFuture = fecha > getParaguayDate()
                     
                     return (
                       <div key={idx} className="flex flex-col items-center gap-2">
@@ -1614,7 +1631,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
 
         {/* Vista semanal en columnas */}
         {(() => {
-          const hoy = new Date()
+          const hoy = getParaguayDate()
           hoy.setHours(0, 0, 0, 0)
 
           // Calcular inicio de la semana (Domingo)
@@ -2374,7 +2391,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                     console.error("[v0] No se puede crear tarea: falta userId o título")
                     return
                   }
-                  const hoy = new Date().toISOString().split("T")[0]
+                  const hoy = getParaguayDateString()
                   
                   if (editingTarea) {
                     const { error } = await supabase.from("tareas_meta").update({ 
@@ -2528,11 +2545,34 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="fecha-inicio-recurrente">Fecha de inicio</Label>
+                <Input
+                  id="fecha-inicio-recurrente"
+                  type="date"
+                  value={habitoRecurrenteForm.fecha_inicio}
+                  onChange={(e) => setHabitoRecurrenteForm({ ...habitoRecurrenteForm, fecha_inicio: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="fecha-fin-recurrente">Fecha fin (opcional)</Label>
+                <Input
+                  id="fecha-fin-recurrente"
+                  type="date"
+                  value={habitoRecurrenteForm.fecha_fin}
+                  onChange={(e) => setHabitoRecurrenteForm({ ...habitoRecurrenteForm, fecha_fin: e.target.value })}
+                  min={habitoRecurrenteForm.fecha_inicio}
+                />
+              </div>
+            </div>
+
             <DialogFooter className="pt-2">
               <Button type="button" variant="outline" onClick={() => setShowHabitoRecurrenteModal(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white" disabled={!habitoRecurrenteForm.nombre.trim()}>
+              <Button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white" disabled={!habitoRecurrenteForm.nombre.trim() || !habitoRecurrenteForm.fecha_inicio}>
                 Crear Tarea
               </Button>
             </DialogFooter>
