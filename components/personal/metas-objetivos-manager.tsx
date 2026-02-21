@@ -94,12 +94,10 @@ interface MetasObjetivosManagerProps {
 
 // Helper para obtener fecha actual en Paraguay (UTC-3)
 const getParaguayDate = () => {
+  // Usar Intl para obtener la hora real de Paraguay sin depender del offset local
   const now = new Date()
-  const paraguayOffset = -3 * 60 // UTC-3 en minutos
-  const localOffset = now.getTimezoneOffset()
-  const diff = paraguayOffset - (-localOffset)
-  const paraguayTime = new Date(now.getTime() + diff * 60 * 1000)
-  return paraguayTime
+  const paraguayStr = now.toLocaleString("en-US", { timeZone: "America/Asuncion" })
+  return new Date(paraguayStr)
 }
 
 const getParaguayDateString = () => {
