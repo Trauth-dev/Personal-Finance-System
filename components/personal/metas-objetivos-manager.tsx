@@ -103,7 +103,11 @@ const getParaguayDate = () => {
 }
 
 const getParaguayDateString = () => {
-  return getParaguayDate().toISOString().split("T")[0]
+  const d = getParaguayDate()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${y}-${m}-${day}`
 }
 
 const COLORES_HABITOS = [
@@ -206,8 +210,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       hace6Dias.setDate(hoy.getDate() - 6)
       
       const hoyStr = getParaguayDateString()
-      const hace5DiasStr = hace5Dias.toISOString().split("T")[0]
-      const hace6DiasStr = hace6Dias.toISOString().split("T")[0]
+      const hace5DiasStr = formatDate(hace5Dias)
+      const hace6DiasStr = formatDate(hace6Dias)
       
       // Eliminar tareas de más de 6 días
       await supabase.from("tareas_meta")
@@ -258,7 +262,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           const habitoIds = habitosRecData.map((h) => h.id)
           const haceTresSemanas = getParaguayDate()
           haceTresSemanas.setDate(haceTresSemanas.getDate() - 21)
-          const fechaDesde = haceTresSemanas.toISOString().split("T")[0]
+          const fechaDesde = formatDate(haceTresSemanas)
           
           const { data: registrosRec } = await supabase
             .from("registro_habitos_recurrentes")
@@ -292,11 +296,11 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   
   // Funciones de fecha
   function getStartOfMonth(date: Date): string {
-    return new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split("T")[0]
+    return formatDate(new Date(date.getFullYear(), date.getMonth(), 1))
   }
   
   function getEndOfMonth(date: Date): string {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split("T")[0]
+    return formatDate(new Date(date.getFullYear(), date.getMonth() + 1, 0))
   }
   
   function getWeekDates(date: Date): Date[] {
@@ -321,7 +325,10 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0)
     
     let currentWeekStart = new Date(firstDay)
-    currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay())
+    // Retroceder al lunes de esa semana
+    const dayOfWeek = currentWeekStart.getDay()
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    currentWeekStart.setDate(currentWeekStart.getDate() + diffToMonday)
     
     while (currentWeekStart <= lastDay || weeks.length < 5) {
       const week: Date[] = []
@@ -353,7 +360,10 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   }
   
   function formatDate(date: Date): string {
-    return date.toISOString().split("T")[0]
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, "0")
+    const d = String(date.getDate()).padStart(2, "0")
+    return `${y}-${m}-${d}`
   }
   
   function getWeekNumber(date: Date): number {
@@ -697,7 +707,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
             .from("habitos_recurrentes")
             .update({ 
               ultima_completada: fecha, 
-              proxima_ocurrencia: proximaFecha.toISOString().split("T")[0] 
+              proxima_ocurrencia: formatDate(proximaFecha) 
             })
             .eq("id", habitoId)
         }
@@ -766,15 +776,36 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     return `Cada ${dias} días`
   }
   
+  // Función para parsear fecha string "YYYY-MM-DD" sin desfase UTC
+  const parseDateLocal = (dateStr: string): Date => {
+    const [y, m, d] = dateStr.split("-").map(Number)
+    return new Date(y, m - 1, d)
+  }
+  
   // Función para calcular ocurrencias de una tarea en un rango de fechas
   const calcularOcurrencias = (tarea: HabitoRecurrente, fechaInicio: Date, fechaFin: Date) => {
     const ocurrencias: { fecha: string; diaNombre: string }[] = []
-    const inicio = new Date(tarea.fecha_inicio)
-    let fechaActual = new Date(Math.max(inicio.getTime(), fechaInicio.getTime()))
+    const inicio = parseDateLocal(tarea.fecha_inicio)
+    const finTarea = tarea.fecha_fin ? parseDateLocal(tarea.fecha_fin) : null
+    
+    // Calcular la primera ocurrencia que cae dentro del rango
+    let fechaActual: Date
+    if (inicio >= fechaInicio) {
+      fechaActual = new Date(inicio)
+    } else {
+      // Avanzar desde inicio hasta la primera fecha >= fechaInicio
+      const diffDays = Math.floor((fechaInicio.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24))
+      const saltos = Math.floor(diffDays / tarea.intervalo_dias)
+      fechaActual = new Date(inicio)
+      fechaActual.setDate(fechaActual.getDate() + saltos * tarea.intervalo_dias)
+      if (fechaActual < fechaInicio) {
+        fechaActual.setDate(fechaActual.getDate() + tarea.intervalo_dias)
+      }
+    }
     
     while (fechaActual <= fechaFin) {
-      if (fechaActual >= inicio && (!tarea.fecha_fin || fechaActual <= new Date(tarea.fecha_fin))) {
-        const fechaStr = fechaActual.toISOString().split("T")[0]
+      if (fechaActual >= inicio && (!finTarea || fechaActual <= finTarea)) {
+        const fechaStr = formatDate(fechaActual)
         const diaNombre = fechaActual.toLocaleDateString("es-PY", { weekday: "long" })
         ocurrencias.push({ fecha: fechaStr, diaNombre: diaNombre.charAt(0).toUpperCase() + diaNombre.slice(1) })
       }
@@ -791,7 +822,9 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     
     const inicioDeSemana = new Date(hoy)
     const diaSemana = hoy.getDay()
-    inicioDeSemana.setDate(hoy.getDate() - diaSemana)
+    // Semana empieza en Lunes: getDay() retorna 0=Dom, 1=Lun...6=Sab
+    const diffLunes = diaSemana === 0 ? -6 : 1 - diaSemana
+    inicioDeSemana.setDate(hoy.getDate() + diffLunes)
     
     const finDeSemana = new Date(inicioDeSemana)
     finDeSemana.setDate(inicioDeSemana.getDate() + (verDiasFuturos ? 13 : 6))
@@ -825,7 +858,8 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const calcularEstadisticasHabitos = () => {
     const hoy = getParaguayDate()
     const inicioSemana = new Date(hoy)
-    inicioSemana.setDate(hoy.getDate() - hoy.getDay())
+    const diaS = hoy.getDay()
+    inicioSemana.setDate(hoy.getDate() + (diaS === 0 ? -6 : 1 - diaS))
     
     let totalPosibles = 0
     let completados = 0
@@ -1634,25 +1668,26 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           const hoy = getParaguayDate()
           hoy.setHours(0, 0, 0, 0)
 
-          // Calcular inicio de la semana (Domingo)
+          // Calcular inicio de la semana (Lunes)
           const inicioSemana = new Date(hoy)
           const diaSemanaHoy = hoy.getDay()
-          inicioSemana.setDate(hoy.getDate() - diaSemanaHoy)
+          const diffALunes = diaSemanaHoy === 0 ? -6 : 1 - diaSemanaHoy
+          inicioSemana.setDate(hoy.getDate() + diffALunes)
 
           if (verDiasFuturos) {
             inicioSemana.setDate(inicioSemana.getDate() + 7)
           }
 
           const diasSemana: { fecha: Date; nombre: string; nombreCorto: string }[] = []
-          const NOMBRES_DIAS = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"]
+          const NOMBRES_DIAS = ["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"]
           const COLORES_DIAS = [
-            "bg-red-500/80 text-white",
             "bg-blue-500/80 text-white",
             "bg-slate-500/80 text-white",
             "bg-slate-600/80 text-white",
             "bg-emerald-500/80 text-white",
             "bg-amber-600/80 text-white",
             "bg-purple-500/80 text-white",
+            "bg-red-500/80 text-white",
           ]
 
           for (let i = 0; i < 7; i++) {
