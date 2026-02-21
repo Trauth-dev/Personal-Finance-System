@@ -785,6 +785,9 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     const ocurrencias: { fecha: string; diaNombre: string }[] = []
     const inicio = parseDateLocal(tarea.fecha_inicio)
     const finTarea = tarea.fecha_fin ? parseDateLocal(tarea.fecha_fin) : null
+    // Normalizar rango a midnight para comparar correctamente con parseDateLocal
+    fechaInicio = parseDateLocal(formatDate(fechaInicio))
+    fechaFin = parseDateLocal(formatDate(fechaFin))
     
     // Calcular la primera ocurrencia que cae dentro del rango
     let fechaActual: Date
@@ -1664,6 +1667,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
         {/* Vista semanal en columnas */}
         {(() => {
           const hoy = getParaguayDate()
+          const hoyStr = formatDate(hoy)
           hoy.setHours(0, 0, 0, 0)
 
           // Calcular inicio de la semana (Lunes)
@@ -1711,8 +1715,9 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
           habitosRecurrentes.forEach((tarea) => {
             const ocurrencias = calcularOcurrencias(tarea, inicioSemana, finSemana)
             ocurrencias.forEach((oc) => {
-              const fechaOc = new Date(oc.fecha + "T12:00:00")
-              const diaIndex = Math.round((fechaOc.getTime() - inicioSemana.getTime()) / (1000 * 60 * 60 * 24))
+              const fechaOc = parseDateLocal(oc.fecha)
+              const inicioRef = parseDateLocal(formatDate(inicioSemana))
+              const diaIndex = Math.round((fechaOc.getTime() - inicioRef.getTime()) / (1000 * 60 * 60 * 24))
               if (diaIndex >= 0 && diaIndex < 7) {
                 const clave = `${tarea.id}-${oc.fecha}`
                 // No mostrar ocurrencias excluidas (eliminadas de un dia especifico)
@@ -1743,7 +1748,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                 {/* Tabs de dias */}
                 <div className="flex gap-0">
                   {diasSemana.map((dia, i) => {
-                    const esHoyDia = dia.fecha.getTime() === hoy.getTime()
+                    const esHoyDia = formatDate(dia.fecha) === hoyStr
                     return (
                       <div
                         key={i}
@@ -1763,7 +1768,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                 <div className="grid grid-cols-7 border border-border/30 rounded-b-lg overflow-hidden min-h-[300px]">
                   {diasSemana.map((dia, i) => {
                     const tareasDia = tareasPorDiaSemana[i]
-                    const esHoyDia = dia.fecha.getTime() === hoy.getTime()
+                    const esHoyDia = formatDate(dia.fecha) === hoyStr
 
                     return (
                       <div
@@ -1838,7 +1843,7 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               <div className="md:hidden space-y-3">
                 {diasSemana.map((dia, i) => {
                   const tareasDia = tareasPorDiaSemana[i]
-                  const esHoyDia = dia.fecha.getTime() === hoy.getTime()
+                    const esHoyDia = formatDate(dia.fecha) === hoyStr
                   
                   // Saltar dias sin tareas en movil
                   if (tareasDia.length === 0) return null
