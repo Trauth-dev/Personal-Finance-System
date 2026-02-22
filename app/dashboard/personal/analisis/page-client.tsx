@@ -213,7 +213,7 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
             <BarChart3 className="w-8 h-8 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Análisis Financiero</h1>
+            <h1 className="text-3xl font-bold text-slate-900">Asesoramiento + Herramientas</h1>
             <p className="text-slate-600">Análisis detallado de tus finanzas personales</p>
           </div>
         </div>

@@ -48,7 +48,7 @@ const navItemsPersonal = [
   //   icon: Activity,
   // },
   {
-    title: "Dashboard Terciario",
+    title: "Diagnostico inteligente",
     href: "/dashboard/personal/terciario",
     icon: BarChart3,
   },
@@ -85,7 +85,7 @@ const navItemsPersonal = [
     icon: History,
   },
   {
-    title: "Análisis Financiero",
+    title: "Asesoramiento + Herramientas",
     href: "/dashboard/personal/analisis",
     icon: BarChart3,
   },
@@ -120,7 +120,7 @@ const navItemsEmpresarial = [
     icon: Activity,
   },
   {
-    title: "Dashboard Terciario",
+    title: "Diagnostico inteligente",
     href: "/dashboard/empresarial/terciario",
     icon: BarChart3,
   },
@@ -155,7 +155,7 @@ const navItemsEmpresarial = [
     icon: History,
   },
   {
-    title: "Análisis Financiero",
+    title: "Asesoramiento + Herramientas",
     href: "/dashboard/empresarial/analisis",
     icon: BarChart3,
   },

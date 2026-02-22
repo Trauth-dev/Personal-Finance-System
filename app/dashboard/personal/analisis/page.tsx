@@ -28,7 +28,7 @@ export default async function PersonalAnalysisPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <DashboardHeader title="Análisis Financiero" description="Análisis detallado de tus finanzas" />
+      <DashboardHeader title="Asesoramiento + Herramientas" description="Análisis detallado de tus finanzas" />
       <AnalisisFinancieroClient perfilId={perfilPersonal.id} />
     </div>
   )

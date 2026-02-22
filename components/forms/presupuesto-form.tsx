@@ -7,11 +7,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
+
+const MESES = [
+  { value: "01", label: "Enero" },
+  { value: "02", label: "Febrero" },
+  { value: "03", label: "Marzo" },
+  { value: "04", label: "Abril" },
+  { value: "05", label: "Mayo" },
+  { value: "06", label: "Junio" },
+  { value: "07", label: "Julio" },
+  { value: "08", label: "Agosto" },
+  { value: "09", label: "Septiembre" },
+  { value: "10", label: "Octubre" },
+  { value: "11", label: "Noviembre" },
+  { value: "12", label: "Diciembre" },
+]
 
 const CATEGORIAS_CONFIG = [
   { key: 'pct_donacion', label: 'Donación', icon: Heart, color: 'text-pink-600', default: 0 },
@@ -27,8 +43,10 @@ const CATEGORIAS_CONFIG = [
 
 export function PresupuestoForm() {
   const { perfilActual } = usePerfil()
+  const todayStr = getTodayDate()
   const [presupuesto, setPresupuesto] = useState("")
-  const [fecha, setFecha] = useState(getTodayDate())
+  const [mesSeleccionado, setMesSeleccionado] = useState(todayStr.slice(5, 7))
+  const [anioSeleccionado, setAnioSeleccionado] = useState(todayStr.slice(0, 4))
   const [porcentajes, setPorcentajes] = useState<Record<string, number>>(
     CATEGORIAS_CONFIG.reduce((acc, cat) => ({ ...acc, [cat.key]: cat.default }), {})
   )
@@ -38,8 +56,17 @@ export function PresupuestoForm() {
   const router = useRouter()
 
   useEffect(() => {
-    setFecha(getTodayDate())
+    const hoy = getTodayDate()
+    setMesSeleccionado(hoy.slice(5, 7))
+    setAnioSeleccionado(hoy.slice(0, 4))
   }, [])
+
+  // Construir fecha en formato YYYY-MM-DD (primer día del mes)
+  const fecha = `${anioSeleccionado}-${mesSeleccionado}-01`
+
+  // Generar opciones de año (actual y +-2)
+  const anioActual = parseInt(todayStr.slice(0, 4))
+  const aniosDisponibles = Array.from({ length: 5 }, (_, i) => String(anioActual - 2 + i))
 
   const totalPorcentajes = Object.values(porcentajes).reduce((sum, val) => sum + val, 0)
 
@@ -79,9 +106,12 @@ export function PresupuestoForm() {
         Object.entries(porcentajes).map(([key, value]) => [key, value / 100])
       )
 
-      // Normalizar fecha al primer día del mes para que haya un solo registro por mes
-      const fechaObj = new Date(fecha + "T00:00:00")
-      const primerDiaMes = new Date(fechaObj.getFullYear(), fechaObj.getMonth(), 1).toISOString().split("T")[0]
+      // fecha ya es el primer día del mes (YYYY-MM-01)
+      const primerDiaMes = fecha
+      const anio = parseInt(anioSeleccionado)
+      const mes = parseInt(mesSeleccionado)
+      const ultimoDiaMes = new Date(anio, mes, 0)
+      const ultimoDiaStr = `${anioSeleccionado}-${mesSeleccionado}-${String(ultimoDiaMes.getDate()).padStart(2, "0")}`
 
       const dataToUpsert = {
         user_id: user.id,
@@ -97,7 +127,7 @@ export function PresupuestoForm() {
         .select("id")
         .eq("perfil_id", perfilActual.id)
         .gte("fecha", primerDiaMes)
-        .lte("fecha", new Date(fechaObj.getFullYear(), fechaObj.getMonth() + 1, 0).toISOString().split("T")[0])
+        .lte("fecha", ultimoDiaStr)
         .limit(1)
 
       let data, upsertError
@@ -128,7 +158,9 @@ export function PresupuestoForm() {
 
       setSuccess(true)
       setPresupuesto("")
-      setFecha(getTodayDate())
+      const hoyReset = getTodayDate()
+      setMesSeleccionado(hoyReset.slice(5, 7))
+      setAnioSeleccionado(hoyReset.slice(0, 4))
       setPorcentajes(CATEGORIAS_CONFIG.reduce((acc, cat) => ({ ...acc, [cat.key]: cat.default }), {}))
 
       setTimeout(() => {
@@ -186,18 +218,36 @@ export function PresupuestoForm() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="fecha" className="flex items-center gap-2">
+              <Label className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
-                Fecha (Mes)
+                Mes del Presupuesto
               </Label>
-              <Input
-                id="fecha"
-                type="date"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                required
-                className="bg-background/50"
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Mes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MESES.map((mes) => (
+                      <SelectItem key={mes.value} value={mes.value}>
+                        {mes.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={anioSeleccionado} onValueChange={setAnioSeleccionado}>
+                  <SelectTrigger className="bg-background/50">
+                    <SelectValue placeholder="Año" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {aniosDisponibles.map((anio) => (
+                      <SelectItem key={anio} value={anio}>
+                        {anio}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 
