@@ -10,6 +10,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   PiggyBank,
+  Landmark,
+  Banknote,
+  CreditCard,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
@@ -172,6 +175,26 @@ export default async function DashboardPersonalPage({
   const cambioEgresos =
     totalEgresosMesAnterior > 0 ? ((totalEgresos - totalEgresosMesAnterior) / totalEgresosMesAnterior) * 100 : 0
 
+  // --- Total Historico (Todos los ingresos - Todos los egresos) ---
+  const { data: ingresosHistoricos } = await supabase
+    .from("ingresos")
+    .select("monto")
+    .eq("perfil_id", perfilPersonal.id)
+
+  const totalIngresosHistoricos = ingresosHistoricos?.reduce((sum, item) => sum + Number(item.monto), 0) || 0
+
+  const { data: egresosHistoricos } = await supabase
+    .from("egresos")
+    .select("monto")
+    .eq("perfil_id", perfilPersonal.id)
+
+  const totalEgresosHistoricos = egresosHistoricos?.reduce((sum, item) => sum + Number(item.monto), 0) || 0
+
+  const patrimonioTotal = totalIngresosHistoricos - totalEgresosHistoricos
+
+  // Total en cajas de ahorro
+  const totalEnCajas = cajas.reduce((sum, c) => sum + Number(c.monto_actual), 0)
+
   // Nombre de la caja seleccionada
   const cajaNombre = cajaValida ? cajas.find((c) => c.id === cajaValida)?.nombre : null
 
@@ -190,6 +213,53 @@ export default async function DashboardPersonalPage({
               </p>
             </div>
           )}
+
+          {/* Patrimonio Total - Resumen Acumulado */}
+          <Card className="border-2 border-cyan-500/30 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900">
+            <CardContent className="p-4 md:p-5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-center">
+                {/* Total Historico Ingresos */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center">
+                    <Banknote className="w-5 h-5 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Total Ingresos Acumulados</p>
+                    <p className="text-lg font-bold text-green-400">{formatGuaranies(totalIngresosHistoricos)}</p>
+                  </div>
+                </div>
+
+                {/* Total Historico Egresos */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center">
+                    <CreditCard className="w-5 h-5 text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Total Egresos Acumulados</p>
+                    <p className="text-lg font-bold text-red-400">{formatGuaranies(totalEgresosHistoricos)}</p>
+                  </div>
+                </div>
+
+                {/* Patrimonio Neto */}
+                <div className="flex items-center gap-3 sm:justify-end">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/20 flex items-center justify-center">
+                    <Landmark className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div className="sm:text-right">
+                    <p className="text-[11px] text-slate-400 font-medium uppercase tracking-wide">Patrimonio Neto Total</p>
+                    <p className={`text-xl font-bold ${patrimonioTotal >= 0 ? "text-cyan-400" : "text-red-400"}`}>
+                      {formatGuaranies(patrimonioTotal)}
+                    </p>
+                    {totalEnCajas > 0 && (
+                      <p className="text-[10px] text-slate-500 mt-0.5">
+                        En cajas de ahorro: {formatGuaranies(totalEnCajas)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
