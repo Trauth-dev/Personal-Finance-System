@@ -6,6 +6,7 @@ import { MonthSelector } from "@/components/personal/month-selector"
 import { AnalisisMensualComparativo } from "@/components/personal/analisis-mensual-comparativo"
 import { getParaguayDate } from "@/lib/utils"
 import { TrendingUp, BarChart3, Info, Scale, Snowflake, FileText } from "lucide-react"
+import { PresupuestoVsRealidad } from "@/components/personal/presupuesto-vs-realidad"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
@@ -297,15 +298,7 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
 
         {/* Tab: Presupuesto vs Realidad */}
         <TabsContent value="presupuesto-vs-realidad" className="mt-0">
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="p-4 bg-purple-100/20 rounded-xl mb-4">
-              <Scale className="w-12 h-12 text-purple-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Presupuesto vs Realidad</h2>
-            <p className="text-muted-foreground max-w-md">
-              Compara tu presupuesto planificado con los gastos reales de cada categoria. Proximamente disponible.
-            </p>
-          </div>
+          <PresupuestoVsRealidad perfilId={perfilId} />
         </TabsContent>
 
         {/* Tab: Bola de Nieve */}
