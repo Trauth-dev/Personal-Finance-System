@@ -293,8 +293,8 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                     exceeded
                       ? "bg-gradient-to-br from-red-50 to-red-100/60 border-red-200"
                       : hasNoActivity
-                        ? "bg-muted/30 border-muted-foreground/10 opacity-60"
-                        : "border-border"
+                        ? "bg-white dark:bg-slate-100 border-slate-200 opacity-60"
+                        : "bg-white dark:bg-slate-50 border-slate-200"
                   }`}
                 >
                   <CardContent className="pt-5 pb-4">
@@ -331,7 +331,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                       <div className="flex-1 min-w-0">
                         {/* Title + Badge */}
                         <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-sm font-bold text-foreground truncate">{cat.nombre}</h3>
+                          <h3 className="text-sm font-bold text-slate-900 truncate">{cat.nombre}</h3>
                           <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${status.labelBg}`}>
                             {status.label}
                           </span>
@@ -340,17 +340,17 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                         {/* Data rows */}
                         <div className="space-y-1">
                           <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Presup.</span>
-                            <span className="font-semibold text-foreground">{formatGuaranies(cat.presupuestado)}</span>
+                            <span className="text-slate-500">Presup.</span>
+                            <span className="font-semibold text-slate-800">{formatGuaranies(cat.presupuestado)}</span>
                           </div>
                           <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">Gastado</span>
-                            <span className={`font-bold ${exceeded ? "text-red-600" : "text-foreground"}`}>
+                            <span className="text-slate-500">Gastado</span>
+                            <span className={`font-bold ${exceeded ? "text-red-600" : "text-slate-800"}`}>
                               {formatGuaranies(cat.gastado)}
                             </span>
                           </div>
                           <div className="flex justify-between text-xs">
-                            <span className="text-muted-foreground">{cat.diferencia >= 0 ? "Disponible" : "Excedido"}</span>
+                            <span className="text-slate-500">{cat.diferencia >= 0 ? "Disponible" : "Excedido"}</span>
                             <span className={`font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
                               {cat.diferencia >= 0 ? "+" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
                             </span>
@@ -376,33 +376,33 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
           </div>
 
           {/* Summary Table */}
-          <Card className="border">
+          <Card className="border bg-white dark:bg-slate-50 border-slate-200">
             <CardContent className="pt-5 pb-3">
-              <h3 className="text-sm font-bold text-foreground mb-3">Resumen por Categoria</h3>
+              <h3 className="text-sm font-bold text-slate-900 mb-3">Resumen por Categoria</h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-border">
-                      <th className="text-left py-2 px-2 font-semibold text-muted-foreground">Categoria</th>
-                      <th className="text-right py-2 px-2 font-semibold text-muted-foreground">Presupuestado</th>
-                      <th className="text-right py-2 px-2 font-semibold text-muted-foreground">Gastado</th>
-                      <th className="text-right py-2 px-2 font-semibold text-muted-foreground">Diferencia</th>
-                      <th className="text-right py-2 px-2 font-semibold text-muted-foreground">% Uso</th>
+                    <tr className="border-b border-slate-200">
+                      <th className="text-left py-2 px-2 font-semibold text-slate-500">Categoria</th>
+                      <th className="text-right py-2 px-2 font-semibold text-slate-500">Presupuestado</th>
+                      <th className="text-right py-2 px-2 font-semibold text-slate-500">Gastado</th>
+                      <th className="text-right py-2 px-2 font-semibold text-slate-500">Diferencia</th>
+                      <th className="text-right py-2 px-2 font-semibold text-slate-500">% Uso</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredCategorias.map((cat) => {
                       const status = getStatusInfo(cat.porcentaje)
                       return (
-                        <tr key={cat.nombre} className="border-b border-border/50 last:border-0">
+                        <tr key={cat.nombre} className="border-b border-slate-100 last:border-0">
                           <td className="py-2.5 px-2">
                             <div className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full" style={{ backgroundColor: status.ring }} />
-                              <span className="font-medium text-foreground">{cat.nombre}</span>
+                              <span className="font-medium text-slate-800">{cat.nombre}</span>
                             </div>
                           </td>
-                          <td className="text-right py-2.5 px-2 text-foreground font-medium">{formatGuaranies(cat.presupuestado)}</td>
-                          <td className="text-right py-2.5 px-2 text-foreground font-medium">{formatGuaranies(cat.gastado)}</td>
+                          <td className="text-right py-2.5 px-2 text-slate-700 font-medium">{formatGuaranies(cat.presupuestado)}</td>
+                          <td className="text-right py-2.5 px-2 text-slate-700 font-medium">{formatGuaranies(cat.gastado)}</td>
                           <td className={`text-right py-2.5 px-2 font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
                             {cat.diferencia >= 0 ? "+" : ""}{formatGuaranies(cat.diferencia)}
                           </td>
@@ -413,10 +413,10 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                       )
                     })}
                     {/* Totals row */}
-                    <tr className="border-t-2 border-foreground/20 bg-muted/30">
-                      <td className="py-2.5 px-2 font-bold text-foreground">TOTAL</td>
-                      <td className="text-right py-2.5 px-2 font-bold text-foreground">{formatGuaranies(totalPresupuestado)}</td>
-                      <td className="text-right py-2.5 px-2 font-bold text-foreground">{formatGuaranies(totalGastado)}</td>
+                    <tr className="border-t-2 border-slate-300 bg-slate-50">
+                      <td className="py-2.5 px-2 font-bold text-slate-900">TOTAL</td>
+                      <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(totalPresupuestado)}</td>
+                      <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(totalGastado)}</td>
                       <td className={`text-right py-2.5 px-2 font-bold ${diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
                         {diferencia >= 0 ? "+" : ""}{formatGuaranies(diferencia)}
                       </td>
@@ -432,13 +432,13 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
 
           {/* Insight Card */}
           {mejorCategoria && peorCategoria && (
-            <Card className="border-2 border-purple-200 bg-gradient-to-r from-purple-50/30 to-indigo-50/30">
+            <Card className="border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50">
               <CardContent className="pt-5 pb-4">
                 <div className="flex items-start gap-3">
                   <Info className="w-5 h-5 text-purple-600 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <h3 className="font-semibold text-foreground mb-1">Insight del Mes</h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <h3 className="font-semibold text-slate-900 mb-1">Insight del Mes</h3>
+                    <p className="text-sm text-slate-600 leading-relaxed">
                       Tu categoria mas controlada es <span className="font-bold text-teal-600">{mejorCategoria.nombre}</span> ({mejorCategoria.porcentaje.toFixed(1)}% usado).
                       {peorCategoria.nombre !== mejorCategoria.nombre && (
                         <>
