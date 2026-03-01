@@ -43,6 +43,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
   const [categorias, setCategorias] = useState<CategoriaComparativa[]>([])
   const [totalPresupuestado, setTotalPresupuestado] = useState(0)
   const [totalGastado, setTotalGastado] = useState(0)
+  const [metaSalarioTotal, setMetaSalarioTotal] = useState(0)
   const [showAll, setShowAll] = useState(true)
 
   useEffect(() => {
@@ -141,11 +142,14 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     setCategorias(categoriasResult)
     setTotalPresupuestado(sumPresupuestado)
     setTotalGastado(sumGastado)
+    setMetaSalarioTotal(metaSalario)
     setLoading(false)
   }
 
-  const diferencia = totalPresupuestado - totalGastado
-  const porcentajeGeneral = totalPresupuestado > 0 ? (totalGastado / totalPresupuestado) * 100 : 0
+  // Use metaSalarioTotal (actual loaded budget) for the top-level summary
+  const presupuestoDisplay = metaSalarioTotal > 0 ? metaSalarioTotal : totalPresupuestado
+  const diferencia = presupuestoDisplay - totalGastado
+  const porcentajeGeneral = presupuestoDisplay > 0 ? (totalGastado / presupuestoDisplay) * 100 : 0
   const isExceeded = diferencia < 0
 
   // Filter categories based on showAll toggle
@@ -219,7 +223,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                     <Wallet className="w-5 h-5 text-white" />
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-white">{formatGuaranies(totalPresupuestado)}</p>
+                <p className="text-3xl font-bold text-white">{formatGuaranies(presupuestoDisplay)}</p>
                 <p className="text-xs text-slate-300 mt-1">Planificado para el mes</p>
               </CardContent>
             </Card>
@@ -415,7 +419,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                     {/* Totals row */}
                     <tr className="border-t-2 border-slate-300 bg-slate-50">
                       <td className="py-2.5 px-2 font-bold text-slate-900">TOTAL</td>
-                      <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(totalPresupuestado)}</td>
+                      <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(presupuestoDisplay)}</td>
                       <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(totalGastado)}</td>
                       <td className={`text-right py-2.5 px-2 font-bold ${diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
                         {diferencia >= 0 ? "+" : ""}{formatGuaranies(diferencia)}
