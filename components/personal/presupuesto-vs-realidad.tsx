@@ -58,14 +58,24 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     const primerDia = new Date(year, month - 1, 1).toISOString().split("T")[0]
     const ultimoDia = new Date(year, month, 0).toISOString().split("T")[0]
 
+    // Fetch the presupuesto_mensual for meta_salario (total budget)
     const { data: presupuestoMensual } = await supabase
       .from("presupuesto_mensual")
-      .select("*")
+      .select("meta_salario")
       .eq("perfil_id", perfilId)
       .gte("fecha", primerDia)
       .lte("fecha", ultimoDia)
       .order("fecha", { ascending: false })
       .limit(1)
+
+    // Fetch actual budgeted amounts per category from presupuesto_categorias
+    const { data: presupuestoCategorias } = await supabase
+      .from("presupuesto_categorias")
+      .select("categoria, tipo_categoria, monto_presupuestado")
+      .eq("perfil_id", perfilId)
+      .eq("tipo_categoria", "egreso")
+      .gte("mes", primerDia)
+      .lte("mes", ultimoDia)
 
     const { data: tiposCategorias } = await supabase
       .from("tipos_categoria_egreso")
@@ -82,17 +92,11 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     const presupuesto = presupuestoMensual?.[0]
     const metaSalario = Number(presupuesto?.meta_salario || 0)
 
-    const categoriasPctMap: Record<string, string> = {
-      "Donación": "pct_donacion",
-      "Ahorro 2025": "pct_ahorro_2025",
-      "Gastos Varios": "pct_gastos_varios",
-      "Gastos Vivienda": "pct_gastos_vivienda",
-      "Pago Deudas": "pct_pago_deudas",
-      "Disfrute": "pct_disfrute",
-      "Educación": "pct_educacion",
-      "Sueños": "pct_suenos",
-      "Libertad Financiera": "pct_libertad_financiera",
-    }
+    // Build a map of category name -> budgeted amount from presupuesto_categorias
+    const presupuestoMap = new Map<string, number>()
+    presupuestoCategorias?.forEach((pc: any) => {
+      presupuestoMap.set(pc.categoria, Number(pc.monto_presupuestado || 0))
+    })
 
     const gastosMap = new Map<string, number>()
     egresos?.forEach((e: any) => {
@@ -107,9 +111,8 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
 
     if (tiposCategorias) {
       for (const tipo of tiposCategorias) {
-        const pctField = categoriasPctMap[tipo.nombre]
-        const porcentajeAsignado = presupuesto && pctField ? Number((presupuesto as any)[pctField] || 0) : 0
-        const montoPresupuestado = metaSalario > 0 ? (metaSalario * porcentajeAsignado) / 100 : 0
+        // Use the actual monto_presupuestado from presupuesto_categorias table
+        const montoPresupuestado = presupuestoMap.get(tipo.nombre) || 0
         const montoGastado = gastosMap.get(tipo.nombre) || 0
         const diferencia = montoPresupuestado - montoGastado
         const porcentaje = montoPresupuestado > 0 ? (montoGastado / montoPresupuestado) * 100 : montoGastado > 0 ? 100 : 0
