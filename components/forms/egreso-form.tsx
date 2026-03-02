@@ -85,6 +85,7 @@ interface CajaAhorro {
 const ICONOS_CATEGORIAS: Record<string, React.ElementType> = {
   Donación: Heart,
   "Ahorro 2025": Coins,
+  Ahorro: Coins,
   "Gastos Varios": Package,
   "Gastos Fijos": Home,
   "Pago Deudas": CreditCard,
@@ -92,6 +93,10 @@ const ICONOS_CATEGORIAS: Record<string, React.ElementType> = {
   Educación: GraduationCap,
   Sueños: Sparkles,
   "Libertad Financiera": TrendingUp,
+}
+
+const DISPLAY_NOMBRES: Record<string, string> = {
+  "Ahorro 2025": "Ahorro",
 }
 
 export function EgresoForm() {
