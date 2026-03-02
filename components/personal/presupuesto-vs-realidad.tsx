@@ -83,11 +83,15 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     const metaSalario = Number(presupuesto?.meta_salario || 0)
 
     const categoriasPctMap: Record<string, string> = {
+      "Donación": "pct_donacion",
       "Ahorro 2025": "pct_ahorro_2025",
       "Gastos Varios": "pct_gastos_varios",
       "Gastos Vivienda": "pct_gastos_vivienda",
       "Pago Deudas": "pct_pago_deudas",
       "Disfrute": "pct_disfrute",
+      "Educación": "pct_educacion",
+      "Sueños": "pct_suenos",
+      "Libertad Financiera": "pct_libertad_financiera",
     }
 
     const gastosMap = new Map<string, number>()
