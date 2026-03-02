@@ -43,6 +43,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
   const [categorias, setCategorias] = useState<CategoriaComparativa[]>([])
   const [totalPresupuestado, setTotalPresupuestado] = useState(0)
   const [totalGastado, setTotalGastado] = useState(0)
+  const [metaSalarioTotal, setMetaSalarioTotal] = useState(0)
   const [showAll, setShowAll] = useState(true)
 
   useEffect(() => {
@@ -57,6 +58,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     const primerDia = new Date(year, month - 1, 1).toISOString().split("T")[0]
     const ultimoDia = new Date(year, month, 0).toISOString().split("T")[0]
 
+    // Fetch presupuesto_mensual with all pct_* fields
     const { data: presupuestoMensual } = await supabase
       .from("presupuesto_mensual")
       .select("*")
@@ -81,12 +83,19 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     const presupuesto = presupuestoMensual?.[0]
     const metaSalario = Number(presupuesto?.meta_salario || 0)
 
+    // Map category names to their pct_* column in presupuesto_mensual
+    // The form saves percentages as decimals (e.g., 68.6% -> 0.686)
+    // So the budget per category = metaSalario * decimal_value (NOT / 100)
     const categoriasPctMap: Record<string, string> = {
+      "Donación": "pct_donacion",
       "Ahorro 2025": "pct_ahorro_2025",
       "Gastos Varios": "pct_gastos_varios",
       "Gastos Vivienda": "pct_gastos_vivienda",
       "Pago Deudas": "pct_pago_deudas",
       "Disfrute": "pct_disfrute",
+      "Educación": "pct_educacion",
+      "Sueños": "pct_suenos",
+      "Libertad Financiera": "pct_libertad_financiera",
     }
 
     const gastosMap = new Map<string, number>()
@@ -103,8 +112,9 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     if (tiposCategorias) {
       for (const tipo of tiposCategorias) {
         const pctField = categoriasPctMap[tipo.nombre]
-        const porcentajeAsignado = presupuesto && pctField ? Number((presupuesto as any)[pctField] || 0) : 0
-        const montoPresupuestado = metaSalario > 0 ? (metaSalario * porcentajeAsignado) / 100 : 0
+        // pct values are stored as decimals (0.686 = 68.6%), so multiply directly
+        const porcentajeDecimal = presupuesto && pctField ? Number((presupuesto as any)[pctField] || 0) : 0
+        const montoPresupuestado = metaSalario * porcentajeDecimal
         const montoGastado = gastosMap.get(tipo.nombre) || 0
         const diferencia = montoPresupuestado - montoGastado
         const porcentaje = montoPresupuestado > 0 ? (montoGastado / montoPresupuestado) * 100 : montoGastado > 0 ? 100 : 0
@@ -141,11 +151,14 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     setCategorias(categoriasResult)
     setTotalPresupuestado(sumPresupuestado)
     setTotalGastado(sumGastado)
+    setMetaSalarioTotal(metaSalario)
     setLoading(false)
   }
 
-  const diferencia = totalPresupuestado - totalGastado
-  const porcentajeGeneral = totalPresupuestado > 0 ? (totalGastado / totalPresupuestado) * 100 : 0
+  // Use metaSalarioTotal (actual loaded budget) for the top-level summary
+  const presupuestoDisplay = metaSalarioTotal > 0 ? metaSalarioTotal : totalPresupuestado
+  const diferencia = presupuestoDisplay - totalGastado
+  const porcentajeGeneral = presupuestoDisplay > 0 ? (totalGastado / presupuestoDisplay) * 100 : 0
   const isExceeded = diferencia < 0
 
   // Filter categories based on showAll toggle
@@ -219,7 +232,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                     <Wallet className="w-5 h-5 text-white" />
                   </div>
                 </div>
-                <p className="text-3xl font-bold text-white">{formatGuaranies(totalPresupuestado)}</p>
+                <p className="text-3xl font-bold text-white">{formatGuaranies(presupuestoDisplay)}</p>
                 <p className="text-xs text-slate-300 mt-1">Planificado para el mes</p>
               </CardContent>
             </Card>
@@ -415,7 +428,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                     {/* Totals row */}
                     <tr className="border-t-2 border-slate-300 bg-slate-50">
                       <td className="py-2.5 px-2 font-bold text-slate-900">TOTAL</td>
-                      <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(totalPresupuestado)}</td>
+                      <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(presupuestoDisplay)}</td>
                       <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(totalGastado)}</td>
                       <td className={`text-right py-2.5 px-2 font-bold ${diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
                         {diferencia >= 0 ? "+" : ""}{formatGuaranies(diferencia)}
