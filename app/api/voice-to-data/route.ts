@@ -30,6 +30,10 @@ interface ExtractedData {
 
 // Endpoint para convertir audio a texto usando Whisper y extraer datos con GPT
 export async function POST(request: NextRequest) {
+  console.log("[v0] POST /api/voice-to-data iniciado")
+  console.log("[v0] OPENAI_API_KEY existe:", !!process.env.OPENAI_API_KEY)
+  console.log("[v0] openai client existe:", !!openai)
+  
   // Verificar que la API key este configurada
   if (!openai) {
     console.error("[v0] OPENAI_API_KEY no esta configurada")
@@ -96,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     // Extraer datos estructurados del texto usando GPT-4o mini
     const datosExtraidos = await extraerDatosCompletos(
+      openai,
       transcripcion,
       tiposCategoria,
       categoriasEgreso,
@@ -135,6 +140,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function extraerDatosCompletos(
+  openaiClient: OpenAI,
   texto: string,
   tiposCategoria: Array<{ id: string; nombre: string }>,
   categoriasEgreso: Array<{ id: string; nombre: string; tipo_categoria_id: string }>,
@@ -220,7 +226,7 @@ REGLAS:
 - confianza es "baja" si falta monto o tipo`
 
   try {
-    const completion = await openai.chat.completions.create({
+    const completion = await openaiClient.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         { role: "user", content: prompt }
