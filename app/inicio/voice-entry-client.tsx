@@ -162,6 +162,8 @@ export function VoiceEntryClient({
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recognitionRef = useRef<any>(null)
+  const transcripcionRef = useRef<string>("")
+  const shouldProcessRef = useRef<boolean>(false)
 
   // Estado de resumen listo para guardar
   const [showResumen, setShowResumen] = useState(false)
@@ -199,6 +201,10 @@ export function VoiceEntryClient({
     setError(null)
     setSuccess(false)
     setShowResumen(false)
+    setDatosExtraidos(null)
+    setTranscripcion("")
+    transcripcionRef.current = ""
+    shouldProcessRef.current = false
     
     // Usar Web Speech API si esta disponible
     if (supportsWebSpeech) {
@@ -222,7 +228,10 @@ export function VoiceEntryClient({
           }
         }
         
-        setTranscripcion(finalTranscript || interimTranscript)
+        const newTranscript = finalTranscript || interimTranscript
+        transcripcionRef.current = newTranscript
+        setTranscripcion(newTranscript)
+        console.log("[v0] Transcripcion actualizada:", newTranscript)
       }
       
       recognition.onerror = (event: any) => {
@@ -270,20 +279,29 @@ export function VoiceEntryClient({
 
   // Detener grabacion
   const stopRecording = async () => {
+    const textoActual = transcripcionRef.current
+    console.log("[v0] Deteniendo grabacion, transcripcion actual:", textoActual)
+    
     setIsRecording(false)
+    shouldProcessRef.current = true
     
     if (recognitionRef.current) {
       recognitionRef.current.stop()
-      
-      // Procesar el texto transcrito
-      if (transcripcion) {
-        await processText(transcripcion)
-      }
+      recognitionRef.current = null
     }
     
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop()
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+    }
+    
+    // Procesar inmediatamente despues de detener usando el ref
+    if (textoActual && textoActual.trim()) {
+      console.log("[v0] Procesando texto inmediatamente:", textoActual)
+      processText(textoActual)
+    } else {
+      console.log("[v0] No hay texto para procesar")
+      setError("No se detecto ningun texto. Intenta hablar mas claro y cerca del microfono.")
     }
   }
 
@@ -323,6 +341,7 @@ export function VoiceEntryClient({
 
   // Procesar texto con GPT
   const processText = async (texto: string) => {
+    console.log("[v0] processText iniciado con:", texto)
     setIsProcessing(true)
     setError(null)
     
@@ -335,19 +354,24 @@ export function VoiceEntryClient({
       formData.append("cajas_ahorro", JSON.stringify(cajasAhorro))
       formData.append("tarjetas_credito", JSON.stringify(tarjetasCredito))
       
+      console.log("[v0] Enviando request a /api/voice-to-data")
       const response = await fetch("/api/voice-to-data", {
         method: "POST",
         body: formData,
       })
       
+      console.log("[v0] Response status:", response.status)
       const result = await response.json()
+      console.log("[v0] Result:", result)
       
       if (!response.ok) {
         throw new Error(result.error || "Error al procesar el texto")
       }
       
+      console.log("[v0] Llamando handleDatosExtraidos con:", result.datos)
       handleDatosExtraidos(result.datos)
     } catch (err) {
+      console.error("[v0] Error en processText:", err)
       setError(err instanceof Error ? err.message : "Error al procesar el texto")
     } finally {
       setIsProcessing(false)
@@ -356,6 +380,7 @@ export function VoiceEntryClient({
 
   // Manejar datos extraidos
   const handleDatosExtraidos = (datos: ExtractedData) => {
+    console.log("[v0] handleDatosExtraidos llamado con:", datos)
     setDatosExtraidos(datos)
     
     // Rellenar campos automaticamente
@@ -426,6 +451,7 @@ export function VoiceEntryClient({
     }
     
     // Mostrar resumen
+    console.log("[v0] Estableciendo showResumen = true")
     setShowResumen(true)
   }
 
