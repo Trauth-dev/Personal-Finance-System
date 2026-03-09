@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import OpenAI from "openai"
 
-// Verificar API key al inicio
-const apiKey = process.env.OPENAI_API_KEY
-
-// Inicializar cliente de OpenAI solo si hay API key
-const openai = apiKey ? new OpenAI({ apiKey }) : null
-
 interface ExtractedData {
   tipo_transaccion: "ingreso" | "egreso" | null
   monto: number | null
@@ -31,11 +25,12 @@ interface ExtractedData {
 // Endpoint para convertir audio a texto usando Whisper y extraer datos con GPT
 export async function POST(request: NextRequest) {
   console.log("[v0] POST /api/voice-to-data iniciado")
-  console.log("[v0] OPENAI_API_KEY existe:", !!process.env.OPENAI_API_KEY)
-  console.log("[v0] openai client existe:", !!openai)
   
   // Verificar que la API key este configurada
-  if (!openai) {
+  const apiKey = process.env.OPENAI_API_KEY
+  console.log("[v0] OPENAI_API_KEY existe:", !!apiKey)
+  
+  if (!apiKey) {
     console.error("[v0] OPENAI_API_KEY no esta configurada")
     return NextResponse.json(
       { 
@@ -45,6 +40,9 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     )
   }
+  
+  // Inicializar cliente de OpenAI dentro de la funcion
+  const openai = new OpenAI({ apiKey })
 
   try {
     const formData = await request.formData()
@@ -284,17 +282,22 @@ REGLAS:
 
 // Endpoint GET para verificar que la API esta funcionando
 export async function GET() {
-  const hasApiKey = !!process.env.OPENAI_API_KEY
-  
-  return NextResponse.json({
-    status: "ok",
-    mensaje: "Endpoint de voz a datos con IA",
-    openai_configurado: hasApiKey,
-    version: "2.0",
-    instrucciones: {
-      metodo: "POST",
-      body: "FormData con 'audio' (archivo) o 'texto' (string)",
-      datos_opcionales: "categorias_egreso, categorias_ingreso, cajas_ahorro, tarjetas_credito, tipos_categoria (JSON strings)",
-    },
-  })
+  try {
+    const hasApiKey = !!process.env.OPENAI_API_KEY
+    
+    return NextResponse.json({
+      status: "ok",
+      mensaje: "Endpoint de voz a datos con IA",
+      openai_configurado: hasApiKey,
+      version: "2.0",
+      instrucciones: {
+        metodo: "POST",
+        body: "FormData con 'audio' (archivo) o 'texto' (string)",
+        datos_opcionales: "categorias_egreso, categorias_ingreso, cajas_ahorro, tarjetas_credito, tipos_categoria (JSON strings)",
+      },
+    })
+  } catch (error) {
+    console.error("[v0] Error en GET:", error)
+    return NextResponse.json({ error: "Error interno" }, { status: 500 })
+  }
 }
