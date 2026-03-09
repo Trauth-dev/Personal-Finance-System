@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import OpenAI from "openai"
 
-// Inicializar cliente de OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
+// Verificar API key al inicio
+const apiKey = process.env.OPENAI_API_KEY
+
+// Inicializar cliente de OpenAI solo si hay API key
+const openai = apiKey ? new OpenAI({ apiKey }) : null
 
 interface ExtractedData {
   tipo_transaccion: "ingreso" | "egreso" | null
@@ -29,6 +30,18 @@ interface ExtractedData {
 
 // Endpoint para convertir audio a texto usando Whisper y extraer datos con GPT
 export async function POST(request: NextRequest) {
+  // Verificar que la API key este configurada
+  if (!openai) {
+    console.error("[v0] OPENAI_API_KEY no esta configurada")
+    return NextResponse.json(
+      { 
+        error: "API de OpenAI no configurada",
+        detalle: "La variable de entorno OPENAI_API_KEY no esta configurada. Ve a Settings > Environment Variables y agrega tu API key de OpenAI."
+      },
+      { status: 500 }
+    )
+  }
+
   try {
     const formData = await request.formData()
     const audioFile = formData.get("audio") as File | null
@@ -98,10 +111,23 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("[v0] Error en voice-to-data:", error)
+    
+    // Detectar errores especificos de OpenAI
+    const errorMessage = error instanceof Error ? error.message : "Error desconocido"
+    let detalle = errorMessage
+    
+    if (errorMessage.includes("API key")) {
+      detalle = "API Key de OpenAI invalida o expirada. Verifica tu key en platform.openai.com"
+    } else if (errorMessage.includes("quota") || errorMessage.includes("limit")) {
+      detalle = "Has excedido tu cuota de OpenAI. Verifica tu saldo en platform.openai.com"
+    } else if (errorMessage.includes("rate")) {
+      detalle = "Demasiadas solicitudes. Espera un momento e intenta de nuevo."
+    }
+    
     return NextResponse.json(
       { 
         error: "Error al procesar la voz",
-        detalle: error instanceof Error ? error.message : "Error desconocido"
+        detalle
       },
       { status: 500 }
     )

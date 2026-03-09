@@ -361,11 +361,20 @@ export function VoiceEntryClient({
       })
       
       console.log("[v0] Response status:", response.status)
+      
+      // Manejar respuestas no-JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await response.text()
+        console.error("[v0] Respuesta no-JSON:", textResponse)
+        throw new Error("Error del servidor. Verifica que la API Key de OpenAI este configurada correctamente en Settings > Environment Variables.")
+      }
+      
       const result = await response.json()
       console.log("[v0] Result:", result)
       
       if (!response.ok) {
-        throw new Error(result.error || "Error al procesar el texto")
+        throw new Error(result.detalle || result.error || "Error al procesar el texto")
       }
       
       console.log("[v0] Llamando handleDatosExtraidos con:", result.datos)
