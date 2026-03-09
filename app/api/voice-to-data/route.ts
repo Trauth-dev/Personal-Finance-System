@@ -42,12 +42,26 @@ export async function POST(request: NextRequest) {
   }
   
   // Inicializar cliente de OpenAI dentro de la funcion
-  const openai = new OpenAI({ apiKey })
+  let openai: OpenAI
+  try {
+    openai = new OpenAI({ apiKey })
+    console.log("[v0] OpenAI client creado exitosamente")
+  } catch (initError) {
+    console.error("[v0] Error inicializando OpenAI:", initError)
+    return NextResponse.json(
+      { error: "Error inicializando OpenAI", detalle: String(initError) },
+      { status: 500 }
+    )
+  }
 
   try {
+    console.log("[v0] Parseando formData...")
     const formData = await request.formData()
+    console.log("[v0] FormData parseado")
+    
     const audioFile = formData.get("audio") as File | null
     const textoDirecto = formData.get("texto") as string | null
+    console.log("[v0] audioFile:", !!audioFile, "textoDirecto:", textoDirecto?.substring(0, 50))
     
     // Datos dinamicos del usuario para contextualizar la IA
     const categoriasEgresoJSON = formData.get("categorias_egreso") as string | null
@@ -55,6 +69,7 @@ export async function POST(request: NextRequest) {
     const cajasAhorroJSON = formData.get("cajas_ahorro") as string | null
     const tarjetasCreditoJSON = formData.get("tarjetas_credito") as string | null
     const tiposCategoriaJSON = formData.get("tipos_categoria") as string | null
+    console.log("[v0] Datos JSON recibidos")
 
     if (!audioFile && !textoDirecto) {
       return NextResponse.json(
@@ -64,11 +79,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Parsear datos del usuario
+    console.log("[v0] Parseando JSON de categorias...")
     const categoriasEgreso = categoriasEgresoJSON ? JSON.parse(categoriasEgresoJSON) : []
     const categoriasIngreso = categoriasIngresoJSON ? JSON.parse(categoriasIngresoJSON) : []
     const cajasAhorro = cajasAhorroJSON ? JSON.parse(cajasAhorroJSON) : []
     const tarjetasCredito = tarjetasCreditoJSON ? JSON.parse(tarjetasCreditoJSON) : []
     const tiposCategoria = tiposCategoriaJSON ? JSON.parse(tiposCategoriaJSON) : []
+    console.log("[v0] JSON parseado. Categorias egreso:", categoriasEgreso.length)
 
     let transcripcion: string
 
@@ -97,6 +114,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Extraer datos estructurados del texto usando GPT-4o mini
+    console.log("[v0] Llamando a extraerDatosCompletos con texto:", transcripcion.substring(0, 50))
     const datosExtraidos = await extraerDatosCompletos(
       openai,
       transcripcion,
@@ -107,6 +125,7 @@ export async function POST(request: NextRequest) {
       tarjetasCredito
     )
 
+    console.log("[v0] Datos extraidos exitosamente:", datosExtraidos.tipo_transaccion, datosExtraidos.monto)
     return NextResponse.json({
       success: true,
       transcripcion,
