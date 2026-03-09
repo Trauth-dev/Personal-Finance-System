@@ -12,7 +12,7 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-  // Redirigir al dashboard personal por defecto
-  // El usuario puede cambiar entre perfiles usando el selector en el header
-  redirect("/dashboard/personal")
+  // Redirigir a la pagina de carga inteligente post-login
+  // Esta pagina permite carga por voz y acceso rapido al dashboard
+  redirect("/inicio")
 }

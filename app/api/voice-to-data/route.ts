@@ -6,54 +6,40 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 })
 
-// Tipos de categorias disponibles en el sistema
-const TIPOS_CATEGORIA_EGRESO = [
-  "Donación",
-  "Ahorro",
-  "Gastos Varios",
-  "Vivienda",
-  "Pago Deudas",
-  "Disfrute",
-  "Educación",
-  "Sueños",
-  "Libertad Financiera",
-]
-
-const TIPOS_INGRESO = [
-  "Salario",
-  "Freelance",
-  "Inversiones",
-  "Alquiler",
-  "Venta",
-  "Regalo",
-  "Reembolso",
-  "Otro",
-]
-
-interface ExtractedEgresoData {
+interface ExtractedData {
+  tipo_transaccion: "ingreso" | "egreso" | null
   monto: number | null
-  tipo_categoria: string | null
+  categoria: string | null
+  subcategoria: string | null
   concepto: string | null
   fecha: string | null
+  origen_destino: string | null
+  usa_tarjeta_credito: boolean
+  nombre_tarjeta: string | null
   confianza: "alta" | "media" | "baja"
   texto_original: string
+  campos_faltantes: string[]
+  sugerencias: {
+    categoria_sugerida?: string
+    subcategoria_sugerida?: string
+    requiere_crear_categoria?: boolean
+    mensaje?: string
+  }
 }
 
-interface ExtractedIngresoData {
-  monto: number | null
-  tipo_ingreso: string | null
-  fecha: string | null
-  confianza: "alta" | "media" | "baja"
-  texto_original: string
-}
-
-// Endpoint para convertir audio a texto usando Whisper
+// Endpoint para convertir audio a texto usando Whisper y extraer datos con GPT
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
     const audioFile = formData.get("audio") as File | null
-    const tipoTransaccion = formData.get("tipo") as string | null // "egreso" o "ingreso"
-    const textoDirecto = formData.get("texto") as string | null // Si ya tenemos el texto (Web Speech API)
+    const textoDirecto = formData.get("texto") as string | null
+    
+    // Datos dinamicos del usuario para contextualizar la IA
+    const categoriasEgresoJSON = formData.get("categorias_egreso") as string | null
+    const categoriasIngresoJSON = formData.get("categorias_ingreso") as string | null
+    const cajasAhorroJSON = formData.get("cajas_ahorro") as string | null
+    const tarjetasCreditoJSON = formData.get("tarjetas_credito") as string | null
+    const tiposCategoriaJSON = formData.get("tipos_categoria") as string | null
 
     if (!audioFile && !textoDirecto) {
       return NextResponse.json(
@@ -61,6 +47,13 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+
+    // Parsear datos del usuario
+    const categoriasEgreso = categoriasEgresoJSON ? JSON.parse(categoriasEgresoJSON) : []
+    const categoriasIngreso = categoriasIngresoJSON ? JSON.parse(categoriasIngresoJSON) : []
+    const cajasAhorro = cajasAhorroJSON ? JSON.parse(cajasAhorroJSON) : []
+    const tarjetasCredito = tarjetasCreditoJSON ? JSON.parse(tarjetasCreditoJSON) : []
+    const tiposCategoria = tiposCategoriaJSON ? JSON.parse(tiposCategoriaJSON) : []
 
     let transcripcion: string
 
@@ -70,15 +63,13 @@ export async function POST(request: NextRequest) {
     } else if (audioFile) {
       // Convertir el archivo a un formato que OpenAI acepte
       const audioBuffer = Buffer.from(await audioFile.arrayBuffer())
-      
-      // Crear un archivo temporal para Whisper
       const file = new File([audioBuffer], "audio.webm", { type: audioFile.type })
 
       // Transcribir con Whisper
       const transcription = await openai.audio.transcriptions.create({
         file: file,
         model: "whisper-1",
-        language: "es", // Español
+        language: "es",
         response_format: "text",
       })
 
@@ -90,26 +81,21 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Ahora extraer datos estructurados del texto usando GPT-4o mini
-    const tipo = tipoTransaccion || "egreso"
-    
-    if (tipo === "egreso") {
-      const datosExtraidos = await extraerDatosEgreso(transcripcion)
-      return NextResponse.json({
-        success: true,
-        tipo: "egreso",
-        transcripcion,
-        datos: datosExtraidos,
-      })
-    } else {
-      const datosExtraidos = await extraerDatosIngreso(transcripcion)
-      return NextResponse.json({
-        success: true,
-        tipo: "ingreso",
-        transcripcion,
-        datos: datosExtraidos,
-      })
-    }
+    // Extraer datos estructurados del texto usando GPT-4o mini
+    const datosExtraidos = await extraerDatosCompletos(
+      transcripcion,
+      tiposCategoria,
+      categoriasEgreso,
+      categoriasIngreso,
+      cajasAhorro,
+      tarjetasCredito
+    )
+
+    return NextResponse.json({
+      success: true,
+      transcripcion,
+      datos: datosExtraidos,
+    })
   } catch (error) {
     console.error("[v0] Error en voice-to-data:", error)
     return NextResponse.json(
@@ -122,41 +108,90 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function extraerDatosEgreso(texto: string): Promise<ExtractedEgresoData> {
+async function extraerDatosCompletos(
+  texto: string,
+  tiposCategoria: Array<{ id: string; nombre: string }>,
+  categoriasEgreso: Array<{ id: string; nombre: string; tipo_categoria_id: string }>,
+  categoriasIngreso: Array<{ id: string; nombre: string }>,
+  cajasAhorro: Array<{ id: string; nombre: string }>,
+  tarjetasCredito: Array<{ id: string; nombre: string }>
+): Promise<ExtractedData> {
   const hoy = new Date().toISOString().split("T")[0]
+  const ayer = new Date(Date.now() - 86400000).toISOString().split("T")[0]
   
-  const prompt = `Eres un asistente que extrae datos financieros de texto en español (Paraguay/Latinoamérica).
+  const tiposCategoriaLista = tiposCategoria.map(t => t.nombre).join(", ") || "Gastos Varios, Vivienda, Disfrute, Educacion, Ahorro, Donacion, Pago Deudas, Suenos, Libertad Financiera"
+  const categoriasIngresoLista = categoriasIngreso.map(c => c.nombre).join(", ") || "Salario, Freelance, Inversiones, Venta, Regalo"
+  const cajasAhorroLista = cajasAhorro.map(c => c.nombre).join(", ") || "(ninguna registrada)"
+  const tarjetasCreditoLista = tarjetasCredito.map(t => t.nombre).join(", ") || "(ninguna registrada)"
+  
+  const prompt = `Eres un asistente financiero inteligente que extrae datos de texto hablado en espanol (Paraguay/Latinoamerica).
 
-Del siguiente texto, extrae:
-1. MONTO: El valor numérico. Interpreta "mil" = 1000, "millón" = 1000000, "cien" = 100, etc. Si dice "50 mil" = 50000. Si dice "un millón" = 1000000. Los montos en Paraguay suelen ser en guaraníes (números grandes como 50000, 100000, 500000).
-2. TIPO_CATEGORIA: Debe ser EXACTAMENTE uno de estos valores: ${TIPOS_CATEGORIA_EGRESO.join(", ")}. Mapea el contexto:
-   - Comida, supermercado, mercado, almacén, verduras → "Gastos Varios"
-   - Alquiler, luz, agua, internet, gas, mantenimiento casa → "Vivienda"  
-   - Cuota, préstamo, tarjeta, crédito → "Pago Deudas"
-   - Restaurante, cine, salida, entretenimiento, bar, fiesta → "Disfrute"
-   - Curso, libro, capacitación, universidad, colegio → "Educación"
-   - Ahorro, guardé, aparté dinero → "Ahorro"
-   - Donación, iglesia, caridad, ayuda → "Donación"
-   - Viaje, vacaciones, proyecto personal, sueño → "Sueños"
-   - Inversión, acciones, crypto, negocio propio → "Libertad Financiera"
-3. CONCEPTO: Una descripción breve de máximo 5 palabras sobre el gasto.
-4. FECHA: Si menciona "hoy" usa ${hoy}. Si dice "ayer" calcula la fecha. Si no menciona fecha, usa ${hoy}.
+CONTEXTO DEL USUARIO:
+- Tipos de categoria de egreso disponibles: ${tiposCategoriaLista}
+- Categorias de ingreso disponibles: ${categoriasIngresoLista}
+- Cajas de ahorro disponibles: ${cajasAhorroLista}
+- Tarjetas de credito disponibles: ${tarjetasCreditoLista}
+
+Del siguiente texto, extrae TODOS los datos posibles:
+
+1. TIPO_TRANSACCION: "ingreso" o "egreso". Detecta si es un gasto/pago (egreso) o si recibio dinero (ingreso).
+   - Palabras como "gaste", "pague", "compre", "me costo" = egreso
+   - Palabras como "recibi", "me pagaron", "cobre", "me dieron" = ingreso
+
+2. MONTO: El valor numerico. 
+   - "mil" = 1000, "millon" = 1000000
+   - "50 mil" = 50000, "cien mil" = 100000
+   - En Paraguay los montos suelen ser grandes (guaranies)
+
+3. CATEGORIA: 
+   - Para EGRESO: debe coincidir con uno de los tipos de categoria del usuario: ${tiposCategoriaLista}
+   - Para INGRESO: debe coincidir con una categoria de ingreso: ${categoriasIngresoLista}
+   - Si menciona algo que NO existe en las listas, marca requiere_crear_categoria=true y sugiere donde podria ir
+
+4. SUBCATEGORIA/CONCEPTO: Descripcion breve del gasto/ingreso (max 5 palabras)
+
+5. FECHA: 
+   - "hoy" = ${hoy}
+   - "ayer" = ${ayer}
+   - Si no menciona fecha, usa ${hoy}
+
+6. ORIGEN/DESTINO DEL DINERO:
+   - Para EGRESO: de donde sale el dinero. Debe coincidir con: ${cajasAhorroLista} o "efectivo" o una tarjeta de credito
+   - Para INGRESO: a donde va el dinero. Debe coincidir con: ${cajasAhorroLista}
+   - Si dice "tarjeta" o "credito", marca usa_tarjeta_credito=true
+
+7. TARJETA DE CREDITO: Si usa tarjeta, detecta cual. Tarjetas disponibles: ${tarjetasCreditoLista}
 
 TEXTO: "${texto}"
 
-Responde SOLO con un JSON válido (sin markdown, sin \`\`\`):
+Responde SOLO con un JSON valido (sin markdown, sin \`\`\`):
 {
+  "tipo_transaccion": "ingreso" | "egreso" | null,
   "monto": numero_o_null,
-  "tipo_categoria": "categoria_exacta_de_la_lista_o_null",
-  "concepto": "descripcion_corta_o_null",
-  "fecha": "YYYY-MM-DD_o_null",
-  "confianza": "alta|media|baja"
+  "categoria": "nombre_exacto_de_la_lista_o_null",
+  "subcategoria": "concepto_breve_o_null",
+  "concepto": "descripcion_adicional_o_null",
+  "fecha": "YYYY-MM-DD",
+  "origen_destino": "nombre_caja_o_efectivo_o_null",
+  "usa_tarjeta_credito": boolean,
+  "nombre_tarjeta": "nombre_tarjeta_o_null",
+  "confianza": "alta" | "media" | "baja",
+  "campos_faltantes": ["lista", "de", "campos", "que", "faltan"],
+  "sugerencias": {
+    "categoria_sugerida": "si menciono algo que no existe, sugiere la categoria mas cercana",
+    "subcategoria_sugerida": "nombre para crear como subcategoria",
+    "requiere_crear_categoria": boolean,
+    "mensaje": "mensaje para el usuario si falta algo importante"
+  }
 }
 
-La confianza es:
-- "alta" si pudiste extraer monto Y categoria claramente
-- "media" si pudiste extraer al menos uno de los dos
-- "baja" si el texto es muy ambiguo`
+REGLAS:
+- campos_faltantes debe incluir todo lo que NO se pudo extraer claramente
+- Si falta el origen/destino del dinero, incluir "origen_destino" en campos_faltantes
+- Si tiene varias tarjetas y no especifica cual, incluir "tarjeta_especifica" en campos_faltantes
+- confianza es "alta" solo si tienes tipo, monto, categoria y origen/destino
+- confianza es "media" si tienes al menos tipo y monto
+- confianza es "baja" si falta monto o tipo`
 
   try {
     const completion = await openai.chat.completions.create({
@@ -164,8 +199,8 @@ La confianza es:
       messages: [
         { role: "user", content: prompt }
       ],
-      temperature: 0.1, // Baja temperatura para respuestas consistentes
-      max_tokens: 200,
+      temperature: 0.1,
+      max_tokens: 500,
     })
 
     const respuesta = completion.choices[0]?.message?.content || "{}"
@@ -179,104 +214,55 @@ La confianza es:
     const datos = JSON.parse(jsonLimpio)
     
     return {
+      tipo_transaccion: datos.tipo_transaccion || null,
       monto: datos.monto || null,
-      tipo_categoria: TIPOS_CATEGORIA_EGRESO.includes(datos.tipo_categoria) ? datos.tipo_categoria : null,
+      categoria: datos.categoria || null,
+      subcategoria: datos.subcategoria || null,
       concepto: datos.concepto || null,
       fecha: datos.fecha || hoy,
+      origen_destino: datos.origen_destino || null,
+      usa_tarjeta_credito: datos.usa_tarjeta_credito || false,
+      nombre_tarjeta: datos.nombre_tarjeta || null,
       confianza: datos.confianza || "baja",
       texto_original: texto,
+      campos_faltantes: datos.campos_faltantes || [],
+      sugerencias: datos.sugerencias || {},
     }
   } catch (parseError) {
     console.error("[v0] Error parseando respuesta de GPT:", parseError)
     return {
+      tipo_transaccion: null,
       monto: null,
-      tipo_categoria: null,
+      categoria: null,
+      subcategoria: null,
       concepto: null,
       fecha: hoy,
+      origen_destino: null,
+      usa_tarjeta_credito: false,
+      nombre_tarjeta: null,
       confianza: "baja",
       texto_original: texto,
+      campos_faltantes: ["tipo_transaccion", "monto", "categoria", "origen_destino"],
+      sugerencias: {
+        mensaje: "No se pudo procesar el texto. Por favor intenta de nuevo con mas claridad.",
+      },
     }
   }
 }
 
-async function extraerDatosIngreso(texto: string): Promise<ExtractedIngresoData> {
-  const hoy = new Date().toISOString().split("T")[0]
-  
-  const prompt = `Eres un asistente que extrae datos financieros de texto en español (Paraguay/Latinoamérica).
-
-Del siguiente texto, extrae:
-1. MONTO: El valor numérico. Interpreta "mil" = 1000, "millón" = 1000000. Los montos en Paraguay suelen ser en guaraníes.
-2. TIPO_INGRESO: Debe ser EXACTAMENTE uno de estos valores: ${TIPOS_INGRESO.join(", ")}. Mapea el contexto:
-   - Sueldo, paga, nómina, trabajo → "Salario"
-   - Proyecto, cliente, trabajo independiente → "Freelance"
-   - Dividendos, intereses, rendimientos → "Inversiones"
-   - Renta, inquilino, arriendo → "Alquiler"
-   - Vendí, me pagaron por algo → "Venta"
-   - Me regalaron, cumpleaños, regalo → "Regalo"
-   - Devolución, me devolvieron → "Reembolso"
-   - Cualquier otro caso → "Otro"
-3. FECHA: Si menciona "hoy" usa ${hoy}. Si dice "ayer" calcula la fecha. Si no menciona fecha, usa ${hoy}.
-
-TEXTO: "${texto}"
-
-Responde SOLO con un JSON válido (sin markdown):
-{
-  "monto": numero_o_null,
-  "tipo_ingreso": "tipo_exacto_de_la_lista_o_null",
-  "fecha": "YYYY-MM-DD_o_null",
-  "confianza": "alta|media|baja"
-}`
-
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.1,
-      max_tokens: 150,
-    })
-
-    const respuesta = completion.choices[0]?.message?.content || "{}"
-    const jsonLimpio = respuesta
-      .replace(/```json\n?/g, "")
-      .replace(/```\n?/g, "")
-      .trim()
-    
-    const datos = JSON.parse(jsonLimpio)
-    
-    return {
-      monto: datos.monto || null,
-      tipo_ingreso: TIPOS_INGRESO.includes(datos.tipo_ingreso) ? datos.tipo_ingreso : null,
-      fecha: datos.fecha || hoy,
-      confianza: datos.confianza || "baja",
-      texto_original: texto,
-    }
-  } catch (parseError) {
-    console.error("[v0] Error parseando respuesta de GPT:", parseError)
-    return {
-      monto: null,
-      tipo_ingreso: null,
-      fecha: hoy,
-      confianza: "baja",
-      texto_original: texto,
-    }
-  }
-}
-
-// Endpoint GET para verificar que la API está funcionando
+// Endpoint GET para verificar que la API esta funcionando
 export async function GET() {
   const hasApiKey = !!process.env.OPENAI_API_KEY
   
   return NextResponse.json({
     status: "ok",
-    mensaje: "Endpoint de voz a datos",
+    mensaje: "Endpoint de voz a datos con IA",
     openai_configurado: hasApiKey,
+    version: "2.0",
     instrucciones: {
       metodo: "POST",
-      body: "FormData con 'audio' (archivo) o 'texto' (string) y 'tipo' (egreso|ingreso)",
+      body: "FormData con 'audio' (archivo) o 'texto' (string)",
+      datos_opcionales: "categorias_egreso, categorias_ingreso, cajas_ahorro, tarjetas_credito, tipos_categoria (JSON strings)",
     },
-    categorias_egreso: TIPOS_CATEGORIA_EGRESO,
-    tipos_ingreso: TIPOS_INGRESO,
   })
 }
