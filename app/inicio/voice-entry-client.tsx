@@ -587,9 +587,16 @@ export function VoiceEntryClient({
       const montoNumerico = parseFloat(monto)
       
       if (tipoTransaccion === "egreso") {
-        // Validar saldo si es caja de ahorro
+        // Validar saldo si es caja de ahorro - obtener saldo actual de la DB
         if (origenTipo === "caja_ahorro" && origenId) {
-          const cajaOrigen = cajasAhorro.find(c => c.id === origenId)
+          const { data: cajaOrigen, error: validationError } = await supabase
+            .from("cajas_ahorro")
+            .select("monto_actual, nombre")
+            .eq("id", origenId)
+            .single()
+          
+          if (validationError) throw validationError
+          
           if (cajaOrigen && montoNumerico > Number(cajaOrigen.monto_actual)) {
             throw new Error(`Saldo insuficiente en "${cajaOrigen.nombre}". Disponible: ${formatGuaranies(Number(cajaOrigen.monto_actual))}`)
           }
@@ -612,16 +619,27 @@ export function VoiceEntryClient({
         
         if (insertError) throw insertError
         
-        // Descontar del origen
+        // Descontar del origen - obtener saldo actual de la DB para evitar problemas de concurrencia
         if (origenTipo === "caja_ahorro" && origenId) {
-          const cajaOrigen = cajasAhorro.find(c => c.id === origenId)
-          if (cajaOrigen) {
-            const nuevoMonto = Number(cajaOrigen.monto_actual) - montoNumerico
+          // Obtener el saldo ACTUAL de la base de datos, no del estado local
+          const { data: cajaActual, error: fetchError } = await supabase
+            .from("cajas_ahorro")
+            .select("monto_actual, nombre")
+            .eq("id", origenId)
+            .single()
+          
+          if (fetchError) throw fetchError
+          
+          if (cajaActual) {
+            const saldoActual = Number(cajaActual.monto_actual)
+            const nuevoMonto = saldoActual - montoNumerico
             
-            await supabase
+            const { error: updateError } = await supabase
               .from("cajas_ahorro")
               .update({ monto_actual: nuevoMonto })
               .eq("id", origenId)
+            
+            if (updateError) throw updateError
             
             await supabase.from("movimientos_caja").insert({
               caja_id: origenId,
@@ -632,13 +650,25 @@ export function VoiceEntryClient({
             })
           }
         } else if (origenTipo === "tarjeta_credito" && origenId) {
-          const tarjeta = tarjetasCredito.find(t => t.id === origenId)
-          if (tarjeta) {
-            const nuevoDisponible = Number(tarjeta.monto_total) - montoNumerico
-            await supabase
+          // Para tarjetas de credito, incrementar el monto_pagado (lo que se debe)
+          const { data: tarjetaActual, error: fetchError } = await supabase
+            .from("deudas")
+            .select("monto_pagado, monto_total")
+            .eq("id", origenId)
+            .single()
+          
+          if (fetchError) throw fetchError
+          
+          if (tarjetaActual) {
+            const deudaActual = Number(tarjetaActual.monto_pagado) || 0
+            const nuevaDeuda = deudaActual + montoNumerico
+            
+            const { error: updateError } = await supabase
               .from("deudas")
-              .update({ monto_total: nuevoDisponible })
+              .update({ monto_pagado: nuevaDeuda })
               .eq("id", origenId)
+            
+            if (updateError) throw updateError
           }
         }
         
@@ -660,16 +690,27 @@ export function VoiceEntryClient({
         
         if (insertError) throw insertError
         
-        // Depositar en caja destino
+        // Depositar en caja destino - obtener saldo actual de la DB
         if (destinoCajaId) {
-          const cajaDestino = cajasAhorro.find(c => c.id === destinoCajaId)
-          if (cajaDestino) {
-            const nuevoMonto = Number(cajaDestino.monto_actual) + montoNumerico
+          // Obtener el saldo ACTUAL de la base de datos, no del estado local
+          const { data: cajaActual, error: fetchError } = await supabase
+            .from("cajas_ahorro")
+            .select("monto_actual, nombre")
+            .eq("id", destinoCajaId)
+            .single()
+          
+          if (fetchError) throw fetchError
+          
+          if (cajaActual) {
+            const saldoActual = Number(cajaActual.monto_actual)
+            const nuevoMonto = saldoActual + montoNumerico
             
-            await supabase
+            const { error: updateError } = await supabase
               .from("cajas_ahorro")
               .update({ monto_actual: nuevoMonto })
               .eq("id", destinoCajaId)
+            
+            if (updateError) throw updateError
             
             await supabase.from("movimientos_caja").insert({
               caja_id: destinoCajaId,
