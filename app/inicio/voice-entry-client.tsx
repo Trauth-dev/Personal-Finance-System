@@ -235,8 +235,17 @@ export function VoiceEntryClient({
       }
       
       recognition.onerror = (event: any) => {
-        console.error("[v0] Error en reconocimiento de voz:", event.error)
-        setError("Error en el reconocimiento de voz. Intenta de nuevo.")
+        // "no-speech" es un caso normal, no un error - el usuario simplemente no hablo
+        if (event.error === "no-speech") {
+          console.log("[v0] No se detecto voz - caso normal")
+          // No mostrar error, simplemente detener silenciosamente
+        } else if (event.error === "aborted") {
+          console.log("[v0] Reconocimiento de voz abortado - caso normal al navegar")
+          // No mostrar error cuando se aborta intencionalmente
+        } else {
+          console.error("[v0] Error en reconocimiento de voz:", event.error)
+          setError("Error en el reconocimiento de voz. Intenta de nuevo.")
+        }
         setIsRecording(false)
       }
       
@@ -275,6 +284,30 @@ export function VoiceEntryClient({
         setError("No se pudo acceder al microfono. Verifica los permisos.")
       }
     }
+  }
+
+  // Cancelar grabacion sin procesar (para navegacion)
+  const cancelRecording = () => {
+    setIsRecording(false)
+    setTranscripcion("")
+    transcripcionRef.current = ""
+    
+    if (recognitionRef.current) {
+      recognitionRef.current.abort() // Usar abort en lugar de stop para no procesar
+      recognitionRef.current = null
+    }
+    
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+      mediaRecorderRef.current = null
+    }
+  }
+  
+  // Navegar al panel cancelando el microfono primero
+  const navegarAlPanel = () => {
+    cancelRecording()
+    router.push("/dashboard/personal")
   }
 
   // Detener grabacion
@@ -1385,7 +1418,7 @@ export function VoiceEntryClient({
                     Nueva carga
                   </Button>
                   <Button
-                    onClick={() => router.push("/dashboard/personal")}
+  onClick={navegarAlPanel}
                     className="bg-green-500 hover:bg-green-600"
                   >
                     Ver Dashboard
