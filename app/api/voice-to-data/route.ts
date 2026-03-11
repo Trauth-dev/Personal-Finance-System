@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { generateText, Output } from "ai"
+import { generateText } from "ai"
 import { createOpenAI } from "@ai-sdk/openai"
 import * as z from "zod"
 
@@ -47,6 +47,15 @@ interface ExtractedData {
 
 export async function POST(request: NextRequest) {
   console.log("[v0] POST /api/voice-to-data iniciado")
+  
+  // Verificar API key de OpenAI
+  const openaiApiKey = process.env.OPENAI_API_KEY
+  if (!openaiApiKey) {
+    return NextResponse.json(
+      { error: "OPENAI_API_KEY no configurada", detalle: "Agrega tu API key de OpenAI en Settings > Environment Variables" },
+      { status: 500 }
+    )
+  }
 
   try {
     console.log("[v0] Parseando formData...")
@@ -78,8 +87,14 @@ export async function POST(request: NextRequest) {
     
     console.log("[v0] Datos parseados. Llamando a IA...")
 
+    // Crear cliente de OpenAI con la API key del usuario
+    const openai = createOpenAI({
+      apiKey: openaiApiKey,
+    })
+
     // Extraer datos usando AI SDK
     const datosExtraidos = await extraerDatosConIA(
+      openai,
       textoDirecto,
       tiposCategoria,
       categoriasEgreso,
@@ -111,6 +126,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function extraerDatosConIA(
+  openai: ReturnType<typeof createOpenAI>,
   texto: string,
   tiposCategoria: Array<{ id: string; nombre: string }>,
   categoriasEgreso: Array<{ id: string; nombre: string; tipo_categoria_id: string }>,
@@ -146,29 +162,58 @@ REGLAS DE EXTRACCION:
   const maxRetries = 3
   let lastError: Error | null = null
   
-  // Crear provider de OpenAI con la API key
-  const openai = createOpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  })
-
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[v0] Intento ${attempt} de ${maxRetries}`)
       
-      const { output } = await generateText({
+      const jsonPrompt = `Extrae los datos financieros del siguiente texto y responde SOLO con un JSON valido (sin markdown, sin explicaciones):
+
+TEXTO: "${texto}"
+
+Responde con este formato JSON exacto:
+{
+  "tipo_transaccion": "egreso" o "ingreso" o null,
+  "monto": numero o null,
+  "categoria": "nombre categoria" o null,
+  "subcategoria": "detalle" o null,
+  "concepto": "descripcion" o null,
+  "fecha": "${hoy}",
+  "origen_destino": "nombre caja o efectivo" o null,
+  "usa_tarjeta_credito": false,
+  "nombre_tarjeta": null,
+  "confianza": "alta" o "media" o "baja",
+  "campos_faltantes": ["lista de campos no detectados"],
+  "sugerencias": {}
+}`
+
+      const { text } = await generateText({
         model: openai("gpt-4o-mini"),
-        output: Output.object({
-          schema: extractedDataSchema,
-        }),
         system: systemPrompt,
-        prompt: `Extrae los datos financieros del siguiente texto: "${texto}"`,
+        prompt: jsonPrompt,
       })
 
-      if (!output) {
+      if (!text) {
         throw new Error("No se obtuvo respuesta de la IA")
       }
 
-      console.log("[v0] IA respondio exitosamente")
+      console.log("[v0] IA respondio:", text.substring(0, 100))
+      
+      // Limpiar la respuesta de posibles caracteres extra
+      let cleanedText = text.trim()
+      // Remover markdown code blocks si existen
+      if (cleanedText.startsWith("```json")) {
+        cleanedText = cleanedText.slice(7)
+      } else if (cleanedText.startsWith("```")) {
+        cleanedText = cleanedText.slice(3)
+      }
+      if (cleanedText.endsWith("```")) {
+        cleanedText = cleanedText.slice(0, -3)
+      }
+      cleanedText = cleanedText.trim()
+      
+      const output = JSON.parse(cleanedText)
+
+      console.log("[v0] JSON parseado exitosamente")
       
       return {
         tipo_transaccion: output.tipo_transaccion,
