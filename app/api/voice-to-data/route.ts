@@ -1,7 +1,4 @@
 import { NextRequest, NextResponse } from "next/server"
-import { generateText } from "ai"
-import { createOpenAI } from "@ai-sdk/openai"
-import * as z from "zod"
 
 // Schema para los datos extraidos
 const extractedDataSchema = z.object({
@@ -87,14 +84,9 @@ export async function POST(request: NextRequest) {
     
     console.log("[v0] Datos parseados. Llamando a IA...")
 
-    // Crear cliente de OpenAI con la API key del usuario
-    const openai = createOpenAI({
-      apiKey: openaiApiKey,
-    })
-
-    // Extraer datos usando AI SDK
+    // Extraer datos usando API directa de OpenAI
     const datosExtraidos = await extraerDatosConIA(
-      openai,
+      openaiApiKey,
       textoDirecto,
       tiposCategoria,
       categoriasEgreso,
@@ -126,7 +118,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function extraerDatosConIA(
-  openai: ReturnType<typeof createOpenAI>,
+  apiKey: string,
   texto: string,
   tiposCategoria: Array<{ id: string; nombre: string }>,
   categoriasEgreso: Array<{ id: string; nombre: string; tipo_categoria_id: string }>,
@@ -166,7 +158,7 @@ REGLAS DE EXTRACCION:
     try {
       console.log(`[v0] Intento ${attempt} de ${maxRetries}`)
       
-      const jsonPrompt = `Extrae los datos financieros del siguiente texto y responde SOLO con un JSON valido (sin markdown, sin explicaciones):
+      const userPrompt = `Extrae los datos financieros del siguiente texto y responde SOLO con un JSON valido (sin markdown, sin explicaciones):
 
 TEXTO: "${texto}"
 
@@ -186,11 +178,32 @@ Responde con este formato JSON exacto:
   "sugerencias": {}
 }`
 
-      const { text } = await generateText({
-        model: openai("gpt-4o-mini"),
-        system: systemPrompt,
-        prompt: jsonPrompt,
+      // Llamar directamente a la API de OpenAI usando fetch
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.3,
+          max_tokens: 500,
+        }),
       })
+
+      if (!response.ok) {
+        const errorData = await response.text()
+        console.error("[v0] Error de OpenAI API:", response.status, errorData)
+        throw new Error(`OpenAI API error: ${response.status} - ${errorData}`)
+      }
+
+      const data = await response.json()
+      const text = data.choices?.[0]?.message?.content
 
       if (!text) {
         throw new Error("No se obtuvo respuesta de la IA")
