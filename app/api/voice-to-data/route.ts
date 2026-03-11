@@ -47,15 +47,6 @@ interface ExtractedData {
 
 export async function POST(request: NextRequest) {
   console.log("[v0] POST /api/voice-to-data iniciado")
-  
-  // Verificar API key de OpenAI
-  const openaiApiKey = process.env.OPENAI_API_KEY
-  if (!openaiApiKey) {
-    return NextResponse.json(
-      { error: "OPENAI_API_KEY no configurada", detalle: "Agrega tu API key de OpenAI en Settings > Environment Variables" },
-      { status: 500 }
-    )
-  }
 
   try {
     console.log("[v0] Parseando formData...")
@@ -87,14 +78,8 @@ export async function POST(request: NextRequest) {
     
     console.log("[v0] Datos parseados. Llamando a IA...")
 
-    // Crear cliente de OpenAI con la API key del usuario
-    const openai = createOpenAI({
-      apiKey: openaiApiKey,
-    })
-
     // Extraer datos usando AI SDK
     const datosExtraidos = await extraerDatosConIA(
-      openai,
       textoDirecto,
       tiposCategoria,
       categoriasEgreso,
@@ -126,7 +111,6 @@ export async function POST(request: NextRequest) {
 }
 
 async function extraerDatosConIA(
-  openai: ReturnType<typeof createOpenAI>,
   texto: string,
   tiposCategoria: Array<{ id: string; nombre: string }>,
   categoriasEgreso: Array<{ id: string; nombre: string; tipo_categoria_id: string }>,
@@ -162,6 +146,11 @@ REGLAS DE EXTRACCION:
   const maxRetries = 3
   let lastError: Error | null = null
   
+  // Crear provider de OpenAI con la API key
+  const openai = createOpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  })
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[v0] Intento ${attempt} de ${maxRetries}`)
