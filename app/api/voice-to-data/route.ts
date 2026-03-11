@@ -141,55 +141,87 @@ REGLAS DE EXTRACCION:
 5. ORIGEN/DESTINO: De que caja sale/entra el dinero, o "efectivo", o tarjeta de credito
 6. CONFIANZA: "alta" si tienes tipo+monto+categoria+origen, "media" si tipo+monto, "baja" si falta algo importante`
 
-  try {
-    const { output } = await generateText({
-      model: "openai/gpt-4o-mini",
-      output: Output.object({
-        schema: extractedDataSchema,
-      }),
-      system: systemPrompt,
-      prompt: `Extrae los datos financieros del siguiente texto: "${texto}"`,
-    })
+  // Reintentos con backoff exponencial para errores temporales
+  const maxRetries = 3
+  let lastError: Error | null = null
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[v0] Intento ${attempt} de ${maxRetries}`)
+      
+      const { output } = await generateText({
+        model: "openai/gpt-4o-mini",
+        output: Output.object({
+          schema: extractedDataSchema,
+        }),
+        system: systemPrompt,
+        prompt: `Extrae los datos financieros del siguiente texto: "${texto}"`,
+      })
 
-    if (!output) {
-      throw new Error("No se obtuvo respuesta de la IA")
-    }
+      if (!output) {
+        throw new Error("No se obtuvo respuesta de la IA")
+      }
 
-    return {
-      tipo_transaccion: output.tipo_transaccion,
-      monto: output.monto,
-      categoria: output.categoria,
-      subcategoria: output.subcategoria,
-      concepto: output.concepto,
-      fecha: output.fecha || hoy,
-      origen_destino: output.origen_destino,
-      usa_tarjeta_credito: output.usa_tarjeta_credito || false,
-      nombre_tarjeta: output.nombre_tarjeta,
-      confianza: output.confianza || "baja",
-      texto_original: texto,
-      campos_faltantes: output.campos_faltantes || [],
-      sugerencias: output.sugerencias || {},
+      console.log("[v0] IA respondio exitosamente")
+      
+      return {
+        tipo_transaccion: output.tipo_transaccion,
+        monto: output.monto,
+        categoria: output.categoria,
+        subcategoria: output.subcategoria,
+        concepto: output.concepto,
+        fecha: output.fecha || hoy,
+        origen_destino: output.origen_destino,
+        usa_tarjeta_credito: output.usa_tarjeta_credito || false,
+        nombre_tarjeta: output.nombre_tarjeta,
+        confianza: output.confianza || "baja",
+        texto_original: texto,
+        campos_faltantes: output.campos_faltantes || [],
+        sugerencias: output.sugerencias || {},
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error))
+      console.error(`[v0] Error en intento ${attempt}:`, lastError.message)
+      
+      // Solo reintentar si es un error de red/gateway, no si es un error de API
+      const isRetryable = lastError.message.includes("fetch failed") || 
+                          lastError.message.includes("Gateway") ||
+                          lastError.message.includes("Too Many") ||
+                          lastError.message.includes("rate limit") ||
+                          lastError.message.includes("timeout")
+      
+      if (!isRetryable || attempt === maxRetries) {
+        break
+      }
+      
+      // Esperar antes de reintentar (backoff exponencial: 1s, 2s, 4s)
+      const waitTime = Math.pow(2, attempt - 1) * 1000
+      console.log(`[v0] Esperando ${waitTime}ms antes de reintentar...`)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
     }
-  } catch (error) {
-    console.error("[v0] Error en IA:", error)
-    
-    return {
-      tipo_transaccion: null,
-      monto: null,
-      categoria: null,
-      subcategoria: null,
-      concepto: null,
-      fecha: hoy,
-      origen_destino: null,
-      usa_tarjeta_credito: false,
-      nombre_tarjeta: null,
-      confianza: "baja",
-      texto_original: texto,
-      campos_faltantes: ["tipo_transaccion", "monto", "categoria", "origen_destino"],
-      sugerencias: {
-        mensaje: "No se pudo procesar el texto. Intenta de nuevo.",
-      },
-    }
+  }
+  
+  // Si llegamos aqui, todos los intentos fallaron
+  console.error("[v0] Todos los intentos fallaron, error final:", lastError?.message)
+  
+  return {
+    tipo_transaccion: null,
+    monto: null,
+    categoria: null,
+    subcategoria: null,
+    concepto: null,
+    fecha: hoy,
+    origen_destino: null,
+    usa_tarjeta_credito: false,
+    nombre_tarjeta: null,
+    confianza: "baja",
+    texto_original: texto,
+    campos_faltantes: ["tipo_transaccion", "monto", "categoria", "origen_destino"],
+    sugerencias: {
+      mensaje: lastError?.message.includes("Too Many") || lastError?.message.includes("rate limit")
+        ? "Demasiadas solicitudes. Espera unos segundos e intenta de nuevo."
+        : "Error de conexion. Verifica tu internet e intenta de nuevo.",
+    },
   }
 }
 
