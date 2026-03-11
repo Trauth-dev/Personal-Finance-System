@@ -1,26 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 
-// Schema para los datos extraidos
-const extractedDataSchema = z.object({
-  tipo_transaccion: z.enum(["ingreso", "egreso"]).nullable().describe("Tipo de transaccion"),
-  monto: z.number().nullable().describe("Monto numerico"),
-  categoria: z.string().nullable().describe("Categoria exacta de la lista"),
-  subcategoria: z.string().nullable().describe("Subcategoria o concepto breve"),
-  concepto: z.string().nullable().describe("Descripcion adicional"),
-  fecha: z.string().describe("Fecha en formato YYYY-MM-DD"),
-  origen_destino: z.string().nullable().describe("Caja de ahorro o efectivo"),
-  usa_tarjeta_credito: z.boolean().describe("Si usa tarjeta de credito"),
-  nombre_tarjeta: z.string().nullable().describe("Nombre de la tarjeta"),
-  confianza: z.enum(["alta", "media", "baja"]).describe("Nivel de confianza"),
-  campos_faltantes: z.array(z.string()).describe("Campos que no se pudieron extraer"),
-  sugerencias: z.object({
-    categoria_sugerida: z.string().nullable(),
-    subcategoria_sugerida: z.string().nullable(),
-    requiere_crear_categoria: z.boolean().nullable(),
-    mensaje: z.string().nullable(),
-  }).describe("Sugerencias para el usuario"),
-})
-
 interface ExtractedData {
   tipo_transaccion: "ingreso" | "egreso" | null
   monto: number | null
