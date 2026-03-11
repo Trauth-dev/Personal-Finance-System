@@ -171,6 +171,34 @@ export function VoiceEntryClient({
   // Verificar si el navegador soporta Web Speech API
   const supportsWebSpeech = typeof window !== "undefined" && ("SpeechRecognition" in window || "webkitSpeechRecognition" in window)
 
+  // Cleanup al desmontar el componente (navegacion a otra pagina)
+  useEffect(() => {
+    return () => {
+      // Limpiar reconocimiento de voz
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort()
+        } catch (e) {
+          // Ignorar errores al abortar
+        }
+        recognitionRef.current = null
+      }
+      
+      // Limpiar MediaRecorder y tracks de audio
+      if (mediaRecorderRef.current) {
+        try {
+          if (mediaRecorderRef.current.state !== "inactive") {
+            mediaRecorderRef.current.stop()
+          }
+          mediaRecorderRef.current.stream?.getTracks().forEach(track => track.stop())
+        } catch (e) {
+          // Ignorar errores al detener
+        }
+        mediaRecorderRef.current = null
+      }
+    }
+  }, [])
+
   // Cargar datos frescos
   const reloadData = async () => {
     const supabase = createClient()
