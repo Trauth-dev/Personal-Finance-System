@@ -1258,15 +1258,15 @@ export function VoiceEntryClient({
                           </div>
                           <div className="text-right">
                             {(() => {
+                              // Para tarjetas: monto_total = monto disponible actual
+                              const disponible = Number(tarjeta.monto_total) || 0
                               const limite = Number(tarjeta.limite_credito) || 0
-                              const deudaUsada = Number(tarjeta.monto_pagado) || 0
-                              const disponible = limite > 0 ? limite - deudaUsada : 0
                               const montoNum = monto ? Number(monto.replace(/\./g, "").replace(",", ".")) : 0
-                              const insuficiente = limite > 0 && montoNum > 0 && montoNum > disponible
+                              const insuficiente = montoNum > 0 && montoNum > disponible
                               return (
                                 <>
                                   <p className={cn("text-sm font-bold", insuficiente ? "text-red-400" : "text-emerald-400")}>
-                                    {limite > 0 ? formatGuaranies(disponible) : "Sin limite"}
+                                    {formatGuaranies(disponible)}
                                   </p>
                                   {limite > 0 && (
                                     <p className="text-[10px] text-slate-500">
