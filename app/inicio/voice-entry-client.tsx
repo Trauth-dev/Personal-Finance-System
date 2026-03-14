@@ -461,12 +461,37 @@ export function VoiceEntryClient({
     setConcepto(datos.concepto || datos.subcategoria || "")
     
     if (datos.tipo_transaccion === "egreso") {
-      // Buscar el tipo de categoria que coincida
-      const tipoMatch = tiposCategoria.find(t => 
-        t.nombre.toLowerCase() === datos.categoria?.toLowerCase()
-      )
-      if (tipoMatch) {
-        setSelectedTipoCategoria(tipoMatch.id)
+      // PRIMERO: Buscar si la subcategoria existe en las descripciones registradas
+      let categoriaEncontrada = false
+      
+      if (datos.subcategoria) {
+        const subcatLower = datos.subcategoria.toLowerCase()
+        
+        // Buscar la descripcion en categoriasEgreso
+        const descripcionMatch = categoriasEgreso.find(c => 
+          c.nombre.toLowerCase() === subcatLower ||
+          c.nombre.toLowerCase().includes(subcatLower) ||
+          subcatLower.includes(c.nombre.toLowerCase())
+        )
+        
+        if (descripcionMatch) {
+          // Encontramos la descripcion, ahora seleccionamos su categoria padre
+          setSelectedSubcategoria(descripcionMatch.id)
+          setSelectedTipoCategoria(descripcionMatch.tipo_categoria_id)
+          categoriaEncontrada = true
+          console.log("[v0] Subcategoria encontrada:", descripcionMatch.nombre, "-> Categoria:", descripcionMatch.tipo_categoria_id)
+        }
+      }
+      
+      // SEGUNDO: Si no encontramos por subcategoria, buscar por categoria directa
+      if (!categoriaEncontrada && datos.categoria) {
+        const tipoMatch = tiposCategoria.find(t => 
+          t.nombre.toLowerCase() === datos.categoria?.toLowerCase()
+        )
+        if (tipoMatch) {
+          setSelectedTipoCategoria(tipoMatch.id)
+          console.log("[v0] Categoria encontrada directamente:", tipoMatch.nombre)
+        }
       }
       
       // Determinar origen
@@ -1128,7 +1153,10 @@ export function VoiceEntryClient({
                   {/* Categoria */}
                   <div className="space-y-2">
                     <Label className="text-slate-300">Categoria</Label>
-                    <Select value={selectedTipoCategoria} onValueChange={setSelectedTipoCategoria}>
+                    <Select value={selectedTipoCategoria} onValueChange={(val) => {
+                  setSelectedTipoCategoria(val)
+                  setSelectedSubcategoria("") // Reset subcategoria cuando cambia la categoria
+                }}>
                       <SelectTrigger className="bg-white/5 border-white/10 text-white">
                         <SelectValue placeholder="Selecciona una categoria" />
                       </SelectTrigger>

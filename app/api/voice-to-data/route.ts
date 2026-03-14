@@ -113,6 +113,22 @@ async function extraerDatosConIA(
   const cajasAhorroLista = cajasAhorro.map(c => c.nombre).join(", ") || "(ninguna registrada)"
   const tarjetasCreditoLista = tarjetasCredito.map(t => t.nombre).join(", ") || "(ninguna registrada)"
   
+  // Crear mapa de descripciones por categoria para deteccion inteligente
+  const descripcionesPorCategoria: Record<string, string[]> = {}
+  for (const tipo of tiposCategoria) {
+    const descripciones = categoriasEgreso
+      .filter(c => c.tipo_categoria_id === tipo.id)
+      .map(c => c.nombre)
+    if (descripciones.length > 0) {
+      descripcionesPorCategoria[tipo.nombre] = descripciones
+    }
+  }
+  
+  // Formatear descripciones para el prompt
+  const descripcionesFormateadas = Object.entries(descripcionesPorCategoria)
+    .map(([cat, descs]) => `  - ${cat}: ${descs.join(", ")}`)
+    .join("\n")
+  
   const systemPrompt = `Eres un asistente financiero que extrae datos de texto hablado en espanol latinoamericano.
 
 CONTEXTO DEL USUARIO:
@@ -121,10 +137,18 @@ CONTEXTO DEL USUARIO:
 - Cajas de ahorro del usuario: ${cajasAhorroLista}
 - Tarjetas de credito del usuario: ${tarjetasCreditoLista}
 
+DESCRIPCIONES REGISTRADAS POR CATEGORIA (MUY IMPORTANTE):
+${descripcionesFormateadas || "  (ninguna registrada)"}
+
 REGLAS DE EXTRACCION:
 1. TIPO: "gaste/pague/compre" = egreso, "recibi/cobre/me pagaron" = ingreso
 2. MONTO: "mil"=1000, "millon"=1000000. En Paraguay son guaranies (montos grandes)
-3. CATEGORIA: Debe coincidir con las listas del usuario. Si no existe, sugerir donde iria.
+3. CATEGORIA Y DESCRIPCION - MUY IMPORTANTE:
+   - PRIMERO busca si el usuario menciona alguna DESCRIPCION registrada (alquiler, luz, supermercado, etc.)
+   - Si encuentra una descripcion, usa la categoria padre correspondiente
+   - Ejemplo: Si usuario dice "alquiler" y "Alquiler" esta en "Gastos Vivienda" -> categoria: "Gastos Vivienda", subcategoria: "Alquiler"
+   - Si no encuentra descripcion exacta, buscar por similitud (supermercado ~ super, alquiler ~ renta)
+   - Si la descripcion NO existe en ninguna categoria, sugerir donde deberia ir en "sugerencias"
 4. FECHA: "hoy"=${hoy}, "ayer"=${ayer}. Si no menciona, usa ${hoy}
 5. ORIGEN/DESTINO - MUY IMPORTANTE:
    - Buscar menciones de cajas: "caja asalariado", "cuenta banco", "caja ahorros", etc.
@@ -133,9 +157,12 @@ REGLAS DE EXTRACCION:
    - Ejemplo: "de asalariado" -> origen_destino: "asalariado"  
    - Si menciona tarjeta de credito -> usa_tarjeta_credito: true
    - Si dice "efectivo" o "cash" -> origen_destino: "efectivo"
-6. CONFIANZA: "alta" si tienes tipo+monto+categoria+origen, "media" si tipo+monto, "baja" si falta algo importante
+6. CONFIANZA: "alta" si tienes tipo+monto+categoria+subcategoria+origen, "media" si tipo+monto+categoria, "baja" si falta algo importante
 
-IMPORTANTE: Siempre intenta identificar el origen del dinero. Si el usuario menciona alguna de sus cajas de ahorro, extrae el nombre exacto.`
+IMPORTANTE: 
+- La subcategoria es la descripcion especifica del gasto (alquiler, luz, supermercado)
+- La categoria es el tipo general (Gastos Vivienda, Gastos Varios, Disfrute)
+- Siempre intenta detectar la subcategoria primero y de ahi derivar la categoria`
 
   // Reintentos con backoff exponencial para errores temporales
   const maxRetries = 3
@@ -149,20 +176,30 @@ IMPORTANTE: Siempre intenta identificar el origen del dinero. Si el usuario menc
 
 TEXTO: "${texto}"
 
+INSTRUCCIONES ESPECIALES:
+- "categoria" = tipo general (Gastos Vivienda, Gastos Varios, Disfrute, etc.)
+- "subcategoria" = descripcion especifica que el usuario menciona (alquiler, luz, supermercado, etc.)
+- Si el usuario dice "alquiler" y esta registrado en "Gastos Vivienda", entonces categoria="Gastos Vivienda" y subcategoria="Alquiler"
+- Si la subcategoria no existe en las descripciones registradas, incluir en sugerencias: categoria_sugerida, subcategoria_sugerida, requiere_crear_categoria=true
+
 Responde con este formato JSON exacto:
 {
   "tipo_transaccion": "egreso" o "ingreso" o null,
   "monto": numero o null,
-  "categoria": "nombre categoria" o null,
-  "subcategoria": "detalle" o null,
-  "concepto": "descripcion" o null,
+  "categoria": "nombre de tipo de categoria (Gastos Vivienda, Gastos Varios, etc.)" o null,
+  "subcategoria": "descripcion especifica detectada (alquiler, luz, supermercado)" o null,
+  "concepto": "nota adicional si hay" o null,
   "fecha": "${hoy}",
   "origen_destino": "nombre caja o efectivo" o null,
   "usa_tarjeta_credito": false,
   "nombre_tarjeta": null,
   "confianza": "alta" o "media" o "baja",
   "campos_faltantes": ["lista de campos no detectados"],
-  "sugerencias": {}
+  "sugerencias": {
+    "categoria_sugerida": "si subcategoria no existe, sugerir en que categoria deberia ir",
+    "subcategoria_sugerida": "la subcategoria que el usuario menciono pero no existe",
+    "requiere_crear_categoria": true/false
+  }
 }`
 
       // Llamar directamente a la API de OpenAI usando fetch
