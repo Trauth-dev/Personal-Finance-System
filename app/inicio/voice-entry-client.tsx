@@ -76,6 +76,7 @@ interface TarjetaCredito {
   tipo_deuda: string
   limite_credito: number | null
   monto_total: number
+  monto_pagado: number
 }
 
 interface ExtractedData {
@@ -214,7 +215,7 @@ export function VoiceEntryClient({
       supabase.from("categorias_egreso").select("id, nombre, tipo_categoria_id").eq("perfil_id", perfilId).order("nombre"),
       supabase.from("categorias_ingresos").select("id, nombre").eq("perfil_id", perfilId).order("nombre"),
       supabase.from("cajas_ahorro").select("id, nombre, monto_actual, moneda, color, tipo_cuenta, banco").eq("perfil_id", perfilId).eq("activa", true).order("nombre"),
-      supabase.from("deudas").select("id, nombre, tipo_deuda, limite_credito, monto_total").eq("perfil_id", perfilId).eq("tipo_deuda", "tarjeta_credito").eq("estado", "activa").order("nombre"),
+      supabase.from("deudas").select("id, nombre, tipo_deuda, limite_credito, monto_total, monto_pagado").eq("perfil_id", perfilId).eq("tipo_deuda", "tarjeta_credito").eq("estado", "activa").order("nombre"),
     ])
 
     if (tipos) setTiposCategoria(tipos)
@@ -484,14 +485,37 @@ export function VoiceEntryClient({
           }
         }
       } else if (datos.origen_destino) {
-        const cajaMatch = cajasAhorro.find(c => 
-          c.nombre.toLowerCase().includes(datos.origen_destino?.toLowerCase() || "")
-        )
+        const origenLower = datos.origen_destino.toLowerCase()
+        
+        // Buscar coincidencia en cajas de ahorro (busqueda mas flexible)
+        const cajaMatch = cajasAhorro.find(c => {
+          const nombreCaja = c.nombre.toLowerCase()
+          // Coincidencia si el origen contiene el nombre de la caja o viceversa
+          return nombreCaja.includes(origenLower) || 
+                 origenLower.includes(nombreCaja) ||
+                 // Tambien buscar palabras clave como "caja" + nombre
+                 origenLower.includes("caja " + nombreCaja) ||
+                 origenLower.includes("cuenta " + nombreCaja)
+        })
+        
         if (cajaMatch) {
           setOrigenTipo("caja_ahorro")
           setOrigenId(cajaMatch.id)
-        } else if (datos.origen_destino.toLowerCase().includes("efectivo")) {
+        } else if (origenLower.includes("efectivo") || origenLower.includes("cash")) {
           setOrigenTipo("efectivo")
+        } else {
+          // Si no encontro match exacto, buscar por palabras parciales
+          const cajaMatchParcial = cajasAhorro.find(c => {
+            const palabrasCaja = c.nombre.toLowerCase().split(" ")
+            const palabrasOrigen = origenLower.split(" ")
+            // Ver si alguna palabra del origen coincide con alguna palabra de la caja
+            return palabrasCaja.some(p => palabrasOrigen.includes(p) && p.length > 2)
+          })
+          
+          if (cajaMatchParcial) {
+            setOrigenTipo("caja_ahorro")
+            setOrigenId(cajaMatchParcial.id)
+          }
         }
       }
     } else if (datos.tipo_transaccion === "ingreso") {
@@ -710,28 +734,32 @@ export function VoiceEntryClient({
               fecha: fecha,
             })
           }
-        } else if (origenTipo === "tarjeta_credito" && origenId) {
-          // Para tarjetas de credito, incrementar el monto_pagado (lo que se debe)
+          } else if (origenTipo === "tarjeta_credito" && origenId) {
+          // Para tarjetas de credito: restar del credito disponible (monto_total)
           const { data: tarjetaActual, error: fetchError } = await supabase
-            .from("deudas")
-            .select("monto_pagado, monto_total")
-            .eq("id", origenId)
-            .single()
+          .from("deudas")
+          .select("monto_total, monto_pagado, limite_credito")
+          .eq("id", origenId)
+          .single()
           
           if (fetchError) throw fetchError
           
           if (tarjetaActual) {
-            const deudaActual = Number(tarjetaActual.monto_pagado) || 0
-            const nuevaDeuda = deudaActual + montoNumerico
-            
-            const { error: updateError } = await supabase
-              .from("deudas")
-              .update({ monto_pagado: nuevaDeuda })
-              .eq("id", origenId)
-            
-            if (updateError) throw updateError
+          const disponibleActual = Number(tarjetaActual.monto_total)
+          const nuevoDisponible = disponibleActual - montoNumerico
+          
+          if (nuevoDisponible < 0) {
+            throw new Error("Credito insuficiente en la tarjeta seleccionada")
           }
-        }
+          
+          const { error: updateError } = await supabase
+          .from("deudas")
+          .update({ monto_total: nuevoDisponible })
+          .eq("id", origenId)
+          
+          if (updateError) throw updateError
+          }
+          }
         
       } else if (tipoTransaccion === "ingreso") {
         // Obtener nombre de categoria
@@ -1228,9 +1256,30 @@ export function VoiceEntryClient({
                                 : "text-slate-300"
                             )}>{tarjeta.nombre}</span>
                           </div>
-                          <span className="text-sm text-slate-400">
-                            Credito disponible
-                          </span>
+                          <div className="text-right">
+                            {(() => {
+                              // Para tarjetas: monto_total = monto disponible actual
+                              const disponible = Number(tarjeta.monto_total) || 0
+                              const limite = Number(tarjeta.limite_credito) || 0
+                              const montoNum = monto ? Number(monto.replace(/\./g, "").replace(",", ".")) : 0
+                              const insuficiente = montoNum > 0 && montoNum > disponible
+                              return (
+                                <>
+                                  <p className={cn("text-sm font-bold", insuficiente ? "text-red-400" : "text-emerald-400")}>
+                                    {formatGuaranies(disponible)}
+                                  </p>
+                                  {limite > 0 && (
+                                    <p className="text-[10px] text-slate-500">
+                                      Lim: {formatGuaranies(limite)}
+                                    </p>
+                                  )}
+                                  {insuficiente && (
+                                    <p className="text-[10px] text-red-400">Credito insuficiente</p>
+                                  )}
+                                </>
+                              )
+                            })()}
+                          </div>
                         </button>
                       ))}
 

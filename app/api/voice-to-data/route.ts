@@ -118,16 +118,24 @@ async function extraerDatosConIA(
 CONTEXTO DEL USUARIO:
 - Tipos de categoria de egreso: ${tiposCategoriaLista}
 - Categorias de ingreso: ${categoriasIngresoLista}
-- Cajas de ahorro: ${cajasAhorroLista}
-- Tarjetas de credito: ${tarjetasCreditoLista}
+- Cajas de ahorro del usuario: ${cajasAhorroLista}
+- Tarjetas de credito del usuario: ${tarjetasCreditoLista}
 
 REGLAS DE EXTRACCION:
 1. TIPO: "gaste/pague/compre" = egreso, "recibi/cobre/me pagaron" = ingreso
 2. MONTO: "mil"=1000, "millon"=1000000. En Paraguay son guaranies (montos grandes)
 3. CATEGORIA: Debe coincidir con las listas del usuario. Si no existe, sugerir donde iria.
 4. FECHA: "hoy"=${hoy}, "ayer"=${ayer}. Si no menciona, usa ${hoy}
-5. ORIGEN/DESTINO: De que caja sale/entra el dinero, o "efectivo", o tarjeta de credito
-6. CONFIANZA: "alta" si tienes tipo+monto+categoria+origen, "media" si tipo+monto, "baja" si falta algo importante`
+5. ORIGEN/DESTINO - MUY IMPORTANTE:
+   - Buscar menciones de cajas: "caja asalariado", "cuenta banco", "caja ahorros", etc.
+   - Si dice "de la caja X" o "de X" donde X coincide con una caja del usuario, usar exactamente el nombre de esa caja
+   - Ejemplo: "de la caja asalariado" -> origen_destino: "asalariado"
+   - Ejemplo: "de asalariado" -> origen_destino: "asalariado"  
+   - Si menciona tarjeta de credito -> usa_tarjeta_credito: true
+   - Si dice "efectivo" o "cash" -> origen_destino: "efectivo"
+6. CONFIANZA: "alta" si tienes tipo+monto+categoria+origen, "media" si tipo+monto, "baja" si falta algo importante
+
+IMPORTANTE: Siempre intenta identificar el origen del dinero. Si el usuario menciona alguna de sus cajas de ahorro, extrae el nombre exacto.`
 
   // Reintentos con backoff exponencial para errores temporales
   const maxRetries = 3
