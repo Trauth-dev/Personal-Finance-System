@@ -563,10 +563,14 @@ export function VoiceEntryClient({
       }
     }
     
-    // Verificar si necesita crear categoria
-    if (datos.sugerencias?.requiere_crear_categoria) {
+    // Verificar si necesita crear categoria (subcategoria no encontrada)
+    if (datos.sugerencias?.requiere_crear_categoria && datos.sugerencias?.subcategoria_sugerida) {
+      // Preparar los datos para el dialogo
       setNuevaCategoriaParaTipo(datos.sugerencias.categoria_sugerida || "")
       setNuevaCategoriaNombre(datos.sugerencias.subcategoria_sugerida || datos.subcategoria || "")
+      // Abrir automaticamente el dialogo para crear la nueva descripcion
+      setShowCrearCategoria(true)
+      console.log("[v0] Subcategoria no encontrada, abriendo dialogo para crear:", datos.sugerencias.subcategoria_sugerida)
     }
     
     // Mostrar resumen
@@ -658,6 +662,7 @@ export function VoiceEntryClient({
           setCategoriasEgreso([...categoriasEgreso, nuevaCat])
           setSelectedTipoCategoria(tipoId)
           setSelectedSubcategoria(nuevaCat.id)
+          console.log("[v0] Descripcion creada exitosamente:", nuevaCat.nombre, "en categoria:", nuevaCategoriaParaTipo)
         }
       }
     } else if (tipoTransaccion === "ingreso") {
@@ -1551,15 +1556,25 @@ export function VoiceEntryClient({
         )}
       </main>
 
-      {/* Dialog para crear categoria */}
+      {/* Dialog para crear categoria/descripcion */}
       <Dialog open={showCrearCategoria} onOpenChange={setShowCrearCategoria}>
         <DialogContent className="bg-slate-900 border-white/10">
           <DialogHeader>
             <DialogTitle className="text-white">
-              {tipoTransaccion === "ingreso" ? "Crear tipo de ingreso" : "Crear categoria"}
+              {tipoTransaccion === "ingreso" 
+                ? "Crear tipo de ingreso" 
+                : nuevaCategoriaNombre 
+                  ? `Agregar "${nuevaCategoriaNombre}"` 
+                  : "Crear descripcion"
+              }
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              Agrega una nueva categoria para tus transacciones
+              {nuevaCategoriaNombre && nuevaCategoriaParaTipo
+                ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Te sugerimos agregarla en "${nuevaCategoriaParaTipo}".`
+                : nuevaCategoriaNombre
+                  ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Selecciona en que categoria agregarla.`
+                  : "Agrega una nueva descripcion para tus transacciones"
+              }
             </DialogDescription>
           </DialogHeader>
           
