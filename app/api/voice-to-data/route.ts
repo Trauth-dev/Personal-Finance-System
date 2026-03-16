@@ -17,6 +17,9 @@ interface ExtractedData {
     categoria_sugerida?: string | null
     subcategoria_sugerida?: string | null
     requiere_crear_categoria?: boolean | null
+    // Para ingresos
+    tipo_ingreso_sugerido?: string | null
+    requiere_crear_ingreso?: boolean | null
     mensaje?: string | null
   }
 }
@@ -133,36 +136,55 @@ async function extraerDatosConIA(
 
 CONTEXTO DEL USUARIO:
 - Tipos de categoria de egreso: ${tiposCategoriaLista}
-- Categorias de ingreso: ${categoriasIngresoLista}
+- Tipos de ingreso registrados: ${categoriasIngresoLista}
 - Cajas de ahorro del usuario: ${cajasAhorroLista}
 - Tarjetas de credito del usuario: ${tarjetasCreditoLista}
 
-DESCRIPCIONES REGISTRADAS POR CATEGORIA (MUY IMPORTANTE):
+DESCRIPCIONES REGISTRADAS POR CATEGORIA DE EGRESO:
 ${descripcionesFormateadas || "  (ninguna registrada)"}
 
 REGLAS DE EXTRACCION:
-1. TIPO: "gaste/pague/compre" = egreso, "recibi/cobre/me pagaron" = ingreso
+
+1. TIPO DE TRANSACCION:
+   - "gaste/pague/compre/saque" = egreso
+   - "recibi/cobre/me pagaron/entre/deposite/ingrese" = ingreso
+
 2. MONTO: "mil"=1000, "millon"=1000000. En Paraguay son guaranies (montos grandes)
-3. CATEGORIA Y DESCRIPCION - MUY IMPORTANTE:
+
+3. PARA EGRESOS - CATEGORIA Y DESCRIPCION:
    - PRIMERO busca si el usuario menciona alguna DESCRIPCION registrada (alquiler, luz, supermercado, etc.)
    - Si encuentra una descripcion, usa la categoria padre correspondiente
    - Ejemplo: Si usuario dice "alquiler" y "Alquiler" esta en "Gastos Vivienda" -> categoria: "Gastos Vivienda", subcategoria: "Alquiler"
    - Si no encuentra descripcion exacta, buscar por similitud (supermercado ~ super, alquiler ~ renta)
-   - Si la descripcion NO existe en ninguna categoria, sugerir donde deberia ir en "sugerencias"
-4. FECHA: "hoy"=${hoy}, "ayer"=${ayer}. Si no menciona, usa ${hoy}
-5. ORIGEN/DESTINO - MUY IMPORTANTE:
-   - Buscar menciones de cajas: "caja asalariado", "cuenta banco", "caja ahorros", etc.
-   - Si dice "de la caja X" o "de X" donde X coincide con una caja del usuario, usar exactamente el nombre de esa caja
-   - Ejemplo: "de la caja asalariado" -> origen_destino: "asalariado"
-   - Ejemplo: "de asalariado" -> origen_destino: "asalariado"  
-   - Si menciona tarjeta de credito -> usa_tarjeta_credito: true
+   - Si la descripcion NO existe en ninguna categoria, sugerir en "sugerencias" con requiere_crear_categoria=true
+
+4. PARA INGRESOS - TIPO DE INGRESO (MUY IMPORTANTE):
+   - Busca si el usuario menciona un tipo de ingreso registrado: ${categoriasIngresoLista}
+   - Ejemplo: "cobre mi salario" -> categoria: "Salario"
+   - Ejemplo: "recibi pago freelance" -> categoria: "Freelance"
+   - Si el tipo de ingreso NO existe en los registrados, marcarlo en sugerencias:
+     * sugerencias.tipo_ingreso_sugerido = "nombre que menciono el usuario"
+     * sugerencias.requiere_crear_ingreso = true
+   - Buscar por similitud: "sueldo" ~ "Salario", "trabajo independiente" ~ "Freelance"
+
+5. FECHA: "hoy"=${hoy}, "ayer"=${ayer}. Si no menciona, usa ${hoy}
+
+6. ORIGEN (para egresos) / DESTINO (para ingresos) - MUY IMPORTANTE:
+   - Cajas disponibles: ${cajasAhorroLista}
+   - Para EGRESO: "de la caja X", "de X", "saque de X" -> origen_destino: nombre de la caja
+   - Para INGRESO: "a la caja X", "deposite en X", "fue a X", "en mi caja X" -> origen_destino: nombre de la caja
+   - IMPORTANTE: Para ingresos, el destino es OBLIGATORIO. Si no se detecta, agregarlo a campos_faltantes
    - Si dice "efectivo" o "cash" -> origen_destino: "efectivo"
-6. CONFIANZA: "alta" si tienes tipo+monto+categoria+subcategoria+origen, "media" si tipo+monto+categoria, "baja" si falta algo importante
+   - Si menciona tarjeta de credito -> usa_tarjeta_credito: true (solo para egresos)
+
+7. CONFIANZA:
+   - Para EGRESO: "alta" si tienes tipo+monto+categoria+subcategoria+origen, "media" si tipo+monto+categoria, "baja" si falta algo
+   - Para INGRESO: "alta" si tienes tipo+monto+tipo_ingreso+destino, "media" si tipo+monto+tipo_ingreso, "baja" si falta destino o tipo_ingreso
 
 IMPORTANTE: 
-- La subcategoria es la descripcion especifica del gasto (alquiler, luz, supermercado)
-- La categoria es el tipo general (Gastos Vivienda, Gastos Varios, Disfrute)
-- Siempre intenta detectar la subcategoria primero y de ahi derivar la categoria`
+- Para egresos: subcategoria es la descripcion especifica, categoria es el tipo general
+- Para ingresos: categoria es el tipo de ingreso (Salario, Freelance, etc.), destino es la caja donde va el dinero
+- El destino del ingreso SIEMPRE debe detectarse o marcarse como campo faltante`
 
   // Reintentos con backoff exponencial para errores temporales
   const maxRetries = 3
@@ -176,29 +198,37 @@ IMPORTANTE:
 
 TEXTO: "${texto}"
 
-INSTRUCCIONES ESPECIALES:
+INSTRUCCIONES ESPECIALES PARA EGRESOS:
 - "categoria" = tipo general (Gastos Vivienda, Gastos Varios, Disfrute, etc.)
 - "subcategoria" = descripcion especifica que el usuario menciona (alquiler, luz, supermercado, etc.)
 - Si el usuario dice "alquiler" y esta registrado en "Gastos Vivienda", entonces categoria="Gastos Vivienda" y subcategoria="Alquiler"
-- Si la subcategoria no existe en las descripciones registradas, incluir en sugerencias: categoria_sugerida, subcategoria_sugerida, requiere_crear_categoria=true
+- Si la subcategoria no existe, incluir en sugerencias: categoria_sugerida, subcategoria_sugerida, requiere_crear_categoria=true
+
+INSTRUCCIONES ESPECIALES PARA INGRESOS:
+- "categoria" = tipo de ingreso (Salario, Freelance, Inversiones, etc.)
+- Si el tipo de ingreso NO existe en los registrados, incluir en sugerencias: tipo_ingreso_sugerido, requiere_crear_ingreso=true
+- "origen_destino" = OBLIGATORIO para ingresos - la caja de ahorro donde va el dinero
+- Si no se detecta destino para ingreso, agregar "Destino del dinero" a campos_faltantes
 
 Responde con este formato JSON exacto:
 {
   "tipo_transaccion": "egreso" o "ingreso" o null,
   "monto": numero o null,
-  "categoria": "nombre de tipo de categoria (Gastos Vivienda, Gastos Varios, etc.)" o null,
-  "subcategoria": "descripcion especifica detectada (alquiler, luz, supermercado)" o null,
+  "categoria": "para egreso: tipo categoria (Gastos Vivienda, etc.) / para ingreso: tipo ingreso (Salario, Freelance, etc.)" o null,
+  "subcategoria": "solo para egreso: descripcion especifica (alquiler, luz, supermercado)" o null,
   "concepto": "nota adicional si hay" o null,
   "fecha": "${hoy}",
-  "origen_destino": "nombre caja o efectivo" o null,
+  "origen_destino": "para egreso: de donde sale / para ingreso: a que caja va (OBLIGATORIO)" o null,
   "usa_tarjeta_credito": false,
   "nombre_tarjeta": null,
   "confianza": "alta" o "media" o "baja",
-  "campos_faltantes": ["lista de campos no detectados"],
+  "campos_faltantes": ["lista de campos no detectados - para ingreso incluir 'Destino del dinero' si no se detecta"],
   "sugerencias": {
-    "categoria_sugerida": "si subcategoria no existe, sugerir en que categoria deberia ir",
-    "subcategoria_sugerida": "la subcategoria que el usuario menciono pero no existe",
-    "requiere_crear_categoria": true/false
+    "categoria_sugerida": "para egreso: si subcategoria no existe",
+    "subcategoria_sugerida": "para egreso: la subcategoria que no existe",
+    "requiere_crear_categoria": true/false,
+    "tipo_ingreso_sugerido": "para ingreso: el tipo que el usuario menciono pero no existe",
+    "requiere_crear_ingreso": true/false
   }
 }`
 

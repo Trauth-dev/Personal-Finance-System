@@ -96,6 +96,9 @@ interface ExtractedData {
     categoria_sugerida?: string
     subcategoria_sugerida?: string
     requiere_crear_categoria?: boolean
+    // Para ingresos
+    tipo_ingreso_sugerido?: string
+    requiere_crear_ingreso?: boolean
     mensaje?: string
   }
 }
@@ -544,21 +547,63 @@ export function VoiceEntryClient({
         }
       }
     } else if (datos.tipo_transaccion === "ingreso") {
-      // Buscar categoria de ingreso
-      const catMatch = categoriasIngreso.find(c => 
-        c.nombre.toLowerCase() === datos.categoria?.toLowerCase()
-      )
-      if (catMatch) {
-        setSelectedCategoriaIngreso(catMatch.id)
+      // Buscar tipo de ingreso - busqueda flexible
+      let tipoIngresoEncontrado = false
+      
+      if (datos.categoria) {
+        const catLower = datos.categoria.toLowerCase()
+        
+        // Buscar coincidencia exacta o parcial
+        const catMatch = categoriasIngreso.find(c => 
+          c.nombre.toLowerCase() === catLower ||
+          c.nombre.toLowerCase().includes(catLower) ||
+          catLower.includes(c.nombre.toLowerCase())
+        )
+        
+        if (catMatch) {
+          setSelectedCategoriaIngreso(catMatch.id)
+          tipoIngresoEncontrado = true
+          console.log("[v0] Tipo de ingreso encontrado:", catMatch.nombre)
+        }
       }
       
-      // Buscar destino
+      // Si no encontro el tipo de ingreso, verificar sugerencias
+      if (!tipoIngresoEncontrado && datos.sugerencias?.requiere_crear_ingreso && datos.sugerencias?.tipo_ingreso_sugerido) {
+        // Preparar dialogo para crear nuevo tipo de ingreso
+        setNuevaCategoriaNombre(datos.sugerencias.tipo_ingreso_sugerido)
+        setNuevaCategoriaParaTipo("") // No hay categoria padre para ingresos
+        setShowCrearCategoria(true)
+        console.log("[v0] Tipo de ingreso no encontrado, abriendo dialogo para crear:", datos.sugerencias.tipo_ingreso_sugerido)
+      }
+      
+      // Buscar destino (caja de ahorro) - OBLIGATORIO para ingresos
       if (datos.origen_destino) {
-        const cajaMatch = cajasAhorro.find(c => 
-          c.nombre.toLowerCase().includes(datos.origen_destino?.toLowerCase() || "")
-        )
+        const destinoLower = datos.origen_destino.toLowerCase()
+        
+        // Buscar coincidencia en cajas de ahorro (busqueda flexible)
+        const cajaMatch = cajasAhorro.find(c => {
+          const nombreCaja = c.nombre.toLowerCase()
+          return nombreCaja.includes(destinoLower) || 
+                 destinoLower.includes(nombreCaja) ||
+                 destinoLower.includes("caja " + nombreCaja) ||
+                 destinoLower.includes("cuenta " + nombreCaja)
+        })
+        
         if (cajaMatch) {
           setDestinoCajaId(cajaMatch.id)
+          console.log("[v0] Destino encontrado:", cajaMatch.nombre)
+        } else {
+          // Busqueda por palabras parciales
+          const cajaMatchParcial = cajasAhorro.find(c => {
+            const palabrasCaja = c.nombre.toLowerCase().split(" ")
+            const palabrasDestino = destinoLower.split(" ")
+            return palabrasCaja.some(p => palabrasDestino.includes(p) && p.length > 2)
+          })
+          
+          if (cajaMatchParcial) {
+            setDestinoCajaId(cajaMatchParcial.id)
+            console.log("[v0] Destino encontrado (parcial):", cajaMatchParcial.nombre)
+          }
         }
       }
     }
@@ -676,10 +721,11 @@ export function VoiceEntryClient({
         .select()
         .single()
       
-      if (nuevaCat) {
-        setCategoriasIngreso([...categoriasIngreso, nuevaCat])
-        setSelectedCategoriaIngreso(nuevaCat.id)
-      }
+    if (nuevaCat) {
+      setCategoriasIngreso([...categoriasIngreso, nuevaCat])
+      setSelectedCategoriaIngreso(nuevaCat.id)
+      console.log("[v0] Tipo de ingreso creado exitosamente:", nuevaCat.nombre)
+    }
     }
     
     setShowCrearCategoria(false)
@@ -1561,19 +1607,25 @@ export function VoiceEntryClient({
         <DialogContent className="bg-slate-900 border-white/10">
           <DialogHeader>
             <DialogTitle className="text-white">
-              {tipoTransaccion === "ingreso" 
-                ? "Crear tipo de ingreso" 
-                : nuevaCategoriaNombre 
-                  ? `Agregar "${nuevaCategoriaNombre}"` 
+              {tipoTransaccion === "ingreso"
+                ? nuevaCategoriaNombre
+                  ? `Agregar tipo de ingreso "${nuevaCategoriaNombre}"`
+                  : "Crear tipo de ingreso"
+                : nuevaCategoriaNombre
+                  ? `Agregar "${nuevaCategoriaNombre}"`
                   : "Crear descripcion"
               }
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              {nuevaCategoriaNombre && nuevaCategoriaParaTipo
-                ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Te sugerimos agregarla en "${nuevaCategoriaParaTipo}".`
-                : nuevaCategoriaNombre
-                  ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Selecciona en que categoria agregarla.`
-                  : "Agrega una nueva descripcion para tus transacciones"
+              {tipoTransaccion === "ingreso"
+                ? nuevaCategoriaNombre
+                  ? `No encontramos "${nuevaCategoriaNombre}" en tus tipos de ingreso registrados. Confirma para agregarlo.`
+                  : "Agrega un nuevo tipo de ingreso para tus transacciones"
+                : nuevaCategoriaNombre && nuevaCategoriaParaTipo
+                  ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Te sugerimos agregarla en "${nuevaCategoriaParaTipo}".`
+                  : nuevaCategoriaNombre
+                    ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Selecciona en que categoria agregarla.`
+                    : "Agrega una nueva descripcion para tus transacciones"
               }
             </DialogDescription>
           </DialogHeader>
