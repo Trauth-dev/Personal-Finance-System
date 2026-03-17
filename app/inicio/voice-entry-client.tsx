@@ -751,7 +751,7 @@ export function VoiceEntryClient({
         perfil_id: perfilId,
         monto_actual: 0,
         moneda: "PYG",
-        tipo: "ahorro",
+        tipo: "otro",
         activa: true,
       })
       .select("id, nombre, monto_actual, moneda, color, tipo_cuenta, banco")
