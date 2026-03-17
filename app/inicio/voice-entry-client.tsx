@@ -1245,30 +1245,6 @@ export function VoiceEntryClient({
                     <Label className="text-slate-300">Origen del dinero</Label>
                     
                     <div className="grid gap-2">
-                      {/* Efectivo */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOrigenTipo("efectivo")
-                          setOrigenId("")
-                        }}
-                        className={cn(
-                          "p-3 rounded-lg border-2 transition-all flex items-center gap-3",
-                          origenTipo === "efectivo"
-                            ? "border-amber-500 bg-amber-500/20"
-                            : "border-white/10 hover:border-white/30"
-                        )}
-                      >
-                        <Banknote className={cn(
-                          "w-5 h-5",
-                          origenTipo === "efectivo" ? "text-amber-400" : "text-slate-400"
-                        )} />
-                        <span className={cn(
-                          "font-medium",
-                          origenTipo === "efectivo" ? "text-amber-400" : "text-slate-300"
-                        )}>Efectivo</span>
-                      </button>
-
                       {/* Cajas de ahorro */}
                       {cajasAhorro.map((caja) => (
                         <button
@@ -1421,30 +1397,9 @@ export function VoiceEntryClient({
 
                   {/* Destino del dinero */}
                   <div className="space-y-3">
-                    <Label className="text-slate-300">Destino del dinero (opcional)</Label>
+                    <Label className="text-slate-300">Destino del dinero</Label>
                     
                     <div className="grid gap-2">
-                      {/* Sin destino */}
-                      <button
-                        type="button"
-                        onClick={() => setDestinoCajaId("")}
-                        className={cn(
-                          "p-3 rounded-lg border-2 transition-all flex items-center gap-3",
-                          !destinoCajaId
-                            ? "border-slate-500 bg-slate-500/20"
-                            : "border-white/10 hover:border-white/30"
-                        )}
-                      >
-                        <Banknote className={cn(
-                          "w-5 h-5",
-                          !destinoCajaId ? "text-slate-300" : "text-slate-400"
-                        )} />
-                        <span className={cn(
-                          "font-medium",
-                          !destinoCajaId ? "text-slate-300" : "text-slate-400"
-                        )}>Sin especificar destino</span>
-                      </button>
-
                       {/* Cajas de ahorro */}
                       {cajasAhorro.map((caja) => (
                         <button
