@@ -5,8 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatGuaranies(amount: number): string {
-  return `Gs ${amount.toLocaleString("es-PY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+export function formatGuaranies(amount: number | null | undefined): string {
+  const safeAmount = amount ?? 0
+  return `Gs ${safeAmount.toLocaleString("es-PY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
 /**
