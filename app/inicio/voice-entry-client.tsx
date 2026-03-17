@@ -757,7 +757,13 @@ export function VoiceEntryClient({
       .select("id, nombre, monto_actual, moneda, color, tipo_cuenta, banco")
       .single()
     
+    if (errorCaja) {
+      console.error("[v0] Error al crear caja:", errorCaja)
+      return
+    }
+    
     if (nuevaCaja) {
+      console.log("[v0] Caja creada exitosamente:", nuevaCaja)
       setCajasAhorro([...cajasAhorro, nuevaCaja])
       setDestinoCajaId(nuevaCaja.id)
     }
