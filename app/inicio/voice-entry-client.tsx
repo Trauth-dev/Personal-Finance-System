@@ -96,6 +96,9 @@ interface ExtractedData {
     categoria_sugerida?: string
     subcategoria_sugerida?: string
     requiere_crear_categoria?: boolean
+    // Para ingresos
+    tipo_ingreso_sugerido?: string
+    requiere_crear_ingreso?: boolean
     mensaje?: string
   }
 }
@@ -151,6 +154,10 @@ export function VoiceEntryClient({
   const [showCrearCategoria, setShowCrearCategoria] = useState(false)
   const [nuevaCategoriaNombre, setNuevaCategoriaNombre] = useState("")
   const [nuevaCategoriaParaTipo, setNuevaCategoriaParaTipo] = useState("")
+  
+  // Dialog para crear caja de ahorro
+  const [showCrearCaja, setShowCrearCaja] = useState(false)
+  const [nuevaCajaNombre, setNuevaCajaNombre] = useState("")
 
   // Datos dinamicos
   const [tiposCategoria, setTiposCategoria] = useState(initialTiposCategoria)
@@ -544,21 +551,63 @@ export function VoiceEntryClient({
         }
       }
     } else if (datos.tipo_transaccion === "ingreso") {
-      // Buscar categoria de ingreso
-      const catMatch = categoriasIngreso.find(c => 
-        c.nombre.toLowerCase() === datos.categoria?.toLowerCase()
-      )
-      if (catMatch) {
-        setSelectedCategoriaIngreso(catMatch.id)
+      // Buscar tipo de ingreso - busqueda flexible
+      let tipoIngresoEncontrado = false
+      
+      if (datos.categoria) {
+        const catLower = datos.categoria.toLowerCase()
+        
+        // Buscar coincidencia exacta o parcial
+        const catMatch = categoriasIngreso.find(c => 
+          c.nombre.toLowerCase() === catLower ||
+          c.nombre.toLowerCase().includes(catLower) ||
+          catLower.includes(c.nombre.toLowerCase())
+        )
+        
+        if (catMatch) {
+          setSelectedCategoriaIngreso(catMatch.id)
+          tipoIngresoEncontrado = true
+          console.log("[v0] Tipo de ingreso encontrado:", catMatch.nombre)
+        }
       }
       
-      // Buscar destino
+      // Si no encontro el tipo de ingreso, verificar sugerencias
+      if (!tipoIngresoEncontrado && datos.sugerencias?.requiere_crear_ingreso && datos.sugerencias?.tipo_ingreso_sugerido) {
+        // Preparar dialogo para crear nuevo tipo de ingreso
+        setNuevaCategoriaNombre(datos.sugerencias.tipo_ingreso_sugerido)
+        setNuevaCategoriaParaTipo("") // No hay categoria padre para ingresos
+        setShowCrearCategoria(true)
+        console.log("[v0] Tipo de ingreso no encontrado, abriendo dialogo para crear:", datos.sugerencias.tipo_ingreso_sugerido)
+      }
+      
+      // Buscar destino (caja de ahorro) - OBLIGATORIO para ingresos
       if (datos.origen_destino) {
-        const cajaMatch = cajasAhorro.find(c => 
-          c.nombre.toLowerCase().includes(datos.origen_destino?.toLowerCase() || "")
-        )
+        const destinoLower = datos.origen_destino.toLowerCase()
+        
+        // Buscar coincidencia en cajas de ahorro (busqueda flexible)
+        const cajaMatch = cajasAhorro.find(c => {
+          const nombreCaja = c.nombre.toLowerCase()
+          return nombreCaja.includes(destinoLower) || 
+                 destinoLower.includes(nombreCaja) ||
+                 destinoLower.includes("caja " + nombreCaja) ||
+                 destinoLower.includes("cuenta " + nombreCaja)
+        })
+        
         if (cajaMatch) {
           setDestinoCajaId(cajaMatch.id)
+          console.log("[v0] Destino encontrado:", cajaMatch.nombre)
+        } else {
+          // Busqueda por palabras parciales
+          const cajaMatchParcial = cajasAhorro.find(c => {
+            const palabrasCaja = c.nombre.toLowerCase().split(" ")
+            const palabrasDestino = destinoLower.split(" ")
+            return palabrasCaja.some(p => palabrasDestino.includes(p) && p.length > 2)
+          })
+          
+          if (cajaMatchParcial) {
+            setDestinoCajaId(cajaMatchParcial.id)
+            console.log("[v0] Destino encontrado (parcial):", cajaMatchParcial.nombre)
+          }
         }
       }
     }
@@ -676,17 +725,53 @@ export function VoiceEntryClient({
         .select()
         .single()
       
-      if (nuevaCat) {
-        setCategoriasIngreso([...categoriasIngreso, nuevaCat])
-        setSelectedCategoriaIngreso(nuevaCat.id)
-      }
+    if (nuevaCat) {
+      setCategoriasIngreso([...categoriasIngreso, nuevaCat])
+      setSelectedCategoriaIngreso(nuevaCat.id)
+      console.log("[v0] Tipo de ingreso creado exitosamente:", nuevaCat.nombre)
+    }
     }
     
-    setShowCrearCategoria(false)
-    setNuevaCategoriaNombre("")
-    setNuevaCategoriaParaTipo("")
+  setShowCrearCategoria(false)
+  setNuevaCategoriaNombre("")
+  setNuevaCategoriaParaTipo("")
   }
-
+  
+  // Crear nueva caja de ahorro
+  const handleCrearCaja = async () => {
+    if (!nuevaCajaNombre.trim()) return
+    
+    const supabase = createClient()
+    
+    const { data: nuevaCaja, error: errorCaja } = await supabase
+      .from("cajas_ahorro")
+      .insert({
+        nombre: nuevaCajaNombre.trim(),
+        user_id: userId,
+        perfil_id: perfilId,
+        monto_actual: 0,
+        moneda: "PYG",
+        tipo: "otro",
+        activa: true,
+      })
+      .select("id, nombre, monto_actual, moneda, color, tipo_cuenta, banco")
+      .single()
+    
+    if (errorCaja) {
+      console.error("[v0] Error al crear caja:", errorCaja)
+      return
+    }
+    
+    if (nuevaCaja) {
+      console.log("[v0] Caja creada exitosamente:", nuevaCaja)
+      setCajasAhorro([...cajasAhorro, nuevaCaja])
+      setDestinoCajaId(nuevaCaja.id)
+    }
+    
+    setShowCrearCaja(false)
+    setNuevaCajaNombre("")
+  }
+  
   // Guardar transaccion
   const handleGuardar = async () => {
     if (!datosCompletos()) {
@@ -1199,30 +1284,6 @@ export function VoiceEntryClient({
                     <Label className="text-slate-300">Origen del dinero</Label>
                     
                     <div className="grid gap-2">
-                      {/* Efectivo */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setOrigenTipo("efectivo")
-                          setOrigenId("")
-                        }}
-                        className={cn(
-                          "p-3 rounded-lg border-2 transition-all flex items-center gap-3",
-                          origenTipo === "efectivo"
-                            ? "border-amber-500 bg-amber-500/20"
-                            : "border-white/10 hover:border-white/30"
-                        )}
-                      >
-                        <Banknote className={cn(
-                          "w-5 h-5",
-                          origenTipo === "efectivo" ? "text-amber-400" : "text-slate-400"
-                        )} />
-                        <span className={cn(
-                          "font-medium",
-                          origenTipo === "efectivo" ? "text-amber-400" : "text-slate-300"
-                        )}>Efectivo</span>
-                      </button>
-
                       {/* Cajas de ahorro */}
                       {cajasAhorro.map((caja) => (
                         <button
@@ -1375,30 +1436,19 @@ export function VoiceEntryClient({
 
                   {/* Destino del dinero */}
                   <div className="space-y-3">
-                    <Label className="text-slate-300">Destino del dinero (opcional)</Label>
-                    
-                    <div className="grid gap-2">
-                      {/* Sin destino */}
+                    <div className="flex items-center justify-between">
+                      <Label className="text-slate-300">Destino del dinero</Label>
                       <button
                         type="button"
-                        onClick={() => setDestinoCajaId("")}
-                        className={cn(
-                          "p-3 rounded-lg border-2 transition-all flex items-center gap-3",
-                          !destinoCajaId
-                            ? "border-slate-500 bg-slate-500/20"
-                            : "border-white/10 hover:border-white/30"
-                        )}
+                        onClick={() => setShowCrearCaja(true)}
+                        className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
                       >
-                        <Banknote className={cn(
-                          "w-5 h-5",
-                          !destinoCajaId ? "text-slate-300" : "text-slate-400"
-                        )} />
-                        <span className={cn(
-                          "font-medium",
-                          !destinoCajaId ? "text-slate-300" : "text-slate-400"
-                        )}>Sin especificar destino</span>
+                        <Plus className="w-4 h-4" />
+                        Nueva
                       </button>
-
+                    </div>
+                    
+                    <div className="grid gap-2">
                       {/* Cajas de ahorro */}
                       {cajasAhorro.map((caja) => (
                         <button
@@ -1561,19 +1611,25 @@ export function VoiceEntryClient({
         <DialogContent className="bg-slate-900 border-white/10">
           <DialogHeader>
             <DialogTitle className="text-white">
-              {tipoTransaccion === "ingreso" 
-                ? "Crear tipo de ingreso" 
-                : nuevaCategoriaNombre 
-                  ? `Agregar "${nuevaCategoriaNombre}"` 
+              {tipoTransaccion === "ingreso"
+                ? nuevaCategoriaNombre
+                  ? `Agregar tipo de ingreso "${nuevaCategoriaNombre}"`
+                  : "Crear tipo de ingreso"
+                : nuevaCategoriaNombre
+                  ? `Agregar "${nuevaCategoriaNombre}"`
                   : "Crear descripcion"
               }
             </DialogTitle>
             <DialogDescription className="text-slate-400">
-              {nuevaCategoriaNombre && nuevaCategoriaParaTipo
-                ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Te sugerimos agregarla en "${nuevaCategoriaParaTipo}".`
-                : nuevaCategoriaNombre
-                  ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Selecciona en que categoria agregarla.`
-                  : "Agrega una nueva descripcion para tus transacciones"
+              {tipoTransaccion === "ingreso"
+                ? nuevaCategoriaNombre
+                  ? `No encontramos "${nuevaCategoriaNombre}" en tus tipos de ingreso registrados. Confirma para agregarlo.`
+                  : "Agrega un nuevo tipo de ingreso para tus transacciones"
+                : nuevaCategoriaNombre && nuevaCategoriaParaTipo
+                  ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Te sugerimos agregarla en "${nuevaCategoriaParaTipo}".`
+                  : nuevaCategoriaNombre
+                    ? `No encontramos "${nuevaCategoriaNombre}" en tus descripciones. Selecciona en que categoria agregarla.`
+                    : "Agrega una nueva descripcion para tus transacciones"
               }
             </DialogDescription>
           </DialogHeader>
@@ -1655,6 +1711,47 @@ export function VoiceEntryClient({
               </button>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para crear caja de ahorro */}
+      <Dialog open={showCrearCaja} onOpenChange={setShowCrearCaja}>
+        <DialogContent className="bg-slate-900 border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white">Crear caja de ahorro</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Agrega una nueva caja de ahorro para registrar tus ingresos.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-slate-300">Nombre de la caja</Label>
+              <Input
+                value={nuevaCajaNombre}
+                onChange={(e) => setNuevaCajaNombre(e.target.value)}
+                placeholder="Ej: Cuenta Banco, Billetera, Asalariado..."
+                className="bg-slate-800 border-white/10 text-white"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCrearCaja(false)}
+              className="border-white/20 text-slate-300"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCrearCaja}
+              disabled={!nuevaCajaNombre.trim()}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              Crear caja
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
