@@ -154,6 +154,10 @@ export function VoiceEntryClient({
   const [showCrearCategoria, setShowCrearCategoria] = useState(false)
   const [nuevaCategoriaNombre, setNuevaCategoriaNombre] = useState("")
   const [nuevaCategoriaParaTipo, setNuevaCategoriaParaTipo] = useState("")
+  
+  // Dialog para crear caja de ahorro
+  const [showCrearCaja, setShowCrearCaja] = useState(false)
+  const [nuevaCajaNombre, setNuevaCajaNombre] = useState("")
 
   // Datos dinamicos
   const [tiposCategoria, setTiposCategoria] = useState(initialTiposCategoria)
@@ -728,11 +732,40 @@ export function VoiceEntryClient({
     }
     }
     
-    setShowCrearCategoria(false)
-    setNuevaCategoriaNombre("")
-    setNuevaCategoriaParaTipo("")
+  setShowCrearCategoria(false)
+  setNuevaCategoriaNombre("")
+  setNuevaCategoriaParaTipo("")
   }
-
+  
+  // Crear nueva caja de ahorro
+  const handleCrearCaja = async () => {
+    if (!nuevaCajaNombre.trim()) return
+    
+    const supabase = createClient()
+    
+    const { data: nuevaCaja, error: errorCaja } = await supabase
+      .from("cajas_ahorro")
+      .insert({
+        nombre: nuevaCajaNombre.trim(),
+        user_id: userId,
+        perfil_id: perfilId,
+        monto_actual: 0,
+        moneda: "PYG",
+        tipo: "ahorro",
+        activa: true,
+      })
+      .select("id, nombre, monto_actual, moneda, color, tipo_cuenta, banco")
+      .single()
+    
+    if (nuevaCaja) {
+      setCajasAhorro([...cajasAhorro, nuevaCaja])
+      setDestinoCajaId(nuevaCaja.id)
+    }
+    
+    setShowCrearCaja(false)
+    setNuevaCajaNombre("")
+  }
+  
   // Guardar transaccion
   const handleGuardar = async () => {
     if (!datosCompletos()) {
@@ -1397,7 +1430,17 @@ export function VoiceEntryClient({
 
                   {/* Destino del dinero */}
                   <div className="space-y-3">
-                    <Label className="text-slate-300">Destino del dinero</Label>
+                    <div className="flex items-center justify-between">
+                      <Label className="text-slate-300">Destino del dinero</Label>
+                      <button
+                        type="button"
+                        onClick={() => setShowCrearCaja(true)}
+                        className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Nueva
+                      </button>
+                    </div>
                     
                     <div className="grid gap-2">
                       {/* Cajas de ahorro */}
@@ -1662,6 +1705,47 @@ export function VoiceEntryClient({
               </button>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para crear caja de ahorro */}
+      <Dialog open={showCrearCaja} onOpenChange={setShowCrearCaja}>
+        <DialogContent className="bg-slate-900 border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white">Crear caja de ahorro</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Agrega una nueva caja de ahorro para registrar tus ingresos.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-slate-300">Nombre de la caja</Label>
+              <Input
+                value={nuevaCajaNombre}
+                onChange={(e) => setNuevaCajaNombre(e.target.value)}
+                placeholder="Ej: Cuenta Banco, Billetera, Asalariado..."
+                className="bg-slate-800 border-white/10 text-white"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCrearCaja(false)}
+              className="border-white/20 text-slate-300"
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleCrearCaja}
+              disabled={!nuevaCajaNombre.trim()}
+              className="bg-emerald-600 hover:bg-emerald-700"
+            >
+              Crear caja
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
