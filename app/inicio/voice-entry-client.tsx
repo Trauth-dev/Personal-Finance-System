@@ -1068,13 +1068,25 @@ export function VoiceEntryClient({
                       <button
                         type="button"
                         onClick={() => {
+                          // Limpiar transcripcion
                           setTranscripcion("")
                           transcripcionRef.current = ""
+                          
+                          // En moviles, necesitamos reiniciar el recognition para que siga funcionando
+                          if (recognitionRef.current) {
+                            try {
+                              recognitionRef.current.abort()
+                              recognitionRef.current.start()
+                            } catch (e) {
+                              // Si falla, intentar crear uno nuevo
+                              console.log("[v0] Reiniciando recognition")
+                            }
+                          }
                         }}
-                        className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors"
+                        className="p-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 transition-colors"
+                        title="Reiniciar transcripcion"
                       >
-                        <X className="w-3 h-3" />
-                        Reiniciar
+                        <RefreshCw className="w-4 h-4 text-amber-400" />
                       </button>
                     </div>
                     <p className="text-white">{transcripcion}</p>
