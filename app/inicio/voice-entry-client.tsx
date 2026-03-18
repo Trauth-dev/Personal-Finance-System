@@ -1060,9 +1060,22 @@ export function VoiceEntryClient({
                 {/* Transcripcion en tiempo real */}
                 {transcripcion && isRecording && (
                   <div className="w-full p-4 rounded-lg bg-white/5 border border-white/10">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Volume2 className="w-4 h-4 text-cyan-400" />
-                      <span className="text-xs text-slate-400 uppercase tracking-wide">Transcripcion</span>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Volume2 className="w-4 h-4 text-cyan-400" />
+                        <span className="text-xs text-slate-400 uppercase tracking-wide">Transcripcion</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTranscripcion("")
+                          transcripcionRef.current = ""
+                        }}
+                        className="flex items-center gap-1 text-xs text-red-400 hover:text-red-300 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                        Reiniciar
+                      </button>
                     </div>
                     <p className="text-white">{transcripcion}</p>
                   </div>
