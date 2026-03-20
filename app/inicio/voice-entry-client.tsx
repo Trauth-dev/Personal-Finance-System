@@ -1301,21 +1301,59 @@ export function VoiceEntryClient({
                   </div>
 
                   {/* Subcategoria */}
-                  {selectedTipoCategoria && subcategoriasFiltradas.length > 0 && (
+                  {selectedTipoCategoria && (
                     <div className="space-y-2">
-                      <Label className="text-slate-300">Descripcion</Label>
-                      <Select value={selectedSubcategoria} onValueChange={setSelectedSubcategoria}>
-                        <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                          <SelectValue placeholder="Selecciona una descripcion" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {subcategoriasFiltradas.map((sub) => (
-                            <SelectItem key={sub.id} value={sub.id}>
-                              {sub.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-slate-300">Descripcion</Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            // Obtener el nombre de la categoria seleccionada
+                            const categoriaSeleccionada = tiposCategoria.find(t => t.id === selectedTipoCategoria)
+                            setNuevaCategoriaParaTipo(categoriaSeleccionada?.nombre || "")
+                            setNuevaCategoriaNombre("")
+                            setShowCrearCategoria(true)
+                          }}
+                          className="text-cyan-400 hover:text-cyan-300 gap-1"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Nuevo
+                        </Button>
+                      </div>
+                      
+                      {subcategoriasFiltradas.length > 0 ? (
+                        <Select value={selectedSubcategoria} onValueChange={setSelectedSubcategoria}>
+                          <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                            <SelectValue placeholder="Selecciona una descripcion" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subcategoriasFiltradas.map((sub) => (
+                              <SelectItem key={sub.id} value={sub.id}>
+                                {sub.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="p-4 rounded-lg bg-white/5 border border-white/10 text-center">
+                          <p className="text-sm text-slate-400 mb-2">No hay descripciones en esta categoria</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const categoriaSeleccionada = tiposCategoria.find(t => t.id === selectedTipoCategoria)
+                              setNuevaCategoriaParaTipo(categoriaSeleccionada?.nombre || "")
+                              setNuevaCategoriaNombre("")
+                              setShowCrearCategoria(true)
+                            }}
+                            className="gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Crear primera descripcion
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
 
