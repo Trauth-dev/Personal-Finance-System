@@ -470,6 +470,7 @@ export function VoiceEntryClient({
     if (datos.tipo_transaccion === "egreso") {
       // PRIMERO: Buscar si la subcategoria existe en las descripciones registradas
       let categoriaEncontrada = false
+      let subcategoriaEncontrada = false
       
       if (datos.subcategoria) {
         const subcatLower = datos.subcategoria.toLowerCase()
@@ -486,6 +487,7 @@ export function VoiceEntryClient({
           setSelectedSubcategoria(descripcionMatch.id)
           setSelectedTipoCategoria(descripcionMatch.tipo_categoria_id)
           categoriaEncontrada = true
+          subcategoriaEncontrada = true
           console.log("[v0] Subcategoria encontrada:", descripcionMatch.nombre, "-> Categoria:", descripcionMatch.tipo_categoria_id)
         }
       }
@@ -497,8 +499,19 @@ export function VoiceEntryClient({
         )
         if (tipoMatch) {
           setSelectedTipoCategoria(tipoMatch.id)
+          categoriaEncontrada = true
           console.log("[v0] Categoria encontrada directamente:", tipoMatch.nombre)
         }
+      }
+      
+      // TERCERO: Si la IA detecto una subcategoria pero NO la encontramos en la DB, 
+      // activar automaticamente el dialogo para crearla
+      if (datos.subcategoria && !subcategoriaEncontrada && categoriaEncontrada) {
+        // Preparar los datos para el dialogo de crear descripcion
+        setNuevaCategoriaParaTipo(datos.categoria || "")
+        setNuevaCategoriaNombre(datos.subcategoria)
+        setShowCrearCategoria(true)
+        console.log("[v0] Subcategoria NO existe en DB, abriendo dialogo para crear:", datos.subcategoria)
       }
       
       // Determinar origen
@@ -633,6 +646,7 @@ export function VoiceEntryClient({
     
     if (tipoTransaccion === "egreso") {
       if (!selectedTipoCategoria) return false
+      if (!selectedSubcategoria) return false // Descripcion es OBLIGATORIA
       // Origen es opcional pero recomendado
     }
     
@@ -652,6 +666,7 @@ export function VoiceEntryClient({
     
     if (tipoTransaccion === "egreso") {
       if (!selectedTipoCategoria) faltantes.push("Categoria")
+      if (!selectedSubcategoria) faltantes.push("Descripcion")
       if (!origenTipo && !origenId) faltantes.push("Origen del dinero (caja/tarjeta/efectivo)")
     }
     
@@ -1288,10 +1303,10 @@ export function VoiceEntryClient({
                   {/* Subcategoria */}
                   {selectedTipoCategoria && subcategoriasFiltradas.length > 0 && (
                     <div className="space-y-2">
-                      <Label className="text-slate-300">Descripcion (opcional)</Label>
+                      <Label className="text-slate-300">Descripcion</Label>
                       <Select value={selectedSubcategoria} onValueChange={setSelectedSubcategoria}>
                         <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                          <SelectValue placeholder="Selecciona o deja vacio" />
+                          <SelectValue placeholder="Selecciona una descripcion" />
                         </SelectTrigger>
                         <SelectContent>
                           {subcategoriasFiltradas.map((sub) => (
