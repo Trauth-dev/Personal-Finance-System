@@ -470,6 +470,7 @@ export function VoiceEntryClient({
     if (datos.tipo_transaccion === "egreso") {
       // PRIMERO: Buscar si la subcategoria existe en las descripciones registradas
       let categoriaEncontrada = false
+      let subcategoriaEncontrada = false
       
       if (datos.subcategoria) {
         const subcatLower = datos.subcategoria.toLowerCase()
@@ -486,6 +487,7 @@ export function VoiceEntryClient({
           setSelectedSubcategoria(descripcionMatch.id)
           setSelectedTipoCategoria(descripcionMatch.tipo_categoria_id)
           categoriaEncontrada = true
+          subcategoriaEncontrada = true
           console.log("[v0] Subcategoria encontrada:", descripcionMatch.nombre, "-> Categoria:", descripcionMatch.tipo_categoria_id)
         }
       }
@@ -497,8 +499,19 @@ export function VoiceEntryClient({
         )
         if (tipoMatch) {
           setSelectedTipoCategoria(tipoMatch.id)
+          categoriaEncontrada = true
           console.log("[v0] Categoria encontrada directamente:", tipoMatch.nombre)
         }
+      }
+      
+      // TERCERO: Si la IA detecto una subcategoria pero NO la encontramos en la DB, 
+      // activar automaticamente el dialogo para crearla
+      if (datos.subcategoria && !subcategoriaEncontrada && categoriaEncontrada) {
+        // Preparar los datos para el dialogo de crear descripcion
+        setNuevaCategoriaParaTipo(datos.categoria || "")
+        setNuevaCategoriaNombre(datos.subcategoria)
+        setShowCrearCategoria(true)
+        console.log("[v0] Subcategoria NO existe en DB, abriendo dialogo para crear:", datos.subcategoria)
       }
       
       // Determinar origen
@@ -633,6 +646,7 @@ export function VoiceEntryClient({
     
     if (tipoTransaccion === "egreso") {
       if (!selectedTipoCategoria) return false
+      if (!selectedSubcategoria) return false // Descripcion es OBLIGATORIA
       // Origen es opcional pero recomendado
     }
     
@@ -652,6 +666,7 @@ export function VoiceEntryClient({
     
     if (tipoTransaccion === "egreso") {
       if (!selectedTipoCategoria) faltantes.push("Categoria")
+      if (!selectedSubcategoria) faltantes.push("Descripcion")
       if (!origenTipo && !origenId) faltantes.push("Origen del dinero (caja/tarjeta/efectivo)")
     }
     
@@ -1286,21 +1301,59 @@ export function VoiceEntryClient({
                   </div>
 
                   {/* Subcategoria */}
-                  {selectedTipoCategoria && subcategoriasFiltradas.length > 0 && (
+                  {selectedTipoCategoria && (
                     <div className="space-y-2">
-                      <Label className="text-slate-300">Descripcion (opcional)</Label>
-                      <Select value={selectedSubcategoria} onValueChange={setSelectedSubcategoria}>
-                        <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                          <SelectValue placeholder="Selecciona o deja vacio" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {subcategoriasFiltradas.map((sub) => (
-                            <SelectItem key={sub.id} value={sub.id}>
-                              {sub.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center justify-between">
+                        <Label className="text-slate-300">Descripcion</Label>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            // Obtener el nombre de la categoria seleccionada
+                            const categoriaSeleccionada = tiposCategoria.find(t => t.id === selectedTipoCategoria)
+                            setNuevaCategoriaParaTipo(categoriaSeleccionada?.nombre || "")
+                            setNuevaCategoriaNombre("")
+                            setShowCrearCategoria(true)
+                          }}
+                          className="text-cyan-400 hover:text-cyan-300 gap-1"
+                        >
+                          <Plus className="w-3 h-3" />
+                          Nuevo
+                        </Button>
+                      </div>
+                      
+                      {subcategoriasFiltradas.length > 0 ? (
+                        <Select value={selectedSubcategoria} onValueChange={setSelectedSubcategoria}>
+                          <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                            <SelectValue placeholder="Selecciona una descripcion" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {subcategoriasFiltradas.map((sub) => (
+                              <SelectItem key={sub.id} value={sub.id}>
+                                {sub.nombre}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <div className="p-4 rounded-lg bg-white/5 border border-white/10 text-center">
+                          <p className="text-sm text-slate-400 mb-2">No hay descripciones en esta categoria</p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const categoriaSeleccionada = tiposCategoria.find(t => t.id === selectedTipoCategoria)
+                              setNuevaCategoriaParaTipo(categoriaSeleccionada?.nombre || "")
+                              setNuevaCategoriaNombre("")
+                              setShowCrearCategoria(true)
+                            }}
+                            className="gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Crear primera descripcion
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   )}
 
