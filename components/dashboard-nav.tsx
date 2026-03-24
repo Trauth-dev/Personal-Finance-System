@@ -29,6 +29,13 @@ import {
   Wallet,
   Calculator,
   Mic,
+  UserPlus,
+  CalendarClock,
+  ClipboardList,
+  MessageSquare,
+  Star,
+  RotateCcw,
+  Handshake,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -172,6 +179,49 @@ const navItemsEmpresarial = [
   },
 ]
 
+const navItemsCRM = [
+  {
+    title: "Dashboard CRM",
+    href: "/dashboard/crm",
+    icon: Handshake,
+  },
+  {
+    title: "Clientes",
+    href: "/dashboard/crm/clientes",
+    icon: UserPlus,
+  },
+  {
+    title: "Seguimientos",
+    href: "/dashboard/crm/seguimientos",
+    icon: ClipboardList,
+  },
+  {
+    title: "Agendamientos",
+    href: "/dashboard/crm/agendamientos",
+    icon: CalendarClock,
+  },
+  {
+    title: "Ventas",
+    href: "/dashboard/crm/ventas",
+    icon: ShoppingCart,
+  },
+  {
+    title: "Testimonios",
+    href: "/dashboard/crm/testimonios",
+    icon: MessageSquare,
+  },
+  {
+    title: "Re-visitas",
+    href: "/dashboard/crm/revisitas",
+    icon: RotateCcw,
+  },
+  {
+    title: "Historial",
+    href: "/dashboard/crm/historial",
+    icon: History,
+  },
+]
+
 const navItemsCommon = [
   {
     title: "Perfiles",
@@ -179,7 +229,7 @@ const navItemsCommon = [
     icon: Users,
   },
   {
-    title: "Configuración",
+    title: "Configuracion",
     href: "/dashboard/configuracion",
     icon: Settings,
   },
@@ -207,10 +257,17 @@ function NavContent({
     router.push("/auth/login")
   }
 
-  const navItems =
-    perfilActual?.tipo === "empresarial"
-      ? [...navItemsEmpresarial, ...navItemsCommon]
-      : [...navItemsPersonal, ...navItemsCommon]
+  const getNavItems = () => {
+    switch (perfilActual?.tipo) {
+      case "empresarial":
+        return [...navItemsEmpresarial, ...navItemsCommon]
+      case "crm":
+        return [...navItemsCRM, ...navItemsCommon]
+      default:
+        return [...navItemsPersonal, ...navItemsCommon]
+    }
+  }
+  const navItems = getNavItems()
 
   return (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
@@ -230,7 +287,11 @@ function NavContent({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">{userName || "Usuario"}</p>
               <p className="text-xs text-muted-foreground">
-                {perfilActual?.tipo === "empresarial" ? "Cuenta Empresarial" : "Cuenta Personal"}
+                {perfilActual?.tipo === "empresarial" 
+                  ? "Cuenta Empresarial" 
+                  : perfilActual?.tipo === "crm" 
+                    ? "Cuenta CRM" 
+                    : "Cuenta Personal"}
               </p>
             </div>
           </div>
