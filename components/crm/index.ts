@@ -1,0 +1,8 @@
+// CRM Components
+export { ClientesManager } from "./clientes-manager"
+export { SeguimientosManager } from "./seguimientos-manager"
+export { AgendamientosManager } from "./agendamientos-manager"
+export { VentasManager } from "./ventas-manager"
+export { TestimoniosManager } from "./testimonios-manager"
+export { RevisitasManager } from "./revisitas-manager"
+export { NoComprasManager } from "./no-compras-manager"

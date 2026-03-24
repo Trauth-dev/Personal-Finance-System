@@ -36,6 +36,7 @@ import {
   Star,
   RotateCcw,
   Handshake,
+  XCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -214,6 +215,11 @@ const navItemsCRM = [
     title: "Re-visitas",
     href: "/dashboard/crm/revisitas",
     icon: RotateCcw,
+  },
+  {
+    title: "No Compras",
+    href: "/dashboard/crm/no-compras",
+    icon: XCircle,
   },
   {
     title: "Historial",

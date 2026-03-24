@@ -2,6 +2,7 @@ import { DashboardHeader } from "@/components/dashboard-header"
 import { AgendamientosManager } from "@/components/crm/agendamientos-manager"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
+import { Card, CardContent } from "@/components/ui/card"
 
 export default async function AgendamientosCRMPage() {
   const supabase = await createClient()
@@ -21,6 +22,26 @@ export default async function AgendamientosCRMPage() {
     .eq("tipo", "crm")
     .single()
 
+  if (!perfilCRM) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50">
+        <DashboardHeader 
+          title="Agendamientos" 
+          description="Programa citas y reuniones con clientes" 
+        />
+        <div className="p-4 md:p-6">
+          <Card className="border-2 border-amber-200 bg-amber-50">
+            <CardContent className="p-6">
+              <p className="text-amber-800">
+                No se encontro un perfil CRM. Por favor, crea un perfil de tipo CRM primero.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50">
       <DashboardHeader 
@@ -28,10 +49,7 @@ export default async function AgendamientosCRMPage() {
         description="Programa citas y reuniones con clientes" 
       />
       <div className="p-4 md:p-6">
-        <AgendamientosManager 
-          userId={user.id} 
-          perfilId={perfilCRM?.id || null} 
-        />
+        <AgendamientosManager perfilId={perfilCRM.id} />
       </div>
     </div>
   )

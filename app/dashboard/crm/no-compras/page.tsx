@@ -1,10 +1,10 @@
 import { DashboardHeader } from "@/components/dashboard-header"
-import { SeguimientosManager } from "@/components/crm/seguimientos-manager"
+import { NoComprasManager } from "@/components/crm/no-compras-manager"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 
-export default async function SeguimientosCRMPage() {
+export default async function NoComprasCRMPage() {
   const supabase = await createClient()
 
   const {
@@ -26,8 +26,8 @@ export default async function SeguimientosCRMPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50">
         <DashboardHeader 
-          title="Seguimientos" 
-          description="Gestiona recordatorios y seguimiento de clientes" 
+          title="Registro de No Compras" 
+          description="Analiza los motivos de no conversion" 
         />
         <div className="p-4 md:p-6">
           <Card className="border-2 border-amber-200 bg-amber-50">
@@ -45,11 +45,11 @@ export default async function SeguimientosCRMPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50">
       <DashboardHeader 
-        title="Seguimientos" 
-        description="Gestiona recordatorios y seguimiento de clientes" 
+        title="Registro de No Compras" 
+        description="Analiza los motivos de no conversion" 
       />
       <div className="p-4 md:p-6">
-        <SeguimientosManager perfilId={perfilCRM.id} />
+        <NoComprasManager perfilId={perfilCRM.id} />
       </div>
     </div>
   )
