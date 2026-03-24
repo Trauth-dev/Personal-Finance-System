@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Plus, Trash2, User, Briefcase, Edit2, Check, X } from "lucide-react"
+import { Plus, Trash2, User, Briefcase, Edit2, Check, X, Users } from "lucide-react"
 import { toast } from "sonner"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
@@ -15,7 +15,7 @@ interface Perfil {
   id: string
   user_id: string
   nombre: string
-  tipo: "personal" | "empresarial"
+  tipo: "personal" | "empresarial" | "crm"
   color: string
   icono: string
   created_at: string
@@ -35,6 +35,7 @@ const COLORES_DISPONIBLES = [
 const ICONOS_DISPONIBLES = {
   personal: ["👤", "🏠", "💼", "📱", "🎯"],
   empresarial: ["🏢", "💼", "📊", "🚀", "💰", "🏪", "🏭"],
+  crm: ["👥", "🤝", "📞", "📋", "🎯", "📈", "💬"],
 }
 
 export function PerfilesManager({ perfilesIniciales }: { perfilesIniciales: Perfil[] }) {
@@ -42,7 +43,7 @@ export function PerfilesManager({ perfilesIniciales }: { perfilesIniciales: Perf
   const [mostrarFormulario, setMostrarFormulario] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [nuevoNombre, setNuevoNombre] = useState("")
-  const [nuevoTipo, setNuevoTipo] = useState<"personal" | "empresarial">("personal")
+  const [nuevoTipo, setNuevoTipo] = useState<"personal" | "empresarial" | "crm">("personal")
   const [nuevoColor, setNuevoColor] = useState("#3b82f6")
   const [nuevoIcono, setNuevoIcono] = useState("👤")
   const [isLoading, setIsLoading] = useState(false)
@@ -191,15 +192,22 @@ export function PerfilesManager({ perfilesIniciales }: { perfilesIniciales: Perf
                       <CardTitle>{perfil.nombre}</CardTitle>
                     )}
                     <CardDescription className="flex items-center gap-1 mt-1">
-                      {perfil.tipo === "personal" ? (
+                      {perfil.tipo === "personal" && (
                         <>
                           <User className="h-3 w-3" />
                           Personal
                         </>
-                      ) : (
+                      )}
+                      {perfil.tipo === "empresarial" && (
                         <>
                           <Briefcase className="h-3 w-3" />
                           Empresarial
+                        </>
+                      )}
+                      {perfil.tipo === "crm" && (
+                        <>
+                          <Users className="h-3 w-3" />
+                          CRM
                         </>
                       )}
                     </CardDescription>
@@ -298,8 +306,10 @@ export function PerfilesManager({ perfilesIniciales }: { perfilesIniciales: Perf
                 <RadioGroup
                   value={nuevoTipo}
                   onValueChange={(v) => {
-                    setNuevoTipo(v as "personal" | "empresarial")
-                    setNuevoIcono(v === "personal" ? "👤" : "🏢")
+                    setNuevoTipo(v as "personal" | "empresarial" | "crm")
+                    if (v === "personal") setNuevoIcono("👤")
+                    else if (v === "empresarial") setNuevoIcono("🏢")
+                    else setNuevoIcono("👥")
                   }}
                 >
                   <div className="flex items-center space-x-2">
@@ -314,6 +324,13 @@ export function PerfilesManager({ perfilesIniciales }: { perfilesIniciales: Perf
                     <Label htmlFor="empresarial" className="flex items-center gap-2 cursor-pointer">
                       <Briefcase className="h-4 w-4" />
                       Empresarial
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="crm" id="crm" />
+                    <Label htmlFor="crm" className="flex items-center gap-2 cursor-pointer">
+                      <Users className="h-4 w-4" />
+                      CRM
                     </Label>
                   </div>
                 </RadioGroup>
