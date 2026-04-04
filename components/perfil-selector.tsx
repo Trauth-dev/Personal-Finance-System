@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
-import { ChevronDown, User, Building2, Settings, Lock } from "lucide-react"
+import { ChevronDown, User, Building2, Settings, Lock, Users } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
@@ -29,7 +29,16 @@ export function PerfilSelector() {
   }
 
   const getIconForTipo = (tipo: string) => {
-    return tipo === "personal" ? <User className="h-4 w-4" /> : <Building2 className="h-4 w-4" />
+    switch (tipo) {
+      case "personal":
+        return <User className="h-4 w-4" />
+      case "empresarial":
+        return <Building2 className="h-4 w-4" />
+      case "crm":
+        return <Users className="h-4 w-4" />
+      default:
+        return <User className="h-4 w-4" />
+    }
   }
 
   // Filtrar perfiles segun acceso del usuario
