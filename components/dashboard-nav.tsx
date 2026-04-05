@@ -198,6 +198,11 @@ const navItemsCRM = [
     icon: UserPlus,
   },
   {
+    title: "Inventario",
+    href: "/dashboard/crm/inventario",
+    icon: Package,
+  },
+  {
     title: "Seguimientos",
     href: "/dashboard/crm/seguimientos",
     icon: ClipboardList,
