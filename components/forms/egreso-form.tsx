@@ -681,7 +681,7 @@ export function EgresoForm() {
                         <div className="p-3 rounded-full" style={{ backgroundColor: `${tipo.color}30` }}>
                           <Icon className="w-5 h-5" style={{ color: tipo.color }} />
                         </div>
-                        <span className="text-sm font-medium">{tipo.nombre}</span>
+                        <span className="text-sm font-medium">{DISPLAY_NOMBRES[tipo.nombre] || tipo.nombre}</span>
                       </div>
                     </button>
                   )
