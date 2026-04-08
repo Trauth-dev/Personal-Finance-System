@@ -1,36 +1,25 @@
 import { createClient } from "@/lib/supabase/server"
 import { PresupuestoCategoriasRingsClient } from "./presupuesto-categorias-rings-client"
-import { getParaguayDate } from "@/lib/utils"
 
 interface PresupuestoCategoriasRingsProps {
   perfilId: string
-  fechaInicio?: string
-  fechaFin?: string
 }
 
-export async function PresupuestoCategoriasRings({ perfilId, fechaInicio, fechaFin }: PresupuestoCategoriasRingsProps) {
+export async function PresupuestoCategoriasRings({ perfilId }: PresupuestoCategoriasRingsProps) {
   const supabase = await createClient()
 
-  let primerDia = fechaInicio
-  let ultimoDia = fechaFin
-
-  if (!primerDia || !ultimoDia) {
-    const now = getParaguayDate()
-    primerDia = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
-    ultimoDia = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
-  }
+  const now = new Date()
+  const primerDia = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+  const ultimoDia = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
 
   // Obtener presupuesto con porcentajes
-  const { data: presupuestos } = await supabase
+  const { data: presupuesto } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
     .gte("fecha", primerDia)
     .lte("fecha", ultimoDia)
-    .order("fecha", { ascending: false })
-    .limit(1)
-
-  const presupuesto = presupuestos?.[0] || null
+    .maybeSingle()
 
   if (!presupuesto) {
     return null

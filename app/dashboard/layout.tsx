@@ -6,7 +6,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { DashboardNav } from "@/components/dashboard-nav"
-import { PlanAccessGuard } from "@/components/plan-access-guard"
 import { cn } from "@/lib/utils"
 import { PerfilProvider } from "@/lib/contexts/perfil-context"
 
@@ -146,11 +145,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Main Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
-            <PlanAccessGuard>
-              {children}
-            </PlanAccessGuard>
-          </div>
+          <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">{children}</div>
         </main>
       </div>
     </PerfilProvider>

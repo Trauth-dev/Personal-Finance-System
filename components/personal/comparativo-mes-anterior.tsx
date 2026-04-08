@@ -1,28 +1,27 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { formatGuaranies, getParaguayDate } from "@/lib/utils"
+import { formatGuaranies } from "@/lib/utils"
 import { TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Calendar, Target } from 'lucide-react'
 import { createClient } from "@/lib/supabase/server"
 
 interface Props {
   perfilId: string
-  fechaInicio: string
-  fechaFin: string
 }
 
-export async function ComparativoMesAnterior({ perfilId, fechaInicio, fechaFin }: Props) {
+export async function ComparativoMesAnterior({ perfilId }: Props) {
   const supabase = await createClient()
   
-  // Mes actual (el mes seleccionado)
-  const primerDiaMesActual = fechaInicio
-  const ultimoDiaMesActual = fechaFin
+  const now = new Date()
   
-  // Calcular mes anterior basado en las fechas recibidas
-  const fechaBase = new Date(fechaInicio + "T00:00:00")
-  const primerDiaMesAnterior = new Date(fechaBase.getFullYear(), fechaBase.getMonth() - 1, 1).toISOString().split("T")[0]
-  const ultimoDiaMesAnterior = new Date(fechaBase.getFullYear(), fechaBase.getMonth(), 0).toISOString().split("T")[0]
+  // Mes actual
+  const primerDiaMesActual = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+  const ultimoDiaMesActual = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
+  
+  // Mes anterior
+  const primerDiaMesAnterior = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split("T")[0]
+  const ultimoDiaMesAnterior = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split("T")[0]
 
   // Datos mes actual
-  const { data: presupuestoActualData } = await supabase
+  const { data: presupuestoActual } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
@@ -30,8 +29,7 @@ export async function ComparativoMesAnterior({ perfilId, fechaInicio, fechaFin }
     .lte("fecha", ultimoDiaMesActual)
     .order("fecha", { ascending: false })
     .limit(1)
-
-  const presupuestoActual = presupuestoActualData?.[0] || null
+    .single()
 
   const { data: egresosActuales } = await supabase
     .from("egresos")
@@ -43,7 +41,7 @@ export async function ComparativoMesAnterior({ perfilId, fechaInicio, fechaFin }
   const totalEgresosActual = egresosActuales?.reduce((sum, e) => sum + Number(e.monto), 0) || 0
 
   // Datos mes anterior
-  const { data: presupuestoAnteriorData } = await supabase
+  const { data: presupuestoAnterior } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
@@ -51,8 +49,7 @@ export async function ComparativoMesAnterior({ perfilId, fechaInicio, fechaFin }
     .lte("fecha", ultimoDiaMesAnterior)
     .order("fecha", { ascending: false })
     .limit(1)
-
-  const presupuestoAnterior = presupuestoAnteriorData?.[0] || null
+    .single()
 
   const { data: egresosAnteriores } = await supabase
     .from("egresos")

@@ -7,27 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
-
-const MESES = [
-  { value: "01", label: "Enero" },
-  { value: "02", label: "Febrero" },
-  { value: "03", label: "Marzo" },
-  { value: "04", label: "Abril" },
-  { value: "05", label: "Mayo" },
-  { value: "06", label: "Junio" },
-  { value: "07", label: "Julio" },
-  { value: "08", label: "Agosto" },
-  { value: "09", label: "Septiembre" },
-  { value: "10", label: "Octubre" },
-  { value: "11", label: "Noviembre" },
-  { value: "12", label: "Diciembre" },
-]
 
 const CATEGORIAS_CONFIG = [
   { key: 'pct_donacion', label: 'Donación', icon: Heart, color: 'text-pink-600', default: 0 },
@@ -43,10 +27,8 @@ const CATEGORIAS_CONFIG = [
 
 export function PresupuestoForm() {
   const { perfilActual } = usePerfil()
-  const todayStr = getTodayDate()
   const [presupuesto, setPresupuesto] = useState("")
-  const [mesSeleccionado, setMesSeleccionado] = useState(todayStr.slice(5, 7))
-  const [anioSeleccionado, setAnioSeleccionado] = useState(todayStr.slice(0, 4))
+  const [fecha, setFecha] = useState(getTodayDate())
   const [porcentajes, setPorcentajes] = useState<Record<string, number>>(
     CATEGORIAS_CONFIG.reduce((acc, cat) => ({ ...acc, [cat.key]: cat.default }), {})
   )
@@ -56,17 +38,8 @@ export function PresupuestoForm() {
   const router = useRouter()
 
   useEffect(() => {
-    const hoy = getTodayDate()
-    setMesSeleccionado(hoy.slice(5, 7))
-    setAnioSeleccionado(hoy.slice(0, 4))
+    setFecha(getTodayDate())
   }, [])
-
-  // Construir fecha en formato YYYY-MM-DD (primer día del mes)
-  const fecha = `${anioSeleccionado}-${mesSeleccionado}-01`
-
-  // Generar opciones de año (actual y +-2)
-  const anioActual = parseInt(todayStr.slice(0, 4))
-  const aniosDisponibles = Array.from({ length: 5 }, (_, i) => String(anioActual - 2 + i))
 
   const totalPorcentajes = Object.values(porcentajes).reduce((sum, val) => sum + val, 0)
 
@@ -79,6 +52,9 @@ export function PresupuestoForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    console.log("[v0] Iniciando registro de presupuesto")
+    console.log("[v0] Perfil actual:", perfilActual)
 
     if (!perfilActual?.id) {
       setError("No hay perfil activo. Por favor selecciona un perfil.")
@@ -97,76 +73,59 @@ export function PresupuestoForm() {
     const supabase = createClient()
 
     try {
+      console.log("[v0] Obteniendo usuario autenticado...")
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       
-      if (userError) throw userError
-      if (!user) throw new Error("Usuario no autenticado")
+      if (userError) {
+        console.error("[v0] Error al obtener usuario:", userError)
+        throw userError
+      }
+      
+      if (!user) {
+        console.error("[v0] Usuario no autenticado")
+        throw new Error("Usuario no autenticado")
+      }
+
+      console.log("[v0] Usuario autenticado:", user.id)
 
       const porcentajesDecimales = Object.fromEntries(
         Object.entries(porcentajes).map(([key, value]) => [key, value / 100])
       )
 
-      // fecha ya es el primer día del mes (YYYY-MM-01)
-      const primerDiaMes = fecha
-      const anio = parseInt(anioSeleccionado)
-      const mes = parseInt(mesSeleccionado)
-      const ultimoDiaMes = new Date(anio, mes, 0)
-      const ultimoDiaStr = `${anioSeleccionado}-${mesSeleccionado}-${String(ultimoDiaMes.getDate()).padStart(2, "0")}`
-
       const dataToUpsert = {
         user_id: user.id,
         perfil_id: perfilActual.id,
         meta_salario: Number.parseFloat(presupuesto),
-        fecha: primerDiaMes,
+        fecha: fecha,
         ...porcentajesDecimales
       }
 
-      // Primero buscar si ya existe un presupuesto para este mes
-      const { data: existente } = await supabase
-        .from("presupuesto_mensual")
-        .select("id")
-        .eq("perfil_id", perfilActual.id)
-        .gte("fecha", primerDiaMes)
-        .lte("fecha", ultimoDiaStr)
-        .limit(1)
+      console.log("[v0] Datos a upsert:", dataToUpsert)
 
-      let data, upsertError
-      if (existente && existente.length > 0) {
-        // Actualizar el registro existente
-        const result = await supabase
-          .from("presupuesto_mensual")
-          .update({
-            meta_salario: Number.parseFloat(presupuesto),
-            fecha: primerDiaMes,
-            ...porcentajesDecimales
-          })
-          .eq("id", existente[0].id)
-          .select()
-        data = result.data
-        upsertError = result.error
-      } else {
-        // Insertar nuevo registro
-        const result = await supabase
-          .from("presupuesto_mensual")
-          .insert(dataToUpsert)
-          .select()
-        data = result.data
-        upsertError = result.error
+      const { data, error: upsertError } = await supabase
+        .from("presupuesto_mensual")
+        .upsert(dataToUpsert, {
+          onConflict: 'user_id,fecha'
+        })
+        .select()
+
+      if (upsertError) {
+        console.error("[v0] Error al guardar presupuesto:", upsertError)
+        throw upsertError
       }
 
-      if (upsertError) throw upsertError
+      console.log("[v0] Presupuesto guardado exitosamente:", data)
 
       setSuccess(true)
       setPresupuesto("")
-      const hoyReset = getTodayDate()
-      setMesSeleccionado(hoyReset.slice(5, 7))
-      setAnioSeleccionado(hoyReset.slice(0, 4))
+      setFecha(getTodayDate())
       setPorcentajes(CATEGORIAS_CONFIG.reduce((acc, cat) => ({ ...acc, [cat.key]: cat.default }), {}))
 
       setTimeout(() => {
         router.refresh()
       }, 1500)
     } catch (err) {
+      console.error("[v0] Error completo:", err)
       setError(err instanceof Error ? err.message : "Error al registrar presupuesto")
     } finally {
       setIsLoading(false)
@@ -218,36 +177,18 @@ export function PresupuestoForm() {
             </div>
 
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
+              <Label htmlFor="fecha" className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
-                Mes del Presupuesto
+                Fecha (Mes)
               </Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Mes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MESES.map((mes) => (
-                      <SelectItem key={mes.value} value={mes.value}>
-                        {mes.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={anioSeleccionado} onValueChange={setAnioSeleccionado}>
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Año" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {aniosDisponibles.map((anio) => (
-                      <SelectItem key={anio} value={anio}>
-                        {anio}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Input
+                id="fecha"
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                required
+                className="bg-background/50"
+              />
             </div>
           </div>
 

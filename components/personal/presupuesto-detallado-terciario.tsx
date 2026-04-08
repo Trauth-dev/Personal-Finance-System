@@ -12,7 +12,10 @@ export async function PresupuestoDetalladoTerciario({
 }) {
   const supabase = await createClient()
 
-  const { data: presupuestos } = await supabase
+  console.log("[v0] Terciario - Buscando presupuesto - perfilId:", perfilId)
+  console.log("[v0] Terciario - Rango de fechas:", fechaInicio, "a", fechaFin)
+
+  const { data: presupuestos, error: presupuestoError } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
@@ -22,6 +25,11 @@ export async function PresupuestoDetalladoTerciario({
     .limit(1)
 
   const presupuesto = presupuestos?.[0] || null
+
+  console.log("[v0] Terciario - Presupuesto encontrado:", presupuesto)
+  if (presupuestoError) {
+    console.log("[v0] Terciario - Error:", presupuestoError)
+  }
 
   // Obtener egresos del mes con categorías
   const { data: egresos } = await supabase
@@ -37,6 +45,8 @@ export async function PresupuestoDetalladoTerciario({
     .gte("fecha", fechaInicio)
     .lte("fecha", fechaFin)
     .order("monto", { ascending: false })
+
+  console.log("[v0] Terciario - Total egresos:", egresos?.length)
 
   return <PresupuestoDetalladoTerciarioClient presupuesto={presupuesto} egresos={egresos || []} />
 }

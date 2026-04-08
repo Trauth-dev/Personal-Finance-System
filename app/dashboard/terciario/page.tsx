@@ -136,7 +136,7 @@ export default async function TerciarioDashboardPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <DashboardHeader
-        title="Diagnostico inteligente"
+        title="Dashboard Terciario"
         description="Análisis detallado de ingresos, egresos y patrones de consumo"
       />
 

@@ -2,7 +2,6 @@
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar } from "lucide-react"
-import { getParaguayDate } from "@/lib/utils"
 
 interface MonthSelectorProps {
   value: string
@@ -12,7 +11,7 @@ interface MonthSelectorProps {
 export function MonthSelector({ value, onChange }: MonthSelectorProps) {
   const generateMonthOptions = () => {
     const options = []
-    const today = getParaguayDate()
+    const today = new Date()
 
     for (let i = 0; i < 12; i++) {
       const date = new Date(today.getFullYear(), today.getMonth() - i, 1)

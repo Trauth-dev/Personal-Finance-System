@@ -55,7 +55,7 @@ export default async function AnalisisPage() {
 
   return (
     <div>
-      <DashboardHeader title="Asesoramiento + Herramientas" description="Análisis detallado de tu situación financiera" />
+      <DashboardHeader title="Análisis Financiero" description="Análisis detallado de tu situación financiera" />
 
       <div className="p-6 space-y-6">
         {/* Salud Financiera */}

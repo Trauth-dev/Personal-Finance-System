@@ -35,14 +35,8 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
   Trash2,
-  Landmark,
-  Wallet,
-  Smartphone,
-  Pencil,
-  AlertTriangle,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { formatGuaranies } from "@/lib/utils"
 
 type CajaAhorro = {
   id: string
@@ -54,10 +48,6 @@ type CajaAhorro = {
   color: string
   prioridad: number
   created_at: string
-  tipo_cuenta: string | null
-  banco: string | null
-  numero_cuenta: string | null
-  moneda: string | null
 }
 
 type MovimientoCaja = {
@@ -80,13 +70,6 @@ const iconosDisponibles = [
   { value: "target", label: "Objetivo", icon: Target },
 ]
 
-const tiposCuenta = [
-  { value: "cuenta_bancaria", label: "Cuenta Bancaria", icon: Landmark },
-  { value: "billetera_digital", label: "Billetera Digital", icon: Smartphone },
-  { value: "ahorro_personal", label: "Ahorro Personal / Efectivo", icon: Wallet },
-  { value: "otro", label: "Otro", icon: PiggyBank },
-]
-
 const coloresDisponibles = [
   { value: "blue", label: "Azul", class: "bg-blue-500" },
   { value: "green", label: "Verde", class: "bg-green-500" },
@@ -103,22 +86,7 @@ export function CajasAhorroManager() {
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isMovimientoDialogOpen, setIsMovimientoDialogOpen] = useState(false)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
-  const [cajaAEliminar, setCajaAEliminar] = useState<CajaAhorro | null>(null)
   const [cajaSeleccionada, setCajaSeleccionada] = useState<CajaAhorro | null>(null)
-  const [editData, setEditData] = useState({
-    nombre: "",
-    descripcion: "",
-    meta_monto: "",
-    icono: "piggy-bank",
-    color: "blue",
-    prioridad: "1",
-    tipo_cuenta: "cuenta_bancaria",
-    banco: "",
-    numero_cuenta: "",
-    moneda: "PYG",
-  })
   const { perfilActual } = usePerfil()
   const { toast } = useToast()
 
@@ -129,10 +97,6 @@ export function CajasAhorroManager() {
     icono: "piggy-bank",
     color: "blue",
     prioridad: "1",
-    tipo_cuenta: "cuenta_bancaria",
-    banco: "",
-    numero_cuenta: "",
-    moneda: "PYG",
   })
 
   const [movimientoData, setMovimientoData] = useState({
@@ -140,17 +104,6 @@ export function CajasAhorroManager() {
     monto: "",
     descripcion: "",
   })
-
-  // Helpers para separador de miles
-  const formatMiles = (value: string) => {
-    const num = value.replace(/\D/g, "")
-    if (!num) return ""
-    return Number(num).toLocaleString("es-PY")
-  }
-
-  const parseMiles = (value: string) => {
-    return value.replace(/\D/g, "")
-  }
 
   useEffect(() => {
     if (perfilActual) {
@@ -183,22 +136,16 @@ export function CajasAhorroManager() {
 
     const supabase = createClient()
 
-    const { data, error } = await supabase.from("cajas_ahorro").insert({
+    const { error } = await supabase.from("cajas_ahorro").insert({
       perfil_id: perfilActual.id,
-      user_id: perfilActual.user_id,
       nombre: formData.nombre,
       descripcion: formData.descripcion || null,
-      tipo: 'otro',
-      meta_monto: Number.parseFloat(formData.meta_monto || "0"),
+      meta_monto: Number.parseFloat(formData.meta_monto),
       monto_actual: 0,
       icono: formData.icono,
       color: formData.color,
       prioridad: Number.parseInt(formData.prioridad),
-      tipo_cuenta: formData.tipo_cuenta,
-      banco: formData.banco || null,
-      numero_cuenta: formData.numero_cuenta || null,
-      moneda: formData.moneda || "PYG",
-    }).select()
+    })
 
     if (!error) {
       toast({
@@ -213,10 +160,6 @@ export function CajasAhorroManager() {
         icono: "piggy-bank",
         color: "blue",
         prioridad: "1",
-        tipo_cuenta: "cuenta_bancaria",
-        banco: "",
-        numero_cuenta: "",
-        moneda: "PYG",
       })
       loadCajas()
     } else {
@@ -235,13 +178,13 @@ export function CajasAhorroManager() {
     const supabase = createClient()
     const monto = Number.parseFloat(movimientoData.monto)
 
-    const { data: movData, error: movimientoError } = await supabase.from("movimientos_caja").insert({
+    const { error: movimientoError } = await supabase.from("movimientos_caja").insert({
       caja_id: cajaSeleccionada.id,
       tipo: movimientoData.tipo,
       monto: monto,
-      concepto: movimientoData.descripcion || null,
+      descripcion: movimientoData.descripcion || null,
       fecha: new Date().toISOString().split("T")[0],
-    }).select()
+    })
 
     if (movimientoError) {
       toast({
@@ -292,65 +235,7 @@ export function CajasAhorroManager() {
         title: "Caja eliminada",
         description: "La caja de ahorro ha sido eliminada",
       })
-      setIsDeleteConfirmOpen(false)
-      setCajaAEliminar(null)
       loadCajas()
-    }
-  }
-
-  const openEditDialog = (caja: CajaAhorro) => {
-    setEditData({
-      nombre: caja.nombre,
-      descripcion: caja.descripcion || "",
-      meta_monto: caja.meta_monto > 0 ? String(caja.meta_monto) : "",
-      icono: caja.icono || "piggy-bank",
-      color: caja.color || "blue",
-      prioridad: String(caja.prioridad || 1),
-      tipo_cuenta: caja.tipo_cuenta || "cuenta_bancaria",
-      banco: caja.banco || "",
-      numero_cuenta: caja.numero_cuenta || "",
-      moneda: caja.moneda || "PYG",
-    })
-    setCajaSeleccionada(caja)
-    setIsEditDialogOpen(true)
-  }
-
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!cajaSeleccionada) return
-
-    const supabase = createClient()
-
-    const { error } = await supabase
-      .from("cajas_ahorro")
-      .update({
-        nombre: editData.nombre,
-        descripcion: editData.descripcion || null,
-        meta_monto: Number.parseFloat(editData.meta_monto || "0"),
-        icono: editData.icono,
-        color: editData.color,
-        prioridad: Number.parseInt(editData.prioridad),
-        tipo_cuenta: editData.tipo_cuenta,
-        banco: editData.banco || null,
-        numero_cuenta: editData.numero_cuenta || null,
-        moneda: editData.moneda || "PYG",
-      })
-      .eq("id", cajaSeleccionada.id)
-
-    if (!error) {
-      toast({
-        title: "Caja actualizada",
-        description: `"${editData.nombre}" se ha editado exitosamente`,
-      })
-      setIsEditDialogOpen(false)
-      setCajaSeleccionada(null)
-      loadCajas()
-    } else {
-      toast({
-        title: "Error",
-        description: "No se pudo actualizar la caja de ahorro",
-        variant: "destructive",
-      })
     }
   }
 
@@ -410,103 +295,26 @@ export function CajasAhorroManager() {
                   </div>
 
                   <div>
-                    <Label>Tipo de Cuenta</Label>
-                    <div className="grid grid-cols-2 gap-2 mt-1">
-                      {tiposCuenta.map((tipo) => {
-                        const TipoIcon = tipo.icon
-                        const isSelected = formData.tipo_cuenta === tipo.value
-                        return (
-                          <button
-                            key={tipo.value}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, tipo_cuenta: tipo.value })}
-                            className={`p-3 rounded-lg border-2 transition-all text-left flex items-center gap-2 text-xs ${
-                              isSelected
-                                ? "border-primary bg-primary/10"
-                                : "border-border/50 hover:border-border"
-                            }`}
-                          >
-                            <TipoIcon className={`w-4 h-4 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
-                            <span className={`font-medium ${isSelected ? "text-primary" : ""}`}>{tipo.label}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  {formData.tipo_cuenta === "cuenta_bancaria" && (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label htmlFor="banco">Banco</Label>
-                        <Input
-                          id="banco"
-                          value={formData.banco}
-                          onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
-                          placeholder="Ej: Banco Continental"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="numero_cuenta">Nro. Cuenta (opcional)</Label>
-                        <Input
-                          id="numero_cuenta"
-                          value={formData.numero_cuenta}
-                          onChange={(e) => setFormData({ ...formData, numero_cuenta: e.target.value })}
-                          placeholder="Ej: ****1234"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {formData.tipo_cuenta === "billetera_digital" && (
-                    <div>
-                      <Label htmlFor="banco">Nombre de Billetera</Label>
-                      <Input
-                        id="banco"
-                        value={formData.banco}
-                        onChange={(e) => setFormData({ ...formData, banco: e.target.value })}
-                        placeholder="Ej: Tigo Money, Personal Pay"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <Label>Moneda</Label>
-                    <Select
-                      value={formData.moneda}
-                      onValueChange={(value) => setFormData({ ...formData, moneda: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="PYG">Guaranies (PYG)</SelectItem>
-                        <SelectItem value="USD">Dolares (USD)</SelectItem>
-                        <SelectItem value="BRL">Reales (BRL)</SelectItem>
-                        <SelectItem value="ARS">Pesos Argentinos (ARS)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="descripcion">Descripcion (opcional)</Label>
+                    <Label htmlFor="descripcion">Descripción (opcional)</Label>
                     <Textarea
                       id="descripcion"
                       value={formData.descripcion}
                       onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
                       placeholder="Describe tu objetivo de ahorro"
-                      rows={2}
+                      rows={3}
                     />
                   </div>
 
                   <div>
-                    <Label htmlFor="meta_monto">Meta de Ahorro (opcional)</Label>
+                    <Label htmlFor="meta_monto">Meta de Ahorro</Label>
                     <Input
                       id="meta_monto"
-                      type="text"
-                      inputMode="numeric"
-                      value={formatMiles(formData.meta_monto)}
-                      onChange={(e) => setFormData({ ...formData, meta_monto: parseMiles(e.target.value) })}
-                      placeholder="Ej: 5.000.000"
+                      type="number"
+                      step="0.01"
+                      value={formData.meta_monto}
+                      onChange={(e) => setFormData({ ...formData, meta_monto: e.target.value })}
+                      placeholder="0.00"
+                      required
                     />
                   </div>
 
@@ -589,29 +397,20 @@ export function CajasAhorroManager() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 rounded-lg bg-gradient-to-br from-green-50 to-green-100 border border-green-200">
-              <PiggyBank className="w-8 h-8 mx-auto mb-2 text-green-600" />
-              <p className="text-sm text-green-700 font-medium mb-1">Monto Ahorrado</p>
-              <p className="text-2xl font-bold text-green-700">{formatGuaranies(totalAhorrado)}</p>
+            <div className="text-center p-4 rounded-lg bg-white/50">
+              <p className="text-sm text-muted-foreground mb-1">Total Ahorrado</p>
+              <p className="text-2xl font-bold text-primary">${totalAhorrado.toFixed(2)}</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200">
-              <Target className="w-8 h-8 mx-auto mb-2 text-blue-600" />
-              <p className="text-sm text-blue-700 font-medium mb-1">Meta Total</p>
-              <p className="text-2xl font-bold text-blue-700">{formatGuaranies(totalMetas)}</p>
+            <div className="text-center p-4 rounded-lg bg-white/50">
+              <p className="text-sm text-muted-foreground mb-1">Meta Total</p>
+              <p className="text-2xl font-bold">${totalMetas.toFixed(2)}</p>
             </div>
-            <div className="text-center p-4 rounded-lg bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200">
-              <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-              <p className="text-sm text-purple-700 font-medium mb-1">Logro Alcanzado</p>
-              <p className="text-2xl font-bold text-purple-700">{porcentajeTotal.toFixed(1)}%</p>
+            <div className="text-center p-4 rounded-lg bg-white/50">
+              <p className="text-sm text-muted-foreground mb-1">Progreso General</p>
+              <p className="text-2xl font-bold text-green-600">{porcentajeTotal.toFixed(1)}%</p>
             </div>
           </div>
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Progreso hacia tus metas</span>
-              <span className="font-medium">{formatGuaranies(totalAhorrado)} / {formatGuaranies(totalMetas)}</span>
-            </div>
-            <Progress value={Math.min(100, porcentajeTotal)} className="h-3" />
-          </div>
+          <Progress value={porcentajeTotal} className="h-3" />
         </CardContent>
       </Card>
 
@@ -650,84 +449,34 @@ export function CajasAhorroManager() {
                         <Badge className={`${prioridadColor} text-white mt-1`}>{prioridadLabel}</Badge>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditDialog(caja)}
-                        className="text-muted-foreground hover:text-blue-500 h-8 w-8"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setCajaAEliminar(caja)
-                          setIsDeleteConfirmOpen(true)
-                        }}
-                        className="text-destructive hover:text-destructive h-8 w-8"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(caja.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                   {caja.descripcion && <CardDescription className="mt-2">{caja.descripcion}</CardDescription>}
-                  {/* Info de cuenta */}
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
-                    {caja.tipo_cuenta && (
-                      <Badge variant="outline" className="text-[10px] gap-1 py-0.5">
-                        {caja.tipo_cuenta === "cuenta_bancaria" && <Landmark className="w-3 h-3" />}
-                        {caja.tipo_cuenta === "billetera_digital" && <Smartphone className="w-3 h-3" />}
-                        {caja.tipo_cuenta === "ahorro_personal" && <Wallet className="w-3 h-3" />}
-                        {caja.tipo_cuenta === "otro" && <PiggyBank className="w-3 h-3" />}
-                        {tiposCuenta.find((t) => t.value === caja.tipo_cuenta)?.label || caja.tipo_cuenta}
-                      </Badge>
-                    )}
-                    {caja.banco && (
-                      <Badge variant="secondary" className="text-[10px] py-0.5">
-                        {caja.banco}
-                      </Badge>
-                    )}
-                    {caja.moneda && caja.moneda !== "PYG" && (
-                      <Badge variant="secondary" className="text-[10px] py-0.5">
-                        {caja.moneda}
-                      </Badge>
-                    )}
-                    {caja.numero_cuenta && (
-                      <span className="text-[10px] text-muted-foreground">{caja.numero_cuenta}</span>
-                    )}
-                  </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* Monto Ahorrado destacado */}
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-3 border border-green-200">
-                    <p className="text-xs text-green-700 font-medium mb-1">Monto Ahorrado</p>
-                    <p className="text-2xl font-bold text-green-700">{formatGuaranies(caja.monto_actual)}</p>
-                  </div>
-
-                  {/* Barra de progreso con porcentaje */}
                   <div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span className="text-muted-foreground">Progreso hacia la meta</span>
-                      <span className={`font-bold ${porcentaje >= 100 ? 'text-green-600' : porcentaje >= 50 ? 'text-blue-600' : 'text-orange-600'}`}>
-                        {porcentaje.toFixed(1)}%
-                      </span>
+                      <span className="text-muted-foreground">Progreso</span>
+                      <span className="font-semibold">{porcentaje.toFixed(1)}%</span>
                     </div>
-                    <Progress value={Math.min(100, porcentaje)} className="h-3" />
+                    <Progress value={Math.min(100, porcentaje)} className="h-2" />
                   </div>
 
-                  {/* Meta */}
-                  <div className="flex justify-between items-center pt-2 border-t border-border/50">
+                  <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-xs text-muted-foreground">Meta</p>
-                      <p className="text-lg font-semibold">{formatGuaranies(caja.meta_monto)}</p>
+                      <p className="text-sm text-muted-foreground">Ahorrado</p>
+                      <p className="text-xl font-bold text-primary">${caja.monto_actual.toFixed(2)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Falta</p>
-                      <p className="text-lg font-semibold text-orange-600">
-                        {formatGuaranies(Math.max(0, caja.meta_monto - caja.monto_actual))}
-                      </p>
+                      <p className="text-sm text-muted-foreground">Meta</p>
+                      <p className="text-xl font-bold">${caja.meta_monto.toFixed(2)}</p>
                     </div>
                   </div>
 
@@ -766,9 +515,8 @@ export function CajasAhorroManager() {
         </div>
       )}
 
-      {/* Dialog de Movimiento */}
       <Dialog open={isMovimientoDialogOpen} onOpenChange={setIsMovimientoDialogOpen}>
-        <DialogContent className="glass-effect max-w-md max-h-[90vh]">
+        <DialogContent className="glass-effect max-w-md">
           <DialogHeader>
             <DialogTitle>
               {movimientoData.tipo === "deposito" ? "Depositar en" : "Retirar de"} {cajaSeleccionada?.nombre}
@@ -779,268 +527,38 @@ export function CajasAhorroManager() {
                 : "Retira dinero de esta caja de ahorro"}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleMovimiento} className="space-y-3">
+          <form onSubmit={handleMovimiento} className="space-y-4">
             <div>
-                  <Label htmlFor="monto">Monto</Label>
-                  <Input
-                    id="monto"
-                    type="text"
-                    inputMode="numeric"
-                    value={formatMiles(movimientoData.monto)}
-                    onChange={(e) => setMovimientoData({ ...movimientoData, monto: parseMiles(e.target.value) })}
-                    placeholder="Ej: 500.000"
-                    required
-                  />
+              <Label htmlFor="monto">Monto</Label>
+              <Input
+                id="monto"
+                type="number"
+                step="0.01"
+                value={movimientoData.monto}
+                onChange={(e) => setMovimientoData({ ...movimientoData, monto: e.target.value })}
+                placeholder="0.00"
+                required
+              />
             </div>
 
             <div>
-              <Label htmlFor="descripcion_movimiento">Descripcion (opcional)</Label>
+              <Label htmlFor="descripcion_movimiento">Descripción (opcional)</Label>
               <Textarea
                 id="descripcion_movimiento"
                 value={movimientoData.descripcion}
                 onChange={(e) => setMovimientoData({ ...movimientoData, descripcion: e.target.value })}
                 placeholder="Ej: Ahorro mensual, Regalo, etc."
-                rows={2}
+                rows={3}
               />
             </div>
 
-            <DialogFooter className="pt-2">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsMovimientoDialogOpen(false)}>
                 Cancelar
               </Button>
               <Button type="submit">{movimientoData.tipo === "deposito" ? "Depositar" : "Retirar"}</Button>
             </DialogFooter>
           </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog de Edicion */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="glass-effect max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="w-5 h-5 text-blue-500" />
-              Editar Caja de Ahorro
-            </DialogTitle>
-            <DialogDescription>Modifica los datos de tu caja. El monto ahorrado no se altera.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleEditSubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="edit_nombre">Nombre de la Caja</Label>
-              <Input
-                id="edit_nombre"
-                value={editData.nombre}
-                onChange={(e) => setEditData({ ...editData, nombre: e.target.value })}
-                placeholder="Ej: Vacaciones, Casa, Emergencias"
-                required
-              />
-            </div>
-
-            <div>
-              <Label>Tipo de Cuenta</Label>
-              <div className="grid grid-cols-2 gap-2 mt-1">
-                {tiposCuenta.map((tipo) => {
-                  const TipoIcon = tipo.icon
-                  const isSelected = editData.tipo_cuenta === tipo.value
-                  return (
-                    <button
-                      key={tipo.value}
-                      type="button"
-                      onClick={() => setEditData({ ...editData, tipo_cuenta: tipo.value })}
-                      className={`p-3 rounded-lg border-2 transition-all text-left flex items-center gap-2 text-xs ${
-                        isSelected
-                          ? "border-primary bg-primary/10"
-                          : "border-border/50 hover:border-border"
-                      }`}
-                    >
-                      <TipoIcon className={`w-4 h-4 ${isSelected ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className={`font-medium ${isSelected ? "text-primary" : ""}`}>{tipo.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            {editData.tipo_cuenta === "cuenta_bancaria" && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label htmlFor="edit_banco">Banco</Label>
-                  <Input
-                    id="edit_banco"
-                    value={editData.banco}
-                    onChange={(e) => setEditData({ ...editData, banco: e.target.value })}
-                    placeholder="Ej: Banco Continental"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit_numero_cuenta">Nro. Cuenta (opcional)</Label>
-                  <Input
-                    id="edit_numero_cuenta"
-                    value={editData.numero_cuenta}
-                    onChange={(e) => setEditData({ ...editData, numero_cuenta: e.target.value })}
-                    placeholder="Ej: ****1234"
-                  />
-                </div>
-              </div>
-            )}
-
-            {editData.tipo_cuenta === "billetera_digital" && (
-              <div>
-                <Label htmlFor="edit_billetera">Nombre de Billetera</Label>
-                <Input
-                  id="edit_billetera"
-                  value={editData.banco}
-                  onChange={(e) => setEditData({ ...editData, banco: e.target.value })}
-                  placeholder="Ej: Tigo Money, Personal Pay"
-                />
-              </div>
-            )}
-
-            <div>
-              <Label>Moneda</Label>
-              <Select
-                value={editData.moneda}
-                onValueChange={(value) => setEditData({ ...editData, moneda: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PYG">Guaranies (PYG)</SelectItem>
-                  <SelectItem value="USD">Dolares (USD)</SelectItem>
-                  <SelectItem value="BRL">Reales (BRL)</SelectItem>
-                  <SelectItem value="ARS">Pesos Argentinos (ARS)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="edit_descripcion">Descripcion (opcional)</Label>
-              <Textarea
-                id="edit_descripcion"
-                value={editData.descripcion}
-                onChange={(e) => setEditData({ ...editData, descripcion: e.target.value })}
-                placeholder="Describe tu objetivo de ahorro"
-                rows={2}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="edit_meta_monto">Meta de Ahorro (opcional)</Label>
-              <Input
-                id="edit_meta_monto"
-                type="text"
-                inputMode="numeric"
-                value={formatMiles(editData.meta_monto)}
-                onChange={(e) => setEditData({ ...editData, meta_monto: parseMiles(e.target.value) })}
-                placeholder="Ej: 5.000.000"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit_icono">Icono</Label>
-                <Select
-                  value={editData.icono}
-                  onValueChange={(value) => setEditData({ ...editData, icono: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {iconosDisponibles.map((icono) => {
-                      const Icon = icono.icon
-                      return (
-                        <SelectItem key={icono.value} value={icono.value}>
-                          <div className="flex items-center gap-2">
-                            <Icon className="w-4 h-4" />
-                            {icono.label}
-                          </div>
-                        </SelectItem>
-                      )
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="edit_color">Color</Label>
-                <Select
-                  value={editData.color}
-                  onValueChange={(value) => setEditData({ ...editData, color: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {coloresDisponibles.map((color) => (
-                      <SelectItem key={color.value} value={color.value}>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-4 h-4 rounded ${color.class}`} />
-                          {color.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div>
-              <Label htmlFor="edit_prioridad">Prioridad</Label>
-              <Select
-                value={editData.prioridad}
-                onValueChange={(value) => setEditData({ ...editData, prioridad: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Alta</SelectItem>
-                  <SelectItem value="2">Media</SelectItem>
-                  <SelectItem value="3">Baja</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit">Guardar Cambios</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog de Confirmacion de Eliminacion */}
-      <Dialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
-        <DialogContent className="glass-effect max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="w-5 h-5" />
-              Eliminar Caja de Ahorro
-            </DialogTitle>
-            <DialogDescription>
-              {"Esta accion no se puede deshacer. Se eliminara la caja "}
-              <span className="font-semibold text-foreground">{cajaAEliminar?.nombre}</span>
-              {" y todos sus movimientos asociados."}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button type="button" variant="outline" onClick={() => {
-              setIsDeleteConfirmOpen(false)
-              setCajaAEliminar(null)
-            }}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => cajaAEliminar && handleDelete(cajaAEliminar.id)}
-            >
-              Eliminar
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

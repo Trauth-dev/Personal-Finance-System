@@ -21,7 +21,6 @@ import {
 } from "@/components/ui/dialog"
 import { Plus, Package, AlertTriangle, Edit, Trash2, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { getParaguayTimestamp } from "@/lib/utils"
 
 interface Producto {
   id: string
@@ -95,7 +94,7 @@ export function InventarioManager() {
           .from("inventario")
           .update({
             ...formData,
-            updated_at: getParaguayTimestamp(),
+            updated_at: new Date().toISOString(),
           })
           .eq("id", editingProducto.id)
 

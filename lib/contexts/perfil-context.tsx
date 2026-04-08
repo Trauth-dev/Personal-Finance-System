@@ -7,7 +7,7 @@ interface Perfil {
   id: string
   user_id: string
   nombre: string
-  tipo: "personal" | "empresarial" | "crm"
+  tipo: "personal" | "empresarial"
   color: string
   icono: string
   created_at: string

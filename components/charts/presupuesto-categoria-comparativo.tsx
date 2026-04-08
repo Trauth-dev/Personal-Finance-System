@@ -1,17 +1,14 @@
 import { createClient } from "@/lib/supabase/server"
 import { PresupuestoCategoriasComparativoClient } from "./presupuesto-categoria-comparativo-client"
-import { getParaguayDate } from "@/lib/utils"
 
 export async function PresupuestoCategoriasComparativo({
   perfilId,
   fechaInicio,
   fechaFin,
-  cajaId,
 }: {
   perfilId: string
   fechaInicio?: string
   fechaFin?: string
-  cajaId?: string
 }) {
   const supabase = await createClient()
 
@@ -19,12 +16,15 @@ export async function PresupuestoCategoriasComparativo({
   let ultimoDiaMes = fechaFin
 
   if (!primerDiaMes || !ultimoDiaMes) {
-    const now = getParaguayDate()
+    const now = new Date()
     primerDiaMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
     ultimoDiaMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
   }
 
-  const { data: presupuestos } = await supabase
+  console.log("[v0] Buscando presupuesto - perfilId:", perfilId)
+  console.log("[v0] Rango de fechas:", primerDiaMes, "a", ultimoDiaMes)
+
+  const { data: presupuestos, error: presupuestoError } = await supabase
     .from("presupuesto_mensual")
     .select("*")
     .eq("perfil_id", perfilId)
@@ -35,8 +35,13 @@ export async function PresupuestoCategoriasComparativo({
 
   const presupuesto = presupuestos?.[0] || null
 
+  console.log("[v0] PresupuestoCategoriasComparativo - Presupuesto:", presupuesto)
+  if (presupuestoError) {
+    console.log("[v0] Error de presupuesto:", presupuestoError)
+  }
+
   // Obtener egresos del mes agrupados por tipo de categoría
-  let egresosQuery = supabase
+  const { data: egresos } = await supabase
     .from("egresos")
     .select(`
       monto,
@@ -46,11 +51,11 @@ export async function PresupuestoCategoriasComparativo({
     .gte("fecha", primerDiaMes)
     .lte("fecha", ultimoDiaMes)
 
-  if (cajaId) {
-    egresosQuery = egresosQuery.eq("origen_tipo", "caja_ahorro").eq("origen_id", cajaId)
-  }
+  console.log("[v0] PresupuestoCategoriasComparativo - Egresos:", egresos)
 
-  const { data: egresos } = await egresosQuery
+  if (!presupuesto) {
+    console.log("[v0] No hay presupuesto configurado")
+  }
 
   return <PresupuestoCategoriasComparativoClient presupuesto={presupuesto} egresos={egresos || []} />
 }

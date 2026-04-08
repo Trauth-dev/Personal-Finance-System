@@ -42,7 +42,7 @@ export default async function MetasPage() {
   if (!perfilPersonal) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-        <DashboardHeader title="Metas y Plan de Acción" description="Sistema Financiero Adaptativo" />
+        <DashboardHeader title="Metas y Objetivos" description="Sistema Financiero Adaptativo" />
         <div className="p-6">
           <Card className="border-2 border-amber-200 bg-amber-50">
             <CardContent className="p-6">
@@ -103,7 +103,7 @@ export default async function MetasPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50">
-      <DashboardHeader title="Metas y Plan de Acción" description="Sistema Financiero Adaptativo con Análisis Inteligente" />
+      <DashboardHeader title="Metas y Objetivos" description="Sistema Financiero Adaptativo con Análisis Inteligente" />
 
       <div className="p-4 md:p-6 lg:p-8 space-y-6">
         {/* Resumen General */}

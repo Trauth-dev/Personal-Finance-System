@@ -42,7 +42,7 @@ export default async function PersonalMetasPage() {
       <DashboardHeader />
       <main className="flex-1 container mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <div className="mb-4 sm:mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold">Metas y Plan de Acción</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Metas y Objetivos</h1>
           <p className="text-sm sm:text-base text-muted-foreground">
             Establece metas, crea hábitos y da seguimiento a tu progreso personal
           </p>

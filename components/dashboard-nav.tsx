@@ -28,16 +28,6 @@ import {
   CreditCard,
   Wallet,
   Calculator,
-  Mic,
-  UserPlus,
-  CalendarClock,
-  ClipboardList,
-  MessageSquare,
-  Star,
-  RotateCcw,
-  Handshake,
-  XCircle,
-  Kanban,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -58,7 +48,7 @@ const navItemsPersonal = [
   //   icon: Activity,
   // },
   {
-    title: "Diagnostico inteligente",
+    title: "Dashboard Terciario",
     href: "/dashboard/personal/terciario",
     icon: BarChart3,
   },
@@ -95,7 +85,7 @@ const navItemsPersonal = [
     icon: History,
   },
   {
-    title: "Asesoramiento + Herramientas",
+    title: "Análisis Financiero",
     href: "/dashboard/personal/analisis",
     icon: BarChart3,
   },
@@ -112,7 +102,7 @@ const navItemsPersonal = [
   //   icon: PieChart,
   // },
   {
-    title: "Metas y Plan de Acción",
+    title: "Metas y Objetivos",
     href: "/dashboard/personal/metas",
     icon: Target,
   },
@@ -130,7 +120,7 @@ const navItemsEmpresarial = [
     icon: Activity,
   },
   {
-    title: "Diagnostico inteligente",
+    title: "Dashboard Terciario",
     href: "/dashboard/empresarial/terciario",
     icon: BarChart3,
   },
@@ -165,7 +155,7 @@ const navItemsEmpresarial = [
     icon: History,
   },
   {
-    title: "Asesoramiento + Herramientas",
+    title: "Análisis Financiero",
     href: "/dashboard/empresarial/analisis",
     icon: BarChart3,
   },
@@ -181,64 +171,6 @@ const navItemsEmpresarial = [
   },
 ]
 
-const navItemsCRM = [
-  {
-    title: "Dashboard CRM",
-    href: "/dashboard/crm",
-    icon: Handshake,
-  },
-  {
-    title: "Pipeline",
-    href: "/dashboard/crm/pipeline",
-    icon: Kanban,
-  },
-  {
-    title: "Clientes",
-    href: "/dashboard/crm/clientes",
-    icon: UserPlus,
-  },
-  {
-    title: "Inventario",
-    href: "/dashboard/crm/inventario",
-    icon: Package,
-  },
-  {
-    title: "Seguimientos",
-    href: "/dashboard/crm/seguimientos",
-    icon: ClipboardList,
-  },
-  {
-    title: "Agendamientos",
-    href: "/dashboard/crm/agendamientos",
-    icon: CalendarClock,
-  },
-  {
-    title: "Ventas",
-    href: "/dashboard/crm/ventas",
-    icon: ShoppingCart,
-  },
-  {
-    title: "Testimonios",
-    href: "/dashboard/crm/testimonios",
-    icon: MessageSquare,
-  },
-  {
-    title: "Re-visitas",
-    href: "/dashboard/crm/revisitas",
-    icon: RotateCcw,
-  },
-  {
-    title: "No Compras",
-    href: "/dashboard/crm/no-compras",
-    icon: XCircle,
-  },
-  {
-    title: "Historial",
-    href: "/dashboard/crm/historial",
-    icon: History,
-  },
-]
-
 const navItemsCommon = [
   {
     title: "Perfiles",
@@ -246,7 +178,7 @@ const navItemsCommon = [
     icon: Users,
   },
   {
-    title: "Configuracion",
+    title: "Configuración",
     href: "/dashboard/configuracion",
     icon: Settings,
   },
@@ -274,17 +206,10 @@ function NavContent({
     router.push("/auth/login")
   }
 
-  const getNavItems = () => {
-    switch (perfilActual?.tipo) {
-      case "empresarial":
-        return [...navItemsEmpresarial, ...navItemsCommon]
-      case "crm":
-        return [...navItemsCRM, ...navItemsCommon]
-      default:
-        return [...navItemsPersonal, ...navItemsCommon]
-    }
-  }
-  const navItems = getNavItems()
+  const navItems =
+    perfilActual?.tipo === "empresarial"
+      ? [...navItemsEmpresarial, ...navItemsCommon]
+      : [...navItemsPersonal, ...navItemsCommon]
 
   return (
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
@@ -304,11 +229,7 @@ function NavContent({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-sidebar-foreground truncate">{userName || "Usuario"}</p>
               <p className="text-xs text-muted-foreground">
-                {perfilActual?.tipo === "empresarial" 
-                  ? "Cuenta Empresarial" 
-                  : perfilActual?.tipo === "crm" 
-                    ? "Cuenta CRM" 
-                    : "Cuenta Personal"}
+                {perfilActual?.tipo === "empresarial" ? "Cuenta Empresarial" : "Cuenta Personal"}
               </p>
             </div>
           </div>
@@ -321,39 +242,6 @@ function NavContent({
             </div>
           </div>
         )}
-      </div>
-
-      {/* Boton destacado para Carga por Voz */}
-      <div className={cn("px-2 pt-2", isCollapsed && !isMobile && "px-1")}>
-        <Link href="/inicio">
-          <div
-            className={cn(
-              "relative overflow-hidden rounded-xl p-3 transition-all group cursor-pointer",
-              "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600",
-              "shadow-lg hover:shadow-emerald-500/25 hover:shadow-xl",
-              isCollapsed && !isMobile && "p-2"
-            )}
-          >
-            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className={cn(
-              "flex items-center gap-3",
-              isCollapsed && !isMobile && "justify-center"
-            )}>
-              <div className={cn(
-                "flex items-center justify-center rounded-lg bg-white/20 p-2",
-                isCollapsed && !isMobile && "p-1.5"
-              )}>
-                <Mic className={cn("w-5 h-5 text-white", isCollapsed && !isMobile && "w-4 h-4")} />
-              </div>
-              {(!isCollapsed || isMobile) && (
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-white">Carga por Voz</p>
-                  <p className="text-xs text-white/70">Registra con IA</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </Link>
       </div>
 
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">

@@ -117,7 +117,11 @@ export function PresupuestoDetalladoTerciarioClient({
   presupuesto: Presupuesto | null
   egresos: Egreso[]
 }) {
+  console.log("[v0] PresupuestoDetalladoTerciario - Presupuesto:", presupuesto)
+  console.log("[v0] PresupuestoDetalladoTerciario - Egresos:", egresos)
+
   if (!presupuesto) {
+    console.log("[v0] No hay presupuesto configurado para el dashboard terciario")
     return (
       <Card className="bg-amber-50 border-2 border-amber-200">
         <CardContent className="p-6">

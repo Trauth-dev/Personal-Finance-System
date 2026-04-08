@@ -9,20 +9,10 @@ import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Settings, Plus, ChevronDown, ChevronUp, Building2, Wallet, Landmark, Smartphone, PiggyBank, ArrowRight, Banknote } from "lucide-react"
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Settings, Plus, ChevronDown, ChevronUp } from "lucide-react"
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import Link from "next/link"
 import { usePerfil } from "@/lib/contexts/perfil-context"
-
-type CajaDestino = {
-  id: string
-  nombre: string
-  monto_actual: number
-  tipo_cuenta: string | null
-  banco: string | null
-  moneda: string | null
-  color: string | null
-}
 
 export function IngresoForm() {
   const { perfilActual } = usePerfil()
@@ -36,15 +26,12 @@ export function IngresoForm() {
   const [showNewCategory, setShowNewCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
   const [isExpanded, setIsExpanded] = useState(true)
-  const [cajasDestino, setCajasDestino] = useState<CajaDestino[]>([])
-  const [destinoCajaId, setDestinoCajaId] = useState<string>("")
   const router = useRouter()
 
   useEffect(() => {
     setFecha(getTodayDate())
     if (perfilActual?.id) {
       loadCategorias()
-      loadCajasDestino()
     }
   }, [perfilActual])
 
@@ -75,22 +62,6 @@ export function IngresoForm() {
       }
     } catch (error) {
       setCategorias([])
-    }
-  }
-
-  const loadCajasDestino = async () => {
-    if (!perfilActual?.id) return
-    try {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from("cajas_ahorro")
-        .select("id, nombre, monto_actual, tipo_cuenta, banco, moneda, color")
-        .eq("perfil_id", perfilActual.id)
-        .eq("activa", true)
-        .order("nombre")
-      if (data) setCajasDestino(data)
-    } catch {
-      setCajasDestino([])
     }
   }
 
@@ -143,15 +114,12 @@ export function IngresoForm() {
         throw new Error("Usuario no autenticado")
       }
 
-      const montoNumerico = Number.parseFloat(monto)
-
-      const ingresoData: any = {
+      const ingresoData = {
         user_id: user.id,
         perfil_id: perfilActual.id,
         tipo_ingreso: tipoIngreso,
-        monto: montoNumerico,
+        monto: Number.parseFloat(monto),
         fecha: fecha,
-        destino_caja_id: destinoCajaId || null,
       }
 
       const { error: insertError } = await supabase.from("ingresos").insert(ingresoData).select()
@@ -160,37 +128,10 @@ export function IngresoForm() {
         throw insertError
       }
 
-      // Depositar automaticamente en la caja de ahorro destino
-      if (destinoCajaId) {
-        const cajaDestino = cajasDestino.find((c) => c.id === destinoCajaId)
-        if (cajaDestino) {
-          const nuevoMonto = Number(cajaDestino.monto_actual) + montoNumerico
-
-          await supabase
-            .from("cajas_ahorro")
-            .update({ monto_actual: nuevoMonto })
-            .eq("id", destinoCajaId)
-
-          // Registrar movimiento de deposito
-          await supabase.from("movimientos_caja").insert({
-            caja_id: destinoCajaId,
-            perfil_id: perfilActual.id,
-            user_id: user.id,
-            tipo: "deposito",
-            monto: montoNumerico,
-            descripcion: `Ingreso: ${tipoIngreso}`,
-            fecha: fecha,
-          })
-        }
-      }
-
       setSuccess(true)
+      setTipoIngreso("")
       setMonto("")
       setFecha(getTodayDate())
-      setDestinoCajaId("")
-
-      // Recargar cajas para reflejar el nuevo saldo inmediatamente
-      await loadCajasDestino()
 
       setTimeout(() => {
         router.refresh()
@@ -322,109 +263,10 @@ export function IngresoForm() {
             )}
           </div>
 
-          {/* Selector de Caja Destino */}
-          {tipoIngreso && (
-            <div className="space-y-3 p-5 rounded-xl bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-transparent border border-blue-500/30">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-full bg-blue-500/20">
-                  <Wallet className="w-5 h-5 text-blue-400" />
-                </div>
-                <div>
-                  <Label className="text-base font-semibold text-blue-400">Destino del Ingreso</Label>
-                  <p className="text-xs text-muted-foreground">Selecciona donde se depositara el dinero (opcional)</p>
-                </div>
-              </div>
-
-              {cajasDestino.length > 0 ? (
-                <div className="space-y-2">
-                  {/* Opcion sin destino */}
-                  <button
-                    type="button"
-                    onClick={() => setDestinoCajaId("")}
-                    className={`w-full p-3 rounded-lg border-2 transition-all text-left flex items-center gap-3 ${
-                      !destinoCajaId
-                        ? "border-blue-400 bg-blue-500/20"
-                        : "border-border/30 hover:border-border/60 bg-background/50"
-                    }`}
-                  >
-                    <div className="p-2 rounded-full bg-muted">
-                      <Banknote className="w-4 h-4 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">Sin especificar destino</p>
-                      <p className="text-xs text-muted-foreground">No vincular a ninguna caja</p>
-                    </div>
-                  </button>
-
-                  {/* Cajas de ahorro disponibles */}
-                  {cajasDestino.map((caja) => {
-                    const isSelected = destinoCajaId === caja.id
-                    const getTipoCuentaIcon = () => {
-                      switch (caja.tipo_cuenta) {
-                        case "cuenta_bancaria": return <Landmark className="w-4 h-4 text-blue-400" />
-                        case "billetera_digital": return <Smartphone className="w-4 h-4 text-cyan-400" />
-                        case "ahorro_personal": return <Wallet className="w-4 h-4 text-green-400" />
-                        default: return <PiggyBank className="w-4 h-4 text-amber-400" />
-                      }
-                    }
-                    return (
-                      <button
-                        key={caja.id}
-                        type="button"
-                        onClick={() => setDestinoCajaId(caja.id)}
-                        className={`w-full p-3 rounded-lg border-2 transition-all text-left flex items-center justify-between ${
-                          isSelected
-                            ? "border-blue-400 bg-blue-500/20 shadow-lg shadow-blue-500/10"
-                            : "border-border/30 hover:border-border/60 bg-background/50"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-full bg-blue-500/20">
-                            {getTipoCuentaIcon()}
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm">{caja.nombre}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {caja.banco || (caja.tipo_cuenta === "ahorro_personal" ? "Efectivo" : caja.tipo_cuenta?.replace("_", " ") || "")}
-                              {caja.moneda && caja.moneda !== "PYG" ? ` - ${caja.moneda}` : ""}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-bold text-sm text-emerald-400">
-                            {formatGuaranies(Number(caja.monto_actual))}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">Saldo actual</p>
-                        </div>
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground text-center py-4 bg-background/30 rounded-lg border border-border/50">
-                  No tienes cajas de ahorro activas. Crea una desde la seccion Cajas de Ahorro para vincular tus ingresos.
-                </p>
-              )}
-
-              {/* Resumen del destino seleccionado */}
-              {destinoCajaId && monto && (
-                <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                  <ArrowRight className="w-4 h-4 text-blue-400" />
-                  <p className="text-sm text-blue-400">
-                    Se depositara <span className="font-bold">{formatGuaranies(Number(monto))}</span> en{" "}
-                    <span className="font-bold">
-                      {cajasDestino.find((c) => c.id === destinoCajaId)?.nombre}
-                    </span>
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
           <div className="space-y-2">
             <Label htmlFor="monto" className="flex items-center gap-2">
               <DollarSign className="w-4 h-4" />
-              Monto (Guaranies)
+              Monto (Guaraníes)
             </Label>
             <Input
               id="monto"

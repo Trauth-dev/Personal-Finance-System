@@ -159,7 +159,7 @@ export default async function DashboardTerciarioPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <DashboardHeader title="Diagnostico inteligente" description="Análisis detallado del periodo" />
+      <DashboardHeader title="Dashboard Terciario" description="Análisis detallado del periodo" />
 
       <DashboardTerciarioClient initialMonth={currentMonthValue}>
         <div className="p-3 sm:p-4 md:p-6">
