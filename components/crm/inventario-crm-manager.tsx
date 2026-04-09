@@ -51,13 +51,12 @@ interface Producto {
   perfil_id: string
   nombre: string
   descripcion: string | null
-  categoria: string | null
   sku: string | null
   precio_costo: number
   precio_venta: number
-  stock: number
+  stock_actual: number
   stock_minimo: number
-  unidad: string
+  unidad_medida: string
   activo: boolean
   created_at: string
 }
@@ -70,7 +69,6 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
   const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [filterCategoria, setFilterCategoria] = useState<string>("all")
   const [filterStock, setFilterStock] = useState<string>("all")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null)
@@ -79,13 +77,12 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
   const [formData, setFormData] = useState({
     nombre: "",
     descripcion: "",
-    categoria: "",
     sku: "",
     precio_costo: "",
     precio_venta: "",
-    stock: "",
+    stock_actual: "",
     stock_minimo: "5",
-    unidad: "unidad"
+    unidad_medida: "unidad"
   })
 
   const { toast } = useToast()
@@ -134,13 +131,12 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
         perfil_id: perfilId,
         nombre: formData.nombre,
         descripcion: formData.descripcion || null,
-        categoria: formData.categoria || null,
         sku: formData.sku || null,
         precio_costo: parseFloat(formData.precio_costo) || 0,
         precio_venta: parseFloat(formData.precio_venta) || 0,
-        stock: parseInt(formData.stock) || 0,
+        stock_actual: parseInt(formData.stock_actual) || 0,
         stock_minimo: parseInt(formData.stock_minimo) || 5,
-        unidad: formData.unidad,
+        unidad_medida: formData.unidad_medida,
         activo: true
       }
 
@@ -179,13 +175,12 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
     setFormData({
       nombre: producto.nombre,
       descripcion: producto.descripcion || "",
-      categoria: producto.categoria || "",
       sku: producto.sku || "",
       precio_costo: producto.precio_costo.toString(),
       precio_venta: producto.precio_venta.toString(),
-      stock: producto.stock.toString(),
+      stock_actual: producto.stock_actual.toString(),
       stock_minimo: producto.stock_minimo.toString(),
-      unidad: producto.unidad
+      unidad_medida: producto.unidad_medida
     })
     setDialogOpen(true)
   }
@@ -217,13 +212,12 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
     setFormData({
       nombre: "",
       descripcion: "",
-      categoria: "",
       sku: "",
       precio_costo: "",
       precio_venta: "",
-      stock: "",
+      stock_actual: "",
       stock_minimo: "5",
-      unidad: "unidad"
+      unidad_medida: "unidad"
     })
   }
 
@@ -237,25 +231,22 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
   }
 
   // Filtros
-  const categorias = [...new Set(productos.map(p => p.categoria).filter(Boolean))]
-  
   const filteredProductos = productos.filter(p => {
     const matchSearch = p.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
-    const matchCategoria = filterCategoria === "all" || p.categoria === filterCategoria
     const matchStock = filterStock === "all" ||
-      (filterStock === "low" && p.stock <= p.stock_minimo) ||
-      (filterStock === "out" && p.stock === 0) ||
-      (filterStock === "ok" && p.stock > p.stock_minimo)
-    return matchSearch && matchCategoria && matchStock
+      (filterStock === "low" && p.stock_actual <= p.stock_minimo) ||
+      (filterStock === "out" && p.stock_actual === 0) ||
+      (filterStock === "ok" && p.stock_actual > p.stock_minimo)
+    return matchSearch && matchStock
   })
 
   // Metricas
   const totalProductos = productos.length
-  const stockBajo = productos.filter(p => p.stock <= p.stock_minimo && p.stock > 0).length
-  const sinStock = productos.filter(p => p.stock === 0).length
-  const valorInventario = productos.reduce((sum, p) => sum + (p.precio_costo * p.stock), 0)
-  const potencialVenta = productos.reduce((sum, p) => sum + (p.precio_venta * p.stock), 0)
+  const stockBajo = productos.filter(p => p.stock_actual <= p.stock_minimo && p.stock_actual > 0).length
+  const sinStock = productos.filter(p => p.stock_actual === 0).length
+  const valorInventario = productos.reduce((sum, p) => sum + (p.precio_costo * p.stock_actual), 0)
+  const potencialVenta = productos.reduce((sum, p) => sum + (p.precio_venta * p.stock_actual), 0)
   const gananciaEstimada = potencialVenta - valorInventario
 
   if (loading) {
@@ -391,34 +382,23 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                       />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="categoria">Categoria</Label>
-                        <Input
-                          id="categoria"
-                          value={formData.categoria}
-                          onChange={(e) => setFormData({ ...formData, categoria: e.target.value })}
-                          placeholder="Ej: Suplementos"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="unidad">Unidad</Label>
-                        <Select
-                          value={formData.unidad}
-                          onValueChange={(v) => setFormData({ ...formData, unidad: v })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unidad">Unidad</SelectItem>
-                            <SelectItem value="caja">Caja</SelectItem>
-                            <SelectItem value="paquete">Paquete</SelectItem>
-                            <SelectItem value="kg">Kilogramo</SelectItem>
-                            <SelectItem value="litro">Litro</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="unidad_medida">Unidad de Medida</Label>
+                      <Select
+                        value={formData.unidad_medida}
+                        onValueChange={(v) => setFormData({ ...formData, unidad_medida: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unidad">Unidad</SelectItem>
+                          <SelectItem value="caja">Caja</SelectItem>
+                          <SelectItem value="paquete">Paquete</SelectItem>
+                          <SelectItem value="kg">Kilogramo</SelectItem>
+                          <SelectItem value="litro">Litro</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -455,12 +435,12 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="stock">Stock Actual *</Label>
+                        <Label htmlFor="stock_actual">Stock Actual *</Label>
                         <Input
-                          id="stock"
+                          id="stock_actual"
                           type="number"
-                          value={formData.stock}
-                          onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                          value={formData.stock_actual}
+                          onChange={(e) => setFormData({ ...formData, stock_actual: e.target.value })}
                           required
                         />
                       </div>
@@ -500,17 +480,6 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                 className="pl-10"
               />
             </div>
-            <Select value={filterCategoria} onValueChange={setFilterCategoria}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todas las categorias</SelectItem>
-                {categorias.map(cat => (
-                  <SelectItem key={cat} value={cat!}>{cat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
             <Select value={filterStock} onValueChange={setFilterStock}>
               <SelectTrigger className="w-full md:w-[180px]">
                 <SelectValue placeholder="Estado Stock" />
@@ -530,7 +499,7 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
               <Package className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium">No hay productos</h3>
               <p className="text-muted-foreground">
-                {searchTerm || filterCategoria !== "all" || filterStock !== "all"
+                {searchTerm || filterStock !== "all"
                   ? "No se encontraron productos con los filtros aplicados"
                   : "Agrega tu primer producto al inventario"}
               </p>
@@ -542,7 +511,6 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                   <TableRow>
                     <TableHead>Producto</TableHead>
                     <TableHead>SKU</TableHead>
-                    <TableHead>Categoria</TableHead>
                     <TableHead className="text-right">P. Costo</TableHead>
                     <TableHead className="text-right">P. Venta</TableHead>
                     <TableHead className="text-right">Ganancia</TableHead>
@@ -570,11 +538,6 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                         <TableCell className="text-muted-foreground">
                           {producto.sku || "-"}
                         </TableCell>
-                        <TableCell>
-                          {producto.categoria && (
-                            <Badge variant="outline">{producto.categoria}</Badge>
-                          )}
-                        </TableCell>
                         <TableCell className="text-right">
                           {formatCurrency(producto.precio_costo)}
                         </TableCell>
@@ -590,19 +553,19 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                         <TableCell className="text-center">
                           <Badge
                             variant={
-                              producto.stock === 0
+                              producto.stock_actual === 0
                                 ? "destructive"
-                                : producto.stock <= producto.stock_minimo
+                                : producto.stock_actual <= producto.stock_minimo
                                 ? "secondary"
                                 : "default"
                             }
                             className={
-                              producto.stock > producto.stock_minimo
+                              producto.stock_actual > producto.stock_minimo
                                 ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100"
                                 : ""
                             }
                           >
-                            {producto.stock} {producto.unidad}
+                            {producto.stock_actual} {producto.unidad_medida}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
