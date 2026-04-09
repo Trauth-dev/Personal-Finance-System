@@ -91,7 +91,6 @@ interface Cobranza {
   notas: string | null
   created_at: string
   clientes?: Cliente
-  inventario?: Producto
 }
 
 interface PagoCuota {
@@ -172,8 +171,7 @@ export function CobranzasManager({
       .from("crm_ventas")
       .select(`
         *,
-        clientes:cliente_id (id, nombre, apellido),
-        inventario:producto_id (id, nombre, precio_costo, precio_venta, stock_actual, unidad_medida)
+        clientes (id, nombre, apellido)
       `)
       .eq("perfil_id", perfilId)
       .order("fecha_venta", { ascending: false })
@@ -340,47 +338,16 @@ export function CobranzasManager({
   ) => {
     if (!perfilEmpresarialId) return
 
-    // Buscar categoria de ingresos "Ventas" o crearla
-    let { data: categoria } = await supabase
-      .from("categorias")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("perfil_id", perfilEmpresarialId)
-      .eq("nombre", "Ventas CRM")
-      .eq("tipo", "ingreso")
-      .single()
-
-    if (!categoria) {
-      const { data: nuevaCategoria } = await supabase
-        .from("categorias")
-        .insert({
-          user_id: userId,
-          perfil_id: perfilEmpresarialId,
-          nombre: "Ventas CRM",
-          tipo: "ingreso",
-          icono: "shopping-cart",
-          color: "#10b981"
-        })
-        .select("id")
-        .single()
-      
-      categoria = nuevaCategoria
-    }
-
-    if (!categoria) return
-
-    const descripcionIngreso = esCuota 
+    const tipoIngreso = esCuota 
       ? `Cuota ${numeroCuota} - ${descripcion}` 
-      : `Cobranza: ${descripcion}`
+      : `Cobranza CRM: ${descripcion}`
 
     await supabase.from("ingresos").insert({
       user_id: userId,
       perfil_id: perfilEmpresarialId,
-      categoria_id: categoria.id,
       monto: monto,
-      descripcion: descripcionIngreso,
+      tipo_ingreso: tipoIngreso,
       fecha: fecha,
-      referencia_externa: `cobranza:${cobranzaId}`,
     })
   }
 
@@ -805,14 +772,14 @@ export function CobranzasManager({
                   <div className="space-y-2">
                     <Label htmlFor="producto_id">Producto (opcional)</Label>
                     <Select
-                      value={formData.producto_id}
-                      onValueChange={handleProductoChange}
+                      value={formData.producto_id || "none"}
+                      onValueChange={(value) => handleProductoChange(value === "none" ? "" : value)}
                     >
                       <SelectTrigger>
                         <SelectValue placeholder="Selecciona un producto o deja vacio" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Sin producto</SelectItem>
+                        <SelectItem value="none">Sin producto</SelectItem>
                         {productos.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
                             <div className="flex items-center gap-2">
@@ -1179,10 +1146,10 @@ export function CobranzasManager({
                         {cobranza.clientes?.nombre} {cobranza.clientes?.apellido}
                       </TableCell>
                       <TableCell>
-                        {cobranza.inventario ? (
+                        {cobranza.producto_id ? (
                           <div className="flex items-center gap-1">
                             <Package className="h-3 w-3 text-cyan-600" />
-                            <span className="text-sm">{cobranza.inventario.nombre}</span>
+                            <span className="text-sm">{cobranza.descripcion}</span>
                             {cobranza.cantidad && cobranza.cantidad > 1 && (
                               <Badge variant="outline" className="ml-1">x{cobranza.cantidad}</Badge>
                             )}
