@@ -86,7 +86,15 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
       setPerfilActual(perfil)
       if (typeof window !== "undefined") {
         localStorage.setItem("perfil_actual_id", perfilId)
-        window.location.reload()
+        
+        // Navegar al dashboard correspondiente segun el tipo de perfil
+        const dashboardRoutes: Record<string, string> = {
+          personal: "/dashboard/personal",
+          empresarial: "/dashboard/empresarial",
+          crm: "/dashboard/crm"
+        }
+        const targetRoute = dashboardRoutes[perfil.tipo] || "/dashboard"
+        window.location.href = targetRoute
       }
     }
   }
