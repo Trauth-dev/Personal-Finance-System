@@ -323,38 +323,40 @@ function NavContent({
         )}
       </div>
 
-      {/* Boton destacado para Carga por Voz */}
-      <div className={cn("px-2 pt-2", isCollapsed && !isMobile && "px-1")}>
-        <Link href="/inicio">
-          <div
-            className={cn(
-              "relative overflow-hidden rounded-xl p-3 transition-all group cursor-pointer",
-              "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600",
-              "shadow-lg hover:shadow-emerald-500/25 hover:shadow-xl",
-              isCollapsed && !isMobile && "p-2"
-            )}
-          >
-            <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-            <div className={cn(
-              "flex items-center gap-3",
-              isCollapsed && !isMobile && "justify-center"
-            )}>
-              <div className={cn(
-                "flex items-center justify-center rounded-lg bg-white/20 p-2",
-                isCollapsed && !isMobile && "p-1.5"
-              )}>
-                <Mic className={cn("w-5 h-5 text-white", isCollapsed && !isMobile && "w-4 h-4")} />
-              </div>
-              {(!isCollapsed || isMobile) && (
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-white">Carga por Voz</p>
-                  <p className="text-xs text-white/70">Registra con IA</p>
-                </div>
+      {/* Boton destacado para Carga por Voz - Solo visible en perfil Personal */}
+      {perfilActual?.tipo === "personal" && (
+        <div className={cn("px-2 pt-2", isCollapsed && !isMobile && "px-1")}>
+          <Link href="/inicio">
+            <div
+              className={cn(
+                "relative overflow-hidden rounded-xl p-3 transition-all group cursor-pointer",
+                "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600",
+                "shadow-lg hover:shadow-emerald-500/25 hover:shadow-xl",
+                isCollapsed && !isMobile && "p-2"
               )}
+            >
+              <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className={cn(
+                "flex items-center gap-3",
+                isCollapsed && !isMobile && "justify-center"
+              )}>
+                <div className={cn(
+                  "flex items-center justify-center rounded-lg bg-white/20 p-2",
+                  isCollapsed && !isMobile && "p-1.5"
+                )}>
+                  <Mic className={cn("w-5 h-5 text-white", isCollapsed && !isMobile && "w-4 h-4")} />
+                </div>
+                {(!isCollapsed || isMobile) && (
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-white">Carga por Voz</p>
+                    <p className="text-xs text-white/70">Registra con IA</p>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </Link>
-      </div>
+          </Link>
+        </div>
+      )}
 
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
         {navItems.map((item) => {
