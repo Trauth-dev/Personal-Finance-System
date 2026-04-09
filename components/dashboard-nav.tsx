@@ -213,8 +213,8 @@ const navItemsCRM = [
     icon: CalendarClock,
   },
   {
-    title: "Ventas",
-    href: "/dashboard/crm/ventas",
+    title: "Cobranzas",
+    href: "/dashboard/crm/cobranzas",
     icon: ShoppingCart,
   },
   {
