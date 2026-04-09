@@ -31,8 +31,9 @@ export const revalidate = 0
 export default async function DashboardPersonalPage({
   searchParams,
 }: {
-  searchParams: { month?: string; caja?: string }
+  searchParams: Promise<{ month?: string; caja?: string }>
 }) {
+  const resolvedSearchParams = await searchParams
   const supabase = await createClient()
 
   const {
@@ -76,7 +77,7 @@ export default async function DashboardPersonalPage({
     .order("nombre")
 
   const cajas = cajasData || []
-  const cajaSeleccionada = searchParams.caja || null
+  const cajaSeleccionada = resolvedSearchParams.caja || null
 
   // Validar que la caja seleccionada exista
   const cajaValida = cajaSeleccionada && cajas.some((c) => c.id === cajaSeleccionada) ? cajaSeleccionada : null
@@ -85,8 +86,8 @@ export default async function DashboardPersonalPage({
   let selectedYear = now.getFullYear()
   let selectedMonth = now.getMonth()
 
-  if (searchParams.month) {
-    const [year, month] = searchParams.month.split("-").map(Number)
+  if (resolvedSearchParams.month) {
+    const [year, month] = resolvedSearchParams.month.split("-").map(Number)
     selectedYear = year
     selectedMonth = month - 1
   }
