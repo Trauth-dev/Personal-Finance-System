@@ -48,7 +48,8 @@ import {
   Calendar,
   CheckCircle2,
   Clock,
-  Percent
+  Percent,
+  Calculator
 } from "lucide-react"
 import { format, addDays } from "date-fns"
 import { es } from "date-fns/locale"
@@ -87,7 +88,7 @@ interface Cobranza {
   frecuencia_dias: number | null
   fecha_venta: string
   fecha_inicio_cuotas: string | null
-  estado: "pendiente" | "en_curso" | "completada" | "cancelada"
+  estado: "activa" | "completada" | "cancelada" | "en_mora"
   notas: string | null
   created_at: string
   clientes?: Cliente
@@ -377,6 +378,26 @@ export function CobranzasManager({
       }
     }
 
+    // Validar campos requeridos para modo financiado
+    if (formData.tipo_pago === "cuotas") {
+      if (!formData.num_cuotas || parseInt(formData.num_cuotas) < 1) {
+        toast({
+          title: "Error",
+          description: "Debes especificar la cantidad de cuotas",
+          variant: "destructive",
+        })
+        return
+      }
+      if (!formData.monto_total || parseFloat(formData.monto_total) <= 0) {
+        toast({
+          title: "Error",
+          description: "Debes especificar el monto total",
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
     const montoConInteres = calcularMontoConInteres()
     const montoCuota = calcularMontoCuota()
     const cuotasRestantes = calcularCuotasRestantes()
@@ -399,7 +420,7 @@ export function CobranzasManager({
       frecuencia_dias: formData.tipo_pago === "cuotas" ? parseInt(formData.frecuencia_dias) || 30 : null,
       fecha_venta: formData.fecha_venta,
       fecha_inicio_cuotas: formData.tipo_pago === "cuotas" ? formData.fecha_inicio_cuotas : null,
-      estado: formData.tipo_pago === "contado" ? "completada" : "en_curso",
+      estado: formData.tipo_pago === "contado" ? "completada" : "activa",
       notas: formData.notas || null,
     }
 
@@ -642,12 +663,12 @@ export function CobranzasManager({
     .filter(c => c.estado === "completada")
     .reduce((sum, c) => sum + c.monto_total, 0)
   const pendienteCobrar = cobranzas
-    .filter(c => c.estado === "en_curso")
+    .filter(c => c.estado === "activa")
     .reduce((sum, c) => {
       const inicial = c.monto_inicial || 0
       return sum + ((c.monto_con_interes || c.monto_total) - inicial)
     }, 0)
-  const enCurso = cobranzas.filter(c => c.estado === "en_curso").length
+  const enCurso = cobranzas.filter(c => c.estado === "activa").length
 
   if (isLoading) {
     return (
@@ -1028,40 +1049,43 @@ export function CobranzasManager({
                         />
                       </div>
 
-                      {/* Resumen del Plan */}
-                      {formData.monto_total && formData.num_cuotas && (
-                        <div className="p-3 bg-white dark:bg-gray-900 rounded-lg border text-sm space-y-2">
-                          <p className="font-medium text-blue-600">Resumen del Plan:</p>
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Monto base:</span>
-                              <span className="ml-2">{formatCurrency(parseFloat(formData.monto_total))}</span>
-                            </div>
-                            {parseFloat(formData.interes_porcentaje) > 0 && (
-                              <div>
-                                <span className="text-muted-foreground">+ Interes ({formData.interes_porcentaje}%):</span>
-                                <span className="ml-2">{formatCurrency(calcularMontoConInteres() - parseFloat(formData.monto_total))}</span>
-                              </div>
-                            )}
-                            <div>
-                              <span className="text-muted-foreground">Total a pagar:</span>
-                              <span className="ml-2 font-bold">{formatCurrency(calcularMontoConInteres())}</span>
-                            </div>
-                            {parseFloat(formData.monto_inicial) > 0 && (
-                              <div>
-                                <span className="text-muted-foreground">Pago inicial:</span>
-                                <span className="ml-2">{formatCurrency(parseFloat(formData.monto_inicial))}</span>
-                              </div>
-                            )}
-                          </div>
-                          <div className="border-t pt-2 mt-2">
-                            <p className="font-medium">
-                              {calcularCuotasRestantes()} cuota(s) de {formatCurrency(calcularMontoCuota())}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Cada {formData.frecuencia_dias} dias desde {format(new Date(formData.fecha_inicio_cuotas || new Date()), "dd/MM/yyyy")}
-                            </p>
-                          </div>
+{/* Resumen del Plan */}
+  {formData.monto_total && formData.num_cuotas && (
+  <div className="p-4 bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/50 dark:to-teal-950/50 rounded-lg border border-cyan-200 dark:border-cyan-800 text-sm space-y-3">
+  <p className="font-semibold text-cyan-700 dark:text-cyan-300 flex items-center gap-2">
+    <Calculator className="h-4 w-4" />
+    Resumen del Plan:
+  </p>
+  <div className="grid grid-cols-2 gap-3 text-sm">
+  <div className="flex justify-between">
+  <span className="text-gray-600 dark:text-gray-300">Monto base:</span>
+  <span className="font-medium text-gray-900 dark:text-white">{formatCurrency(parseFloat(formData.monto_total))}</span>
+  </div>
+  {parseFloat(formData.interes_porcentaje) > 0 && (
+  <div className="flex justify-between">
+  <span className="text-amber-600 dark:text-amber-400">+ Interes ({formData.interes_porcentaje}%):</span>
+  <span className="font-medium text-amber-700 dark:text-amber-300">{formatCurrency(calcularMontoConInteres() - parseFloat(formData.monto_total))}</span>
+  </div>
+  )}
+  <div className="flex justify-between">
+  <span className="text-gray-600 dark:text-gray-300">Total a pagar:</span>
+  <span className="font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(calcularMontoConInteres())}</span>
+  </div>
+  {parseFloat(formData.monto_inicial) > 0 && (
+  <div className="flex justify-between">
+  <span className="text-gray-600 dark:text-gray-300">Pago inicial:</span>
+  <span className="font-medium text-blue-600 dark:text-blue-400">{formatCurrency(parseFloat(formData.monto_inicial))}</span>
+  </div>
+  )}
+  </div>
+  <div className="border-t border-cyan-200 dark:border-cyan-700 pt-3 mt-3">
+  <p className="font-bold text-lg text-cyan-800 dark:text-cyan-200">
+  {calcularCuotasRestantes()} cuota(s) de {formatCurrency(calcularMontoCuota())}
+  </p>
+  <p className="text-xs text-cyan-600 dark:text-cyan-400">
+  Cada {formData.frecuencia_dias} dias desde {format(new Date(formData.fecha_inicio_cuotas || new Date()), "dd/MM/yyyy")}
+  </p>
+  </div>
                         </div>
                       )}
                     </div>
@@ -1194,8 +1218,9 @@ export function CobranzasManager({
                           className={cobranza.estado === "completada" ? "bg-green-500" : ""}
                         >
                           {cobranza.estado === "completada" ? "Completada" :
-                           cobranza.estado === "en_curso" ? "En curso" :
-                           cobranza.estado === "cancelada" ? "Cancelada" : "Pendiente"}
+                           cobranza.estado === "activa" ? "En curso" :
+                           cobranza.estado === "cancelada" ? "Cancelada" : 
+                           cobranza.estado === "en_mora" ? "En mora" : "Activa"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
