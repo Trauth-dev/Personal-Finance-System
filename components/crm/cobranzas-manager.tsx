@@ -88,7 +88,7 @@ interface Cobranza {
   frecuencia_dias: number | null
   fecha_venta: string
   fecha_inicio_cuotas: string | null
-  estado: "pendiente" | "en_curso" | "completada" | "cancelada"
+  estado: "activa" | "completada" | "cancelada" | "en_mora"
   notas: string | null
   created_at: string
   clientes?: Cliente
@@ -354,10 +354,6 @@ export function CobranzasManager({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    console.log("[v0] handleSubmit iniciado")
-    console.log("[v0] formData:", JSON.stringify(formData, null, 2))
-    console.log("[v0] tipo_pago:", formData.tipo_pago)
 
     // Validar cliente
     if (!formData.cliente_id) {
@@ -406,11 +402,6 @@ export function CobranzasManager({
     const montoCuota = calcularMontoCuota()
     const cuotasRestantes = calcularCuotasRestantes()
 
-    console.log("[v0] Pasó todas las validaciones")
-    console.log("[v0] montoConInteres:", montoConInteres)
-    console.log("[v0] montoCuota:", montoCuota)
-    console.log("[v0] cuotasRestantes:", cuotasRestantes)
-
     const cobranzaData = {
       user_id: userId,
       perfil_id: perfilId,
@@ -429,11 +420,9 @@ export function CobranzasManager({
       frecuencia_dias: formData.tipo_pago === "cuotas" ? parseInt(formData.frecuencia_dias) || 30 : null,
       fecha_venta: formData.fecha_venta,
       fecha_inicio_cuotas: formData.tipo_pago === "cuotas" ? formData.fecha_inicio_cuotas : null,
-      estado: formData.tipo_pago === "contado" ? "completada" : "pendiente",
+      estado: formData.tipo_pago === "contado" ? "completada" : "activa",
       notas: formData.notas || null,
     }
-    
-    console.log("[v0] cobranzaData a insertar:", JSON.stringify(cobranzaData, null, 2))
 
     if (editingCobranza) {
       const { error } = await supabase
@@ -454,19 +443,13 @@ export function CobranzasManager({
         resetForm()
       }
     } else {
-      console.log("[v0] Iniciando insert en crm_ventas...")
-      
       const { data: nuevaCobranza, error } = await supabase
         .from("crm_ventas")
         .insert([cobranzaData])
         .select()
         .single()
 
-      console.log("[v0] Resultado insert - data:", nuevaCobranza)
-      console.log("[v0] Resultado insert - error:", error)
-
       if (error) {
-        console.error("[v0] Error completo:", JSON.stringify(error, null, 2))
         toast({
           title: "Error",
           description: "No se pudo crear la cobranza: " + error.message,
@@ -680,12 +663,12 @@ export function CobranzasManager({
     .filter(c => c.estado === "completada")
     .reduce((sum, c) => sum + c.monto_total, 0)
   const pendienteCobrar = cobranzas
-    .filter(c => c.estado === "pendiente")
+    .filter(c => c.estado === "activa")
     .reduce((sum, c) => {
       const inicial = c.monto_inicial || 0
       return sum + ((c.monto_con_interes || c.monto_total) - inicial)
     }, 0)
-  const enCurso = cobranzas.filter(c => c.estado === "pendiente").length
+  const enCurso = cobranzas.filter(c => c.estado === "activa").length
 
   if (isLoading) {
     return (
@@ -1235,8 +1218,9 @@ export function CobranzasManager({
                           className={cobranza.estado === "completada" ? "bg-green-500" : ""}
                         >
                           {cobranza.estado === "completada" ? "Completada" :
-                           cobranza.estado === "pendiente" ? "En curso" :
-                           cobranza.estado === "cancelada" ? "Cancelada" : "Pendiente"}
+                           cobranza.estado === "activa" ? "En curso" :
+                           cobranza.estado === "cancelada" ? "Cancelada" : 
+                           cobranza.estado === "en_mora" ? "En mora" : "Activa"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
