@@ -354,6 +354,10 @@ export function CobranzasManager({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    console.log("[v0] handleSubmit iniciado")
+    console.log("[v0] formData:", JSON.stringify(formData, null, 2))
+    console.log("[v0] tipo_pago:", formData.tipo_pago)
 
     // Validar cliente
     if (!formData.cliente_id) {
@@ -402,6 +406,11 @@ export function CobranzasManager({
     const montoCuota = calcularMontoCuota()
     const cuotasRestantes = calcularCuotasRestantes()
 
+    console.log("[v0] Pasó todas las validaciones")
+    console.log("[v0] montoConInteres:", montoConInteres)
+    console.log("[v0] montoCuota:", montoCuota)
+    console.log("[v0] cuotasRestantes:", cuotasRestantes)
+
     const cobranzaData = {
       user_id: userId,
       perfil_id: perfilId,
@@ -423,6 +432,8 @@ export function CobranzasManager({
       estado: formData.tipo_pago === "contado" ? "completada" : "pendiente",
       notas: formData.notas || null,
     }
+    
+    console.log("[v0] cobranzaData a insertar:", JSON.stringify(cobranzaData, null, 2))
 
     if (editingCobranza) {
       const { error } = await supabase
@@ -443,13 +454,19 @@ export function CobranzasManager({
         resetForm()
       }
     } else {
+      console.log("[v0] Iniciando insert en crm_ventas...")
+      
       const { data: nuevaCobranza, error } = await supabase
         .from("crm_ventas")
         .insert([cobranzaData])
         .select()
         .single()
 
+      console.log("[v0] Resultado insert - data:", nuevaCobranza)
+      console.log("[v0] Resultado insert - error:", error)
+
       if (error) {
+        console.error("[v0] Error completo:", JSON.stringify(error, null, 2))
         toast({
           title: "Error",
           description: "No se pudo crear la cobranza: " + error.message,
