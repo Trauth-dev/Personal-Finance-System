@@ -354,8 +354,6 @@ export function CobranzasManager({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    console.log("[v0] handleSubmit iniciado, formData:", formData)
 
     // Validar cliente
     if (!formData.cliente_id) {
@@ -400,8 +398,6 @@ export function CobranzasManager({
       }
     }
 
-    console.log("[v0] Validaciones pasadas, tipo_pago:", formData.tipo_pago)
-
     const montoConInteres = calcularMontoConInteres()
     const montoCuota = calcularMontoCuota()
     const cuotasRestantes = calcularCuotasRestantes()
@@ -424,7 +420,7 @@ export function CobranzasManager({
       frecuencia_dias: formData.tipo_pago === "cuotas" ? parseInt(formData.frecuencia_dias) || 30 : null,
       fecha_venta: formData.fecha_venta,
       fecha_inicio_cuotas: formData.tipo_pago === "cuotas" ? formData.fecha_inicio_cuotas : null,
-      estado: formData.tipo_pago === "contado" ? "completada" : "en_curso",
+      estado: formData.tipo_pago === "contado" ? "completada" : "pendiente",
       notas: formData.notas || null,
     }
 
@@ -447,18 +443,13 @@ export function CobranzasManager({
         resetForm()
       }
     } else {
-      console.log("[v0] Intentando crear cobranza con datos:", cobranzaData)
-      
       const { data: nuevaCobranza, error } = await supabase
         .from("crm_ventas")
         .insert([cobranzaData])
         .select()
         .single()
 
-      console.log("[v0] Resultado insert:", { nuevaCobranza, error })
-
       if (error) {
-        console.error("[v0] Error al crear cobranza:", error)
         toast({
           title: "Error",
           description: "No se pudo crear la cobranza: " + error.message,
@@ -672,12 +663,12 @@ export function CobranzasManager({
     .filter(c => c.estado === "completada")
     .reduce((sum, c) => sum + c.monto_total, 0)
   const pendienteCobrar = cobranzas
-    .filter(c => c.estado === "en_curso")
+    .filter(c => c.estado === "pendiente")
     .reduce((sum, c) => {
       const inicial = c.monto_inicial || 0
       return sum + ((c.monto_con_interes || c.monto_total) - inicial)
     }, 0)
-  const enCurso = cobranzas.filter(c => c.estado === "en_curso").length
+  const enCurso = cobranzas.filter(c => c.estado === "pendiente").length
 
   if (isLoading) {
     return (
@@ -1227,7 +1218,7 @@ export function CobranzasManager({
                           className={cobranza.estado === "completada" ? "bg-green-500" : ""}
                         >
                           {cobranza.estado === "completada" ? "Completada" :
-                           cobranza.estado === "en_curso" ? "En curso" :
+                           cobranza.estado === "pendiente" ? "En curso" :
                            cobranza.estado === "cancelada" ? "Cancelada" : "Pendiente"}
                         </Badge>
                       </TableCell>
