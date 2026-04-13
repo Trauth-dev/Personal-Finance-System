@@ -42,7 +42,6 @@ import {
   Edit2,
   DollarSign,
   Eye,
-  TrendingUp,
   Package,
   AlertTriangle,
   CreditCard,
@@ -62,8 +61,7 @@ import {
   X,
   User
 } from "lucide-react"
-import { format, addDays, differenceInDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, parseISO, isBefore, isAfter, startOfWeek, endOfWeek, addMonths, subMonths } from "date-fns"
-import { es } from "date-fns/locale"
+import { format, addDays, differenceInDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, parseISO, isBefore, startOfWeek, endOfWeek, addMonths, subMonths } from "date-fns"
 
 interface Cliente {
   id: string
