@@ -62,6 +62,7 @@ import {
   User
 } from "lucide-react"
 import { format, addDays, differenceInDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, parseISO, isBefore, startOfWeek, endOfWeek, addMonths, subMonths } from "date-fns"
+import { es } from "date-fns/locale"
 
 interface Cliente {
   id: string
