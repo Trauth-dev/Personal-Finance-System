@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { CobranzasManager } from "@/components/crm/cobranzas-manager"
+import CobranzasManager from "@/components/crm/cobranzas-manager"
 
 export default async function CobranzasPage() {
   const supabase = await createClient()
