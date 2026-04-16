@@ -150,6 +150,9 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
   const [dialogNuevaCobranza, setDialogNuevaCobranza] = useState(false)
   const [dialogRegistrarPago, setDialogRegistrarPago] = useState(false)
   const [cuotaSeleccionada, setCuotaSeleccionada] = useState<Cuota | null>(null)
+  
+  // Cobranza expandida para ver detalle de cuotas
+  const [cobranzaExpandida, setCobranzaExpandida] = useState<string | null>(null)
 
   // Form nueva cobranza
   const [formCobranza, setFormCobranza] = useState({
@@ -176,6 +179,62 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
   })
 
   const [submitting, setSubmitting] = useState(false)
+
+  // Obtener cuotas de una cobranza (existentes o generadas)
+  const getCuotasDeCobranza = (cobranza: Cobranza): Array<{
+    numero: number
+    monto: number
+    fechaVencimiento: Date
+    estado: "pagada" | "pendiente" | "vencida"
+    fechaPago: Date | null
+    cuotaId: string | null
+  }> => {
+    if (cobranza.tipo_pago === "contado") {
+      return [{
+        numero: 1,
+        monto: cobranza.monto_total,
+        fechaVencimiento: parseISO(cobranza.fecha_venta),
+        estado: cobranza.estado === "completada" ? "pagada" : "pendiente",
+        fechaPago: cobranza.estado === "completada" ? parseISO(cobranza.fecha_venta) : null,
+        cuotaId: null
+      }]
+    }
+
+    const numCuotas = cobranza.num_cuotas || 1
+    const montoCuota = cobranza.monto_cuota || (cobranza.monto_con_interes || cobranza.monto_total) / numCuotas
+    const fechaInicio = cobranza.fecha_inicio_cuotas ? parseISO(cobranza.fecha_inicio_cuotas) : parseISO(cobranza.fecha_venta)
+    const frecuenciaDias = cobranza.frecuencia_dias || 30
+    
+    // Obtener cuotas existentes de la DB
+    const cuotasDB = cuotas.filter(c => c.venta_id === cobranza.id)
+    
+    const resultado = []
+    for (let i = 1; i <= numCuotas; i++) {
+      const fechaVencimiento = new Date(fechaInicio)
+      fechaVencimiento.setDate(fechaVencimiento.getDate() + (frecuenciaDias * (i - 1)))
+      
+      const cuotaDB = cuotasDB.find(c => c.numero_cuota === i)
+      const hoy = new Date()
+      
+      let estado: "pagada" | "pendiente" | "vencida" = "pendiente"
+      if (cuotaDB?.estado === "pagada") {
+        estado = "pagada"
+      } else if (fechaVencimiento < hoy) {
+        estado = "vencida"
+      }
+      
+      resultado.push({
+        numero: i,
+        monto: montoCuota,
+        fechaVencimiento,
+        estado,
+        fechaPago: cuotaDB?.fecha_pago ? parseISO(cuotaDB.fecha_pago) : null,
+        cuotaId: cuotaDB?.id || null
+      })
+    }
+    
+    return resultado
+  }
 
   // Formatear moneda en guaranies
   const formatCurrency = (amount: number) => {
@@ -381,19 +440,38 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
 
     try {
       const monto = parseFloat(formPago.monto)
+      const esCuotaTemporal = cuotaSeleccionada.id.startsWith("temp-")
       
-      // Actualizar cuota
-      const { error: cuotaError } = await supabase
-        .from("crm_pagos_cuotas")
-        .update({
-          monto_pagado: monto,
-          fecha_pago: format(new Date(), "yyyy-MM-dd"),
-          estado: "pagada",
-          notas: formPago.descripcion
-        })
-        .eq("id", cuotaSeleccionada.id)
+      if (esCuotaTemporal) {
+        // Crear nueva cuota en la DB
+        const { error: cuotaError } = await supabase
+          .from("crm_pagos_cuotas")
+          .insert({
+            user_id: userId,
+            venta_id: cuotaSeleccionada.venta_id,
+            numero_cuota: cuotaSeleccionada.numero_cuota,
+            monto_pagado: monto,
+            fecha_pago: format(new Date(), "yyyy-MM-dd"),
+            fecha_vencimiento: cuotaSeleccionada.fecha_vencimiento,
+            estado: "pagada",
+            notas: formPago.descripcion
+          })
+        
+        if (cuotaError) throw cuotaError
+      } else {
+        // Actualizar cuota existente
+        const { error: cuotaError } = await supabase
+          .from("crm_pagos_cuotas")
+          .update({
+            monto_pagado: monto,
+            fecha_pago: format(new Date(), "yyyy-MM-dd"),
+            estado: "pagada",
+            notas: formPago.descripcion
+          })
+          .eq("id", cuotaSeleccionada.id)
 
-      if (cuotaError) throw cuotaError
+        if (cuotaError) throw cuotaError
+      }
 
       // Registrar ingreso en empresarial
       if (perfilEmpresarialId) {
@@ -892,39 +970,249 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
             </TabsContent>
 
             <TabsContent value="cobranzas" className="p-6">
-              <div className="space-y-3">
-                {clienteSeleccionado.cobranzas.map((cobranza) => (
-                  <div 
-                    key={cobranza.id}
-                    className="flex items-center justify-between p-4 rounded-lg border bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900">
-                        <Receipt className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <div className="space-y-4">
+                {clienteSeleccionado.cobranzas.map((cobranza) => {
+                  const cuotasCobranza = getCuotasDeCobranza(cobranza)
+                  const cuotasPagadas = cuotasCobranza.filter(c => c.estado === "pagada").length
+                  const cuotasVencidas = cuotasCobranza.filter(c => c.estado === "vencida").length
+                  const totalCuotas = cuotasCobranza.length
+                  const progreso = (cuotasPagadas / totalCuotas) * 100
+                  const isExpandida = cobranzaExpandida === cobranza.id
+                  
+                  return (
+                    <div 
+                      key={cobranza.id}
+                      className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden"
+                    >
+                      {/* Header de la cobranza - clickeable */}
+                      <div 
+                        className="p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+                        onClick={() => setCobranzaExpandida(isExpandida ? null : cobranza.id)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-4">
+                            <div className={`p-2.5 rounded-xl ${
+                              cobranza.estado === "completada" 
+                                ? "bg-green-100 dark:bg-green-900/30" 
+                                : cuotasVencidas > 0
+                                ? "bg-red-100 dark:bg-red-900/30"
+                                : "bg-blue-100 dark:bg-blue-900/30"
+                            }`}>
+                              <Receipt className={`h-5 w-5 ${
+                                cobranza.estado === "completada"
+                                  ? "text-green-600 dark:text-green-400"
+                                  : cuotasVencidas > 0
+                                  ? "text-red-600 dark:text-red-400"
+                                  : "text-blue-600 dark:text-blue-400"
+                              }`} />
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-900 dark:text-white">
+                                {cobranza.descripcion}
+                              </p>
+                              <p className="text-sm text-slate-500 dark:text-slate-400">
+                                {format(parseISO(cobranza.fecha_venta), "dd MMM yyyy", { locale: es })} 
+                                {cobranza.tipo_pago === "cuotas" && ` - ${cobranza.num_cuotas} cuotas`}
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <p className="font-bold text-slate-900 dark:text-white">
+                                {formatCurrency(cobranza.monto_con_interes || cobranza.monto_total)}
+                              </p>
+                              <div className="flex items-center gap-2 justify-end">
+                                {cuotasVencidas > 0 && cobranza.estado !== "completada" && (
+                                  <Badge className="bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 text-xs">
+                                    {cuotasVencidas} vencida{cuotasVencidas > 1 ? "s" : ""}
+                                  </Badge>
+                                )}
+                                <Badge className={
+                                  cobranza.estado === "completada"
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300"
+                                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300"
+                                }>
+                                  {cobranza.estado === "completada" ? "Completada" : `${cuotasPagadas}/${totalCuotas}`}
+                                </Badge>
+                              </div>
+                            </div>
+                            <ChevronRight className={`h-5 w-5 text-slate-400 transition-transform ${isExpandida ? "rotate-90" : ""}`} />
+                          </div>
+                        </div>
+                        
+                        {/* Barra de progreso */}
+                        {cobranza.tipo_pago === "cuotas" && (
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+                              <span>Progreso de cobro</span>
+                              <span className={progreso === 100 ? "text-green-600 dark:text-green-400 font-medium" : ""}>
+                                {Math.round(progreso)}%
+                              </span>
+                            </div>
+                            <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full transition-all ${
+                                  progreso === 100 
+                                    ? "bg-green-500" 
+                                    : cuotasVencidas > 0 
+                                    ? "bg-gradient-to-r from-green-500 via-amber-500 to-red-500"
+                                    : "bg-blue-500"
+                                }`}
+                                style={{ width: `${progreso}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-900 dark:text-white">
-                          {cobranza.descripcion}
-                        </p>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">
-                          {format(parseISO(cobranza.fecha_venta), "dd/MM/yyyy")} - {cobranza.tipo_pago === "contado" ? "Contado" : `${cobranza.num_cuotas} cuotas`}
-                        </p>
-                      </div>
+                      
+                      {/* Timeline de cuotas expandido */}
+                      {isExpandida && (
+                        <div className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4">
+                          <div className="mb-4">
+                            <h4 className="font-semibold text-slate-900 dark:text-white text-sm uppercase tracking-wide">
+                              Plan de Pagos
+                            </h4>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                              {cobranza.tipo_pago === "contado" 
+                                ? "Pago unico" 
+                                : `${totalCuotas} cuotas de ${formatCurrency(cobranza.monto_cuota || 0)} cada ${cobranza.frecuencia_dias || 30} dias`
+                              }
+                            </p>
+                          </div>
+                          
+                          {/* Timeline visual */}
+                          <div className="space-y-3">
+                            {cuotasCobranza.map((cuota, index) => {
+                              const diasDiferencia = differenceInDays(cuota.fechaVencimiento, new Date())
+                              
+                              return (
+                                <div 
+                                  key={index}
+                                  className={`relative flex items-center gap-4 p-3 rounded-lg border transition-all ${
+                                    cuota.estado === "pagada"
+                                      ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                                      : cuota.estado === "vencida"
+                                      ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                                      : diasDiferencia <= 7 && diasDiferencia >= 0
+                                      ? "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800"
+                                      : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
+                                  }`}
+                                >
+                                  {/* Indicador de linea del timeline */}
+                                  {index < cuotasCobranza.length - 1 && (
+                                    <div className="absolute left-[26px] top-[48px] w-0.5 h-[calc(100%-24px)] bg-slate-200 dark:bg-slate-700" />
+                                  )}
+                                  
+                                  {/* Icono de estado */}
+                                  <div className={`relative z-10 p-2 rounded-full ${
+                                    cuota.estado === "pagada"
+                                      ? "bg-green-500"
+                                      : cuota.estado === "vencida"
+                                      ? "bg-red-500"
+                                      : diasDiferencia <= 7 && diasDiferencia >= 0
+                                      ? "bg-amber-500"
+                                      : "bg-slate-300 dark:bg-slate-600"
+                                  }`}>
+                                    {cuota.estado === "pagada" ? (
+                                      <CheckCircle2 className="h-4 w-4 text-white" />
+                                    ) : (
+                                      <Clock className="h-4 w-4 text-white" />
+                                    )}
+                                  </div>
+                                  
+                                  {/* Info de la cuota */}
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-slate-900 dark:text-white">
+                                        Cuota {cuota.numero}
+                                      </span>
+                                      <span className="font-bold text-slate-900 dark:text-white">
+                                        {formatCurrency(cuota.monto)}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                                      {cuota.estado === "pagada" && cuota.fechaPago
+                                        ? `Pagado el ${format(cuota.fechaPago, "dd/MM/yyyy")}`
+                                        : `Vence: ${format(cuota.fechaVencimiento, "dd/MM/yyyy")}`
+                                      }
+                                      {cuota.estado === "vencida" && (
+                                        <span className="text-red-600 dark:text-red-400 font-medium ml-2">
+                                          ({Math.abs(diasDiferencia)} dias vencido)
+                                        </span>
+                                      )}
+                                      {cuota.estado === "pendiente" && diasDiferencia <= 7 && diasDiferencia >= 0 && (
+                                        <span className="text-amber-600 dark:text-amber-400 font-medium ml-2">
+                                          (Vence en {diasDiferencia} dias)
+                                        </span>
+                                      )}
+                                    </p>
+                                  </div>
+                                  
+                                  {/* Boton de accion */}
+                                  {cuota.estado !== "pagada" && (
+                                    <Button 
+                                      size="sm"
+                                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        // Crear objeto cuota para el dialog
+                                        const cuotaObj: Cuota = {
+                                          id: cuota.cuotaId || `temp-${cobranza.id}-${cuota.numero}`,
+                                          user_id: userId,
+                                          venta_id: cobranza.id,
+                                          numero_cuota: cuota.numero,
+                                          monto_pagado: null,
+                                          fecha_pago: null,
+                                          fecha_vencimiento: format(cuota.fechaVencimiento, "yyyy-MM-dd"),
+                                          estado: cuota.estado,
+                                          notas: null
+                                        }
+                                        handleAbrirRegistrarPago(cuotaObj)
+                                      }}
+                                    >
+                                      Registrar Pago
+                                    </Button>
+                                  )}
+                                  
+                                  {cuota.estado === "pagada" && (
+                                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
+                                      Pagada
+                                    </Badge>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                          
+                          {/* Resumen */}
+                          <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                            <div className="grid grid-cols-3 gap-4 text-center">
+                              <div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase">Total</p>
+                                <p className="font-bold text-slate-900 dark:text-white">
+                                  {formatCurrency(cobranza.monto_con_interes || cobranza.monto_total)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase">Cobrado</p>
+                                <p className="font-bold text-green-600 dark:text-green-400">
+                                  {formatCurrency(cuotasPagadas * (cobranza.monto_cuota || cobranza.monto_total))}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase">Pendiente</p>
+                                <p className="font-bold text-red-600 dark:text-red-400">
+                                  {formatCurrency((totalCuotas - cuotasPagadas) * (cobranza.monto_cuota || cobranza.monto_total))}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-slate-900 dark:text-white">
-                        {formatCurrency(cobranza.monto_con_interes || cobranza.monto_total)}
-                      </p>
-                      <Badge className={
-                        cobranza.estado === "completada"
-                          ? "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300"
-                          : "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
-                      }>
-                        {cobranza.estado === "completada" ? "Completada" : "Activa"}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </TabsContent>
           </Tabs>
@@ -1370,39 +1658,47 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
 
       {/* Dialog Registrar Pago */}
       <Dialog open={dialogRegistrarPago} onOpenChange={setDialogRegistrarPago}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md bg-white dark:bg-slate-900">
           <DialogHeader>
-            <DialogTitle>Registrar Nuevo Pago</DialogTitle>
+            <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-white">
+              Registrar Nuevo Pago
+            </DialogTitle>
+            {cuotaSeleccionada && (
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Cuota {cuotaSeleccionada.numero_cuota} - Vence: {format(parseISO(cuotaSeleccionada.fecha_vencimiento), "dd/MM/yyyy")}
+              </p>
+            )}
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
+          <div className="space-y-5 py-4">
             <div className="space-y-2">
-              <Label>Monto (Gs.)</Label>
+              <Label className="text-slate-700 dark:text-slate-300">Monto (Gs.)</Label>
               <Input
                 type="number"
                 value={formPago.monto}
                 onChange={(e) => setFormPago({ ...formPago, monto: e.target.value })}
-                placeholder="0"
-                className="text-lg"
+                placeholder="0.00"
+                className="text-lg h-12 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Descripcion</Label>
+              <Label className="text-slate-700 dark:text-slate-300">Descripcion</Label>
               <Input
                 value={formPago.descripcion}
                 onChange={(e) => setFormPago({ ...formPago, descripcion: e.target.value })}
                 placeholder="Ej: Cuota abril"
+                className="border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"
               />
             </div>
 
             <div className="space-y-2">
-              <Label>Metodo de Pago</Label>
+              <Label className="text-slate-700 dark:text-slate-300">Metodo de Pago</Label>
               <Select
                 value={formPago.metodo_pago}
                 onValueChange={(v) => setFormPago({ ...formPago, metodo_pago: v })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="border-slate-300 dark:border-slate-600">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1410,17 +1706,18 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                   <SelectItem value="transferencia">Transferencia</SelectItem>
                   <SelectItem value="tarjeta">Tarjeta</SelectItem>
                   <SelectItem value="cheque">Cheque</SelectItem>
+                  <SelectItem value="otro">Otro</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <Button 
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white gap-2"
+            className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white gap-2 text-base font-medium"
             onClick={handleRegistrarPago}
             disabled={submitting || !formPago.monto}
           >
-            <CheckCircle2 className="h-4 w-4" />
+            <CheckCircle2 className="h-5 w-5" />
             {submitting ? "Registrando..." : "Confirmar Pago"}
           </Button>
         </DialogContent>
