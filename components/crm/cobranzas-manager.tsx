@@ -47,7 +47,11 @@ import {
   MapPin,
   FileText,
   Receipt,
-  TrendingUp
+  TrendingUp,
+  Bell,
+  CalendarClock,
+  XCircle,
+  RefreshCw
 } from "lucide-react"
 import { format, differenceInDays, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
@@ -154,6 +158,19 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
   
   // Cobranza expandida para ver detalle de cuotas
   const [cobranzaExpandida, setCobranzaExpandida] = useState<string | null>(null)
+  
+  // Dialog de reagendar cuota
+  const [dialogReagendar, setDialogReagendar] = useState(false)
+  const [cuotaReagendar, setCuotaReagendar] = useState<{
+    cobranzaId: string
+    numeroCuota: number
+    fechaActual: Date
+  } | null>(null)
+  const [nuevaFechaVencimiento, setNuevaFechaVencimiento] = useState("")
+  
+  // Dialog confirmar incobrable
+  const [dialogIncobrable, setDialogIncobrable] = useState(false)
+  const [cobranzaIncobrable, setCobranzaIncobrable] = useState<string | null>(null)
 
   // Form nueva cobranza
   const [formCobranza, setFormCobranza] = useState({
@@ -522,6 +539,95 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
     }
   }
 
+  // Función para reagendar cuota
+  const handleReagendarCuota = async () => {
+    if (!cuotaReagendar || !nuevaFechaVencimiento) return
+    setSubmitting(true)
+
+    try {
+      // Buscar si la cuota existe en la DB
+      const cuotaExistente = cuotas.find(
+        c => c.venta_id === cuotaReagendar.cobranzaId && c.numero_cuota === cuotaReagendar.numeroCuota
+      )
+
+      if (cuotaExistente) {
+        // Actualizar cuota existente
+        const { error } = await supabase
+          .from("crm_pagos_cuotas")
+          .update({ fecha_vencimiento: nuevaFechaVencimiento })
+          .eq("id", cuotaExistente.id)
+        
+        if (error) throw error
+      } else {
+        // Crear nueva cuota con la fecha reagendada
+        const cobranza = cobranzas.find(c => c.id === cuotaReagendar.cobranzaId)
+        if (cobranza) {
+          const { error } = await supabase
+            .from("crm_pagos_cuotas")
+            .insert({
+              user_id: userId,
+              venta_id: cuotaReagendar.cobranzaId,
+              numero_cuota: cuotaReagendar.numeroCuota,
+              fecha_vencimiento: nuevaFechaVencimiento,
+              estado: "pendiente"
+            })
+          
+          if (error) throw error
+        }
+      }
+
+      toast({
+        title: "Cuota reagendada",
+        description: `La cuota ${cuotaReagendar.numeroCuota} se reagendó para el ${format(parseISO(nuevaFechaVencimiento), "dd/MM/yyyy")}`,
+      })
+
+      setDialogReagendar(false)
+      setCuotaReagendar(null)
+      setNuevaFechaVencimiento("")
+      fetchData()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Función para marcar cobranza como incobrable
+  const handleMarcarIncobrable = async () => {
+    if (!cobranzaIncobrable) return
+    setSubmitting(true)
+
+    try {
+      const { error } = await supabase
+        .from("crm_ventas")
+        .update({ estado: "cancelada" })
+        .eq("id", cobranzaIncobrable)
+
+      if (error) throw error
+
+      toast({
+        title: "Cobranza marcada como incobrable",
+        description: "La cobranza ha sido marcada como cancelada/incobrable",
+      })
+
+      setDialogIncobrable(false)
+      setCobranzaIncobrable(null)
+      fetchData()
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleCrearCobranza = async () => {
     if (!formCobranza.cliente_id || !formCobranza.monto_total) return
     setSubmitting(true)
@@ -815,6 +921,82 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
             />
           </CardContent>
         </Card>
+
+        {/* Banner de Alertas - Solo si hay cuotas vencidas */}
+        {(() => {
+          // Calcular cuotas vencidas y próximas a vencer
+          const todasLasCuotas = clienteSeleccionado.cobranzas.flatMap(c => getCuotasDeCobranza(c))
+          const cuotasVencidas = todasLasCuotas.filter(c => c.estado === "vencida")
+          const cuotasProximas = todasLasCuotas.filter(c => {
+            if (c.estado !== "pendiente") return false
+            const dias = differenceInDays(c.fechaVencimiento, new Date())
+            return dias >= 0 && dias <= 7
+          })
+          const montoVencido = cuotasVencidas.reduce((acc, c) => acc + c.monto, 0)
+          
+          if (cuotasVencidas.length === 0 && cuotasProximas.length === 0) return null
+          
+          return (
+            <div className="space-y-3">
+              {/* Alerta de cuotas vencidas */}
+              {cuotasVencidas.length > 0 && (
+                <div className="flex items-center justify-between p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/50">
+                      <Bell className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-red-800 dark:text-red-200">
+                        {cuotasVencidas.length} cuota{cuotasVencidas.length > 1 ? "s" : ""} vencida{cuotasVencidas.length > 1 ? "s" : ""}
+                      </p>
+                      <p className="text-sm text-red-600 dark:text-red-400">
+                        Total pendiente vencido: {formatCurrency(montoVencido)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      className="border-red-300 text-red-700 hover:bg-red-100 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/50"
+                      onClick={() => {
+                        // Scroll al tab de cobranzas y expandir la primera con vencidas
+                        const primeraCobranzaConVencidas = clienteSeleccionado.cobranzas.find(c => {
+                          const cuotas = getCuotasDeCobranza(c)
+                          return cuotas.some(cuota => cuota.estado === "vencida")
+                        })
+                        if (primeraCobranzaConVencidas) {
+                          setCobranzaExpandida(primeraCobranzaConVencidas.id)
+                        }
+                      }}
+                    >
+                      Ver detalle
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              {/* Alerta de cuotas próximas a vencer */}
+              {cuotasProximas.length > 0 && (
+                <div className="flex items-center justify-between p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50">
+                      <CalendarClock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-amber-800 dark:text-amber-200">
+                        {cuotasProximas.length} cuota{cuotasProximas.length > 1 ? "s" : ""} vence{cuotasProximas.length > 1 ? "n" : ""} esta semana
+                      </p>
+                      <p className="text-sm text-amber-600 dark:text-amber-400">
+                        Total: {formatCurrency(cuotasProximas.reduce((acc, c) => acc + c.monto, 0))}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Tabs de informacion */}
         <Card className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
@@ -1256,30 +1438,48 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                                     </p>
                                   </div>
                                   
-                                  {/* Boton de accion */}
+                                  {/* Botones de accion */}
                                   {cuota.estado !== "pagada" && (
-                                    <Button 
-                                      size="sm"
-                                      className="bg-blue-600 hover:bg-blue-700 text-white"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        // Crear objeto cuota para el dialog
-                                        const cuotaObj: Cuota = {
-                                          id: cuota.cuotaId || `temp-${cobranza.id}-${cuota.numero}`,
-                                          user_id: userId,
-                                          venta_id: cobranza.id,
-                                          numero_cuota: cuota.numero,
-                                          monto_pagado: null,
-                                          fecha_pago: null,
-                                          fecha_vencimiento: format(cuota.fechaVencimiento, "yyyy-MM-dd"),
-                                          estado: cuota.estado,
-                                          notas: null
-                                        }
-                                        handleAbrirRegistrarPago(cuotaObj)
-                                      }}
-                                    >
-                                      Registrar Pago
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                      <Button 
+                                        size="sm"
+                                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          const cuotaObj: Cuota = {
+                                            id: cuota.cuotaId || `temp-${cobranza.id}-${cuota.numero}`,
+                                            user_id: userId,
+                                            venta_id: cobranza.id,
+                                            numero_cuota: cuota.numero,
+                                            monto_pagado: null,
+                                            fecha_pago: null,
+                                            fecha_vencimiento: format(cuota.fechaVencimiento, "yyyy-MM-dd"),
+                                            estado: cuota.estado,
+                                            notas: null
+                                          }
+                                          handleAbrirRegistrarPago(cuotaObj)
+                                        }}
+                                      >
+                                        Registrar Pago
+                                      </Button>
+                                      <Button 
+                                        size="sm"
+                                        variant="outline"
+                                        className="text-slate-600 dark:text-slate-400"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setCuotaReagendar({
+                                            cobranzaId: cobranza.id,
+                                            numeroCuota: cuota.numero,
+                                            fechaActual: cuota.fechaVencimiento
+                                          })
+                                          setNuevaFechaVencimiento(format(cuota.fechaVencimiento, "yyyy-MM-dd"))
+                                          setDialogReagendar(true)
+                                        }}
+                                      >
+                                        <RefreshCw className="h-4 w-4" />
+                                      </Button>
+                                    </div>
                                   )}
                                   
                                   {cuota.estado === "pagada" && (
@@ -1314,6 +1514,25 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                                 </p>
                               </div>
                             </div>
+                            
+                            {/* Acciones de cobranza */}
+                            {cobranza.estado !== "completada" && cobranza.estado !== "cancelada" && (
+                              <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setCobranzaIncobrable(cobranza.id)
+                                    setDialogIncobrable(true)
+                                  }}
+                                >
+                                  <XCircle className="h-4 w-4 mr-2" />
+                                  Marcar como incobrable
+                                </Button>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -1827,6 +2046,110 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
             <CheckCircle2 className="h-5 w-5" />
             {submitting ? "Registrando..." : "Confirmar Pago"}
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Reagendar Cuota */}
+      <Dialog open={dialogReagendar} onOpenChange={setDialogReagendar}>
+        <DialogContent className="max-w-md bg-white dark:bg-slate-900">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-blue-600" />
+              Reagendar Cuota
+            </DialogTitle>
+            {cuotaReagendar && (
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                Cuota {cuotaReagendar.numeroCuota} - Vence actualmente: {format(cuotaReagendar.fechaActual, "dd/MM/yyyy")}
+              </p>
+            )}
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                Al reagendar esta cuota, se actualizara la fecha de vencimiento. Esto no afecta a las demas cuotas del plan de pagos.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-300">Nueva Fecha de Vencimiento</Label>
+              <Input
+                type="date"
+                value={nuevaFechaVencimiento}
+                onChange={(e) => setNuevaFechaVencimiento(e.target.value)}
+                className="border-slate-300 dark:border-slate-600 focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button 
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setDialogReagendar(false)
+                setCuotaReagendar(null)
+                setNuevaFechaVencimiento("")
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={handleReagendarCuota}
+              disabled={submitting || !nuevaFechaVencimiento}
+            >
+              {submitting ? "Guardando..." : "Confirmar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Confirmar Incobrable */}
+      <Dialog open={dialogIncobrable} onOpenChange={setDialogIncobrable}>
+        <DialogContent className="max-w-md bg-white dark:bg-slate-900">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-red-600" />
+              Marcar como Incobrable
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-2">
+                Esta accion no se puede deshacer
+              </p>
+              <p className="text-sm text-red-700 dark:text-red-300">
+                Al marcar esta cobranza como incobrable:
+              </p>
+              <ul className="text-sm text-red-700 dark:text-red-300 list-disc list-inside mt-2 space-y-1">
+                <li>Se cancelara la cobranza</li>
+                <li>Las cuotas pendientes quedaran sin efecto</li>
+                <li>No se podran registrar mas pagos</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button 
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setDialogIncobrable(false)
+                setCobranzaIncobrable(null)
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+              onClick={handleMarcarIncobrable}
+              disabled={submitting}
+            >
+              {submitting ? "Procesando..." : "Confirmar"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
