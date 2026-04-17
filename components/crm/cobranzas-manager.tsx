@@ -46,7 +46,8 @@ import {
   Building2,
   MapPin,
   FileText,
-  Receipt
+  Receipt,
+  TrendingUp
 } from "lucide-react"
 import { format, differenceInDays, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
@@ -904,69 +905,175 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
             </TabsContent>
 
             <TabsContent value="pagos" className="p-6">
-              <div className="space-y-3">
-                {cuotasCliente.length === 0 ? (
-                  <p className="text-center text-slate-500 dark:text-slate-400 py-8">
-                    No hay cuotas registradas
-                  </p>
-                ) : (
-                  cuotasCliente.map((cuota) => {
-                    const vencida = cuota.estado !== "pagada" && differenceInDays(new Date(), parseISO(cuota.fecha_vencimiento)) > 0
+              {(() => {
+                // Obtener todos los pagos realizados del cliente
+                const pagosRealizados = cuotasCliente
+                  .filter(c => c.estado === "pagada" && c.fecha_pago)
+                  .map(cuota => {
                     const cobranza = clienteSeleccionado.cobranzas.find(c => c.id === cuota.venta_id)
+                    const fechaVencimiento = parseISO(cuota.fecha_vencimiento)
+                    const fechaPago = parseISO(cuota.fecha_pago!)
+                    const diasDiferencia = differenceInDays(fechaPago, fechaVencimiento)
                     
-                    return (
-                      <div 
-                        key={cuota.id}
-                        className={`flex items-center justify-between p-4 rounded-lg border ${
-                          cuota.estado === "pagada" 
-                            ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                            : vencida
-                            ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-                            : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700"
-                        }`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className={`p-2 rounded-full ${
-                            cuota.estado === "pagada"
-                              ? "bg-green-100 dark:bg-green-900"
-                              : vencida
-                              ? "bg-red-100 dark:bg-red-900"
-                              : "bg-slate-200 dark:bg-slate-700"
-                          }`}>
-                            {cuota.estado === "pagada" ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                            ) : (
-                              <Clock className={`h-4 w-4 ${vencida ? "text-red-600 dark:text-red-400" : "text-slate-500"}`} />
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium text-slate-900 dark:text-white">
-                              Cuota {cuota.numero_cuota} - {formatCurrency(cobranza?.monto_cuota || 0)}
-                            </p>
-                            <p className="text-sm text-slate-500 dark:text-slate-400">
-                              {cuota.estado === "pagada" 
-                                ? `Pagado el ${format(parseISO(cuota.fecha_pago!), "dd/MM/yyyy")}`
-                                : `Vence: ${format(parseISO(cuota.fecha_vencimiento), "dd/MM/yyyy")}`
-                              }
-                              {vencida && ` (${differenceInDays(new Date(), parseISO(cuota.fecha_vencimiento))} dias vencido)`}
-                            </p>
-                          </div>
-                        </div>
-
-                        {cuota.estado !== "pagada" && (
-                          <Button 
-                            size="sm"
-                            className="bg-blue-600 hover:bg-blue-700 text-white"
-                            onClick={() => handleAbrirRegistrarPago(cuota)}
-                          >
-                            Registrar Pago
-                          </Button>
-                        )}
-                      </div>
-                    )
+                    return {
+                      ...cuota,
+                      cobranza,
+                      fechaPago,
+                      fechaVencimiento,
+                      diasDiferencia,
+                      puntual: diasDiferencia <= 0
+                    }
                   })
-                )}
-              </div>
+                  .sort((a, b) => b.fechaPago.getTime() - a.fechaPago.getTime())
+                
+                // Calcular métricas de puntualidad
+                const totalPagos = pagosRealizados.length
+                const pagosPuntuales = pagosRealizados.filter(p => p.puntual).length
+                const porcentajePuntualidad = totalPagos > 0 ? Math.round((pagosPuntuales / totalPagos) * 100) : 0
+                const promedioDiasRetraso = totalPagos > 0 
+                  ? Math.round(pagosRealizados.reduce((acc, p) => acc + Math.max(0, p.diasDiferencia), 0) / totalPagos)
+                  : 0
+                const totalPagado = pagosRealizados.reduce((acc, p) => acc + (p.monto_pagado || 0), 0)
+                
+                // Obtener método de pago más usado (si existe en notas)
+                const getMetodoPago = (notas: string | null) => {
+                  if (!notas) return "No especificado"
+                  const metodos = ["efectivo", "transferencia", "tarjeta", "cheque"]
+                  for (const m of metodos) {
+                    if (notas.toLowerCase().includes(m)) {
+                      return m.charAt(0).toUpperCase() + m.slice(1)
+                    }
+                  }
+                  return "Efectivo"
+                }
+
+                return (
+                  <div className="space-y-6">
+                    {/* Métricas de puntualidad */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="p-1.5 rounded-lg bg-green-100 dark:bg-green-900/30">
+                            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          </div>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-medium">Total Pagos</span>
+                        </div>
+                        <p className="text-2xl font-bold text-slate-900 dark:text-white">{totalPagos}</p>
+                      </div>
+                      
+                      <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                            <DollarSign className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </div>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-medium">Total Pagado</span>
+                        </div>
+                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(totalPagado)}</p>
+                      </div>
+                      
+                      <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`p-1.5 rounded-lg ${porcentajePuntualidad >= 70 ? "bg-green-100 dark:bg-green-900/30" : porcentajePuntualidad >= 40 ? "bg-amber-100 dark:bg-amber-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
+                            <TrendingUp className={`h-4 w-4 ${porcentajePuntualidad >= 70 ? "text-green-600 dark:text-green-400" : porcentajePuntualidad >= 40 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`} />
+                          </div>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-medium">Puntualidad</span>
+                        </div>
+                        <p className={`text-2xl font-bold ${porcentajePuntualidad >= 70 ? "text-green-600 dark:text-green-400" : porcentajePuntualidad >= 40 ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
+                          {porcentajePuntualidad}%
+                        </p>
+                      </div>
+                      
+                      <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`p-1.5 rounded-lg ${promedioDiasRetraso === 0 ? "bg-green-100 dark:bg-green-900/30" : "bg-amber-100 dark:bg-amber-900/30"}`}>
+                            <Clock className={`h-4 w-4 ${promedioDiasRetraso === 0 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`} />
+                          </div>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-medium">Prom. Retraso</span>
+                        </div>
+                        <p className={`text-2xl font-bold ${promedioDiasRetraso === 0 ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400"}`}>
+                          {promedioDiasRetraso} dias
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Historial de pagos */}
+                    <div>
+                      <h4 className="font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                        <Receipt className="h-5 w-5 text-slate-400" />
+                        Historial de Pagos
+                      </h4>
+                      
+                      {pagosRealizados.length === 0 ? (
+                        <div className="text-center py-12 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                          <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-700 w-fit mx-auto mb-4">
+                            <Receipt className="h-8 w-8 text-slate-400" />
+                          </div>
+                          <p className="text-slate-500 dark:text-slate-400">No hay pagos registrados</p>
+                          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">Los pagos apareceran aqui cuando se registren</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {pagosRealizados.map((pago, index) => (
+                            <div 
+                              key={pago.id}
+                              className="flex items-center justify-between p-4 rounded-xl border bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+                            >
+                              <div className="flex items-center gap-4">
+                                {/* Indicador de puntualidad */}
+                                <div className={`p-2.5 rounded-xl ${
+                                  pago.puntual 
+                                    ? "bg-green-100 dark:bg-green-900/30" 
+                                    : "bg-amber-100 dark:bg-amber-900/30"
+                                }`}>
+                                  {pago.puntual ? (
+                                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                  ) : (
+                                    <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                                  )}
+                                </div>
+                                
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-semibold text-slate-900 dark:text-white">
+                                      {formatCurrency(pago.monto_pagado || 0)}
+                                    </p>
+                                    <Badge className={`text-xs ${
+                                      pago.puntual 
+                                        ? "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300" 
+                                        : "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                                    }`}>
+                                      {pago.puntual ? "Puntual" : `${pago.diasDiferencia}d tarde`}
+                                    </Badge>
+                                  </div>
+                                  <p className="text-sm text-slate-500 dark:text-slate-400">
+                                    Cuota {pago.numero_cuota} - {pago.cobranza?.descripcion || "Sin descripcion"}
+                                  </p>
+                                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-400 dark:text-slate-500">
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      {format(pago.fechaPago, "dd MMM yyyy", { locale: es })}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <CreditCard className="h-3 w-3" />
+                                      {getMetodoPago(pago.notas)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              <div className="text-right">
+                                <p className="text-xs text-slate-400 dark:text-slate-500">
+                                  Vencia: {format(pago.fechaVencimiento, "dd/MM/yyyy")}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
             </TabsContent>
 
             <TabsContent value="cobranzas" className="p-6">
