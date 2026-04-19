@@ -1390,7 +1390,7 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                                 >
                                   {/* Indicador de linea del timeline */}
                                   {index < cuotasCobranza.length - 1 && (
-                                    <div className="absolute left-[26px] top-[48px] w-0.5 h-[calc(100%-24px)] bg-slate-200 dark:bg-slate-700" />
+                                    <div className="absolute left-[26px] top-[48px] w-0.5 h-[calc(100%-24px)] bg-slate-200 dark:bg-slate-700 pointer-events-none z-0" />
                                   )}
                                   
                                   {/* Icono de estado */}
@@ -1440,12 +1440,14 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                                   
                                   {/* Botones de accion */}
                                   {cuota.estado !== "pagada" && (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 relative z-20">
                                       <Button 
                                         size="sm"
                                         className="bg-blue-600 hover:bg-blue-700 text-white"
+                                        type="button"
                                         onClick={(e) => {
                                           e.stopPropagation()
+                                          e.preventDefault()
                                           const cuotaObj: Cuota = {
                                             id: cuota.cuotaId || `temp-${cobranza.id}-${cuota.numero}`,
                                             user_id: userId,
@@ -1465,9 +1467,11 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                                       <Button 
                                         size="sm"
                                         variant="outline"
+                                        type="button"
                                         className="text-slate-600 dark:text-slate-400"
                                         onClick={(e) => {
                                           e.stopPropagation()
+                                          e.preventDefault()
                                           setCuotaReagendar({
                                             cobranzaId: cobranza.id,
                                             numeroCuota: cuota.numero,
