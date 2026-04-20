@@ -1004,19 +1004,19 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
             <TabsList className="w-full justify-start border-b border-slate-200 dark:border-slate-700 rounded-none bg-transparent p-0">
               <TabsTrigger 
                 value="informacion"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent px-6 py-3"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent px-6 py-3 text-slate-700 dark:text-slate-300 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white"
               >
                 Informacion
               </TabsTrigger>
               <TabsTrigger 
                 value="pagos"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent px-6 py-3"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent px-6 py-3 text-slate-700 dark:text-slate-300 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white"
               >
                 Pagos ({cuotasCliente.length})
               </TabsTrigger>
               <TabsTrigger 
                 value="cobranzas"
-                className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent px-6 py-3"
+                className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent px-6 py-3 text-slate-700 dark:text-slate-300 data-[state=active]:text-slate-900 dark:data-[state=active]:text-white"
               >
                 Cobranzas ({clienteSeleccionado.cobranzas.length})
               </TabsTrigger>
