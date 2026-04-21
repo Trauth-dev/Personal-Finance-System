@@ -442,15 +442,15 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
     setClienteSeleccionado(null)
   }
 
-  const handleAbrirRegistrarPago = (cuota: Cuota) => {
-    setCuotaSeleccionada(cuota)
-    setFormPago({
-      monto: cuota.monto_pagado?.toString() || "",
-      descripcion: `Cuota ${cuota.numero_cuota}`,
-      metodo_pago: "efectivo"
-    })
-    setDialogRegistrarPago(true)
-  }
+const handleAbrirRegistrarPago = (cuota: Cuota) => {
+  setCuotaSeleccionada(cuota)
+  setFormPago({
+    monto: cuota.monto_pagado?.toString() || "",
+    descripcion: `Cuota ${cuota.numero_cuota}`,
+    metodo_pago: "efectivo"
+  })
+  setDialogRegistrarPago(true)
+}
 
   const handleRegistrarPago = async () => {
     if (!cuotaSeleccionada || !formPago.monto) return
@@ -1440,14 +1440,11 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                                   
                                   {/* Botones de accion */}
                                   {cuota.estado !== "pagada" && (
-                                    <div className="flex items-center gap-2 relative z-20">
-                                      <Button 
-                                        size="sm"
-                                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                                    <div className="flex items-center gap-2 relative z-20" style={{ pointerEvents: 'auto' }}>
+                                      <button 
+                                        className="inline-flex items-center justify-center h-9 px-3 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                                         type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          e.preventDefault()
+                                        onClick={() => {
                                           const cuotaObj: Cuota = {
                                             id: cuota.cuotaId || `temp-${cobranza.id}-${cuota.numero}`,
                                             user_id: userId,
@@ -1463,15 +1460,11 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                                         }}
                                       >
                                         Registrar Pago
-                                      </Button>
-                                      <Button 
-                                        size="sm"
-                                        variant="outline"
+                                      </button>
+                                      <button 
+                                        className="inline-flex items-center justify-center h-9 w-9 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
                                         type="button"
-                                        className="text-slate-600 dark:text-slate-400"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          e.preventDefault()
+                                        onClick={() => {
                                           setCuotaReagendar({
                                             cobranzaId: cobranza.id,
                                             numeroCuota: cuota.numero,
@@ -1482,7 +1475,7 @@ export default function CobranzasManager({ userId, perfilId, perfilEmpresarialId
                                         }}
                                       >
                                         <RefreshCw className="h-4 w-4" />
-                                      </Button>
+                                      </button>
                                     </div>
                                   )}
                                   
