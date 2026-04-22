@@ -1378,7 +1378,7 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
                               return (
                                 <div 
                                   key={index}
-                                  className={`relative flex items-center gap-4 p-3 rounded-lg border transition-all ${
+                                  className={`flex items-center gap-4 p-3 rounded-lg border ${
                                     cuota.estado === "pagada"
                                       ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
                                       : cuota.estado === "vencida"
@@ -1388,13 +1388,8 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
                                       : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700"
                                   }`}
                                 >
-                                  {/* Indicador de linea del timeline */}
-                                  {index < cuotasCobranza.length - 1 && (
-                                    <div className="absolute left-[26px] top-[48px] w-0.5 h-[calc(100%-24px)] bg-slate-200 dark:bg-slate-700 pointer-events-none z-0" />
-                                  )}
-                                  
                                   {/* Icono de estado */}
-                                  <div className={`relative z-10 p-2 rounded-full ${
+                                  <div className={`p-2 rounded-full shrink-0 ${
                                     cuota.estado === "pagada"
                                       ? "bg-green-500"
                                       : cuota.estado === "vencida"
@@ -1440,10 +1435,10 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
                                   
                                   {/* Botones de accion */}
                                   {cuota.estado !== "pagada" && (
-                                    <div className="flex items-center gap-2 relative z-20" style={{ pointerEvents: 'auto' }}>
-                                      <button 
-                                        className="inline-flex items-center justify-center h-9 px-3 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
-                                        type="button"
+                                    <div className="flex items-center gap-2 ml-auto shrink-0">
+                                      <Button 
+                                        size="sm"
+                                        className="bg-blue-600 hover:bg-blue-700 text-white"
                                         onClick={() => {
                                           const cuotaObj: Cuota = {
                                             id: cuota.cuotaId || `temp-${cobranza.id}-${cuota.numero}`,
@@ -1460,10 +1455,10 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
                                         }}
                                       >
                                         Registrar Pago
-                                      </button>
-                                      <button 
-                                        className="inline-flex items-center justify-center h-9 w-9 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer"
-                                        type="button"
+                                      </Button>
+                                      <Button 
+                                        size="sm"
+                                        variant="outline"
                                         onClick={() => {
                                           setCuotaReagendar({
                                             cobranzaId: cobranza.id,
@@ -1475,7 +1470,7 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
                                         }}
                                       >
                                         <RefreshCw className="h-4 w-4" />
-                                      </button>
+                                      </Button>
                                     </div>
                                   )}
                                   
