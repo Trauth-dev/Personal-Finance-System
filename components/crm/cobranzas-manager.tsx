@@ -1435,10 +1435,13 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
                                   
                                   {/* Botones de accion */}
                                   {cuota.estado !== "pagada" && (
-                                    <div className="flex items-center gap-2 ml-auto shrink-0">
-                                      <Button 
-                                        size="sm"
-                                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                                    <div 
+                                      className="flex items-center gap-2 ml-auto shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button 
+                                        type="button"
+                                        className="inline-flex items-center justify-center h-9 px-3 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
                                         onClick={() => {
                                           const cuotaObj: Cuota = {
                                             id: cuota.cuotaId || `temp-${cobranza.id}-${cuota.numero}`,
@@ -1455,10 +1458,10 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
                                         }}
                                       >
                                         Registrar Pago
-                                      </Button>
-                                      <Button 
-                                        size="sm"
-                                        variant="outline"
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        className="inline-flex items-center justify-center h-9 w-9 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                                         onClick={() => {
                                           setCuotaReagendar({
                                             cobranzaId: cobranza.id,
@@ -1470,7 +1473,7 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
                                         }}
                                       >
                                         <RefreshCw className="h-4 w-4" />
-                                      </Button>
+                                      </button>
                                     </div>
                                   )}
                                   
@@ -1535,6 +1538,177 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
             </TabsContent>
           </Tabs>
         </Card>
+
+        {/* Dialog Registrar Pago - Vista Detalle */}
+        <Dialog open={dialogRegistrarPago} onOpenChange={setDialogRegistrarPago}>
+          <DialogContent className="max-w-md bg-white dark:bg-slate-900">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-white">
+                Registrar Nuevo Pago
+              </DialogTitle>
+              {cuotaSeleccionada && (
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Cuota {cuotaSeleccionada.numero_cuota} - Vence: {format(parseISO(cuotaSeleccionada.fecha_vencimiento), "dd/MM/yyyy")}
+                </p>
+              )}
+            </DialogHeader>
+
+            <div className="space-y-5 py-4">
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-300">Monto (Gs.)</Label>
+                <Input
+                  type="number"
+                  value={formPago.monto}
+                  onChange={(e) => setFormPago({ ...formPago, monto: e.target.value })}
+                  placeholder="0.00"
+                  className="text-lg h-12 border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-300">Descripcion</Label>
+                <Input
+                  value={formPago.descripcion}
+                  onChange={(e) => setFormPago({ ...formPago, descripcion: e.target.value })}
+                  placeholder="Ej: Cuota abril"
+                  className="border-slate-300 dark:border-slate-600 focus:border-blue-500 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-300">Metodo de Pago</Label>
+                <Select
+                  value={formPago.metodo_pago}
+                  onValueChange={(v) => setFormPago({ ...formPago, metodo_pago: v })}
+                >
+                  <SelectTrigger className="border-slate-300 dark:border-slate-600">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    <SelectItem value="transferencia">Transferencia</SelectItem>
+                    <SelectItem value="tarjeta">Tarjeta</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="otro">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <Button 
+              className="w-full h-12 bg-blue-600 hover:bg-blue-700 text-white gap-2 text-base font-medium"
+              onClick={handleRegistrarPago}
+              disabled={submitting || !formPago.monto}
+            >
+              <CheckCircle2 className="h-5 w-5" />
+              {submitting ? "Registrando..." : "Confirmar Pago"}
+            </Button>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog Reagendar Cuota - Vista Detalle */}
+        <Dialog open={dialogReagendar} onOpenChange={setDialogReagendar}>
+          <DialogContent className="max-w-md bg-white dark:bg-slate-900">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <CalendarClock className="h-5 w-5 text-blue-600" />
+                Reagendar Cuota
+              </DialogTitle>
+              {cuotaReagendar && (
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                  Cuota {cuotaReagendar.numeroCuota} - Vence actualmente: {format(cuotaReagendar.fechaActual, "dd/MM/yyyy")}
+                </p>
+              )}
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  Al reagendar esta cuota, se actualizara la fecha de vencimiento. Esto no afecta a las demas cuotas del plan de pagos.
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-300">Nueva Fecha de Vencimiento</Label>
+                <Input
+                  type="date"
+                  value={nuevaFechaVencimiento}
+                  onChange={(e) => setNuevaFechaVencimiento(e.target.value)}
+                  className="border-slate-300 dark:border-slate-600 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button 
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setDialogReagendar(false)
+                  setCuotaReagendar(null)
+                  setNuevaFechaVencimiento("")
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                onClick={handleReagendarCuota}
+                disabled={submitting || !nuevaFechaVencimiento}
+              >
+                {submitting ? "Guardando..." : "Confirmar"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog Confirmar Incobrable - Vista Detalle */}
+        <Dialog open={dialogIncobrable} onOpenChange={setDialogIncobrable}>
+          <DialogContent className="max-w-md bg-white dark:bg-slate-900">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-red-600" />
+                Marcar como Incobrable
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                <p className="text-sm text-red-800 dark:text-red-200 font-medium mb-2">
+                  Esta accion no se puede deshacer
+                </p>
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  Al marcar esta cobranza como incobrable:
+                </p>
+                <ul className="text-sm text-red-700 dark:text-red-300 list-disc list-inside mt-2 space-y-1">
+                  <li>Se cancelara la cobranza</li>
+                  <li>Las cuotas pendientes quedaran sin efecto</li>
+                  <li>No se podran registrar mas pagos</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button 
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setDialogIncobrable(false)
+                  setCobranzaIncobrable(null)
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button 
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                onClick={handleMarcarIncobrable}
+                disabled={submitting}
+              >
+                {submitting ? "Procesando..." : "Confirmar"}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     )
   }
