@@ -659,7 +659,7 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                                 placeholder="0.00"
                                 value={formData.precio_costo_usd}
                                 onChange={(e) => setFormData({ ...formData, precio_costo_usd: e.target.value })}
-                                className="bg-white dark:bg-slate-900"
+                                className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 required
                               />
                             </div>
@@ -674,7 +674,7 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                                 placeholder="0.00"
                                 value={formData.precio_venta_usd}
                                 onChange={(e) => setFormData({ ...formData, precio_venta_usd: e.target.value })}
-                                className="bg-white dark:bg-slate-900"
+                                className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 required
                               />
                             </div>
@@ -712,7 +712,7 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                                 placeholder="0"
                                 value={formData.precio_costo}
                                 onChange={(e) => setFormData({ ...formData, precio_costo: e.target.value })}
-                                className="bg-white dark:bg-slate-900"
+                                className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 required
                               />
                             </div>
@@ -726,7 +726,7 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                                 placeholder="0"
                                 value={formData.precio_venta}
                                 onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })}
-                                className="bg-white dark:bg-slate-900"
+                                className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 required
                               />
                             </div>
