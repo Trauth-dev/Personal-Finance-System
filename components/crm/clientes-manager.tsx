@@ -50,8 +50,10 @@ import {
   MapPin,
   Users,
   Filter,
-  UserPlus
+  UserPlus,
+  History
 } from "lucide-react"
+import { ClienteHistorialUnificado } from "./cliente-historial-unificado"
 
 interface Cliente {
   id: string
@@ -93,7 +95,11 @@ const ESTADOS = [
   { value: "inactivo", label: "Inactivo", color: "bg-gray-500" },
 ]
 
-export function ClientesManager() {
+interface ClientesManagerProps {
+  perfilId?: string
+}
+
+export function ClientesManager({ perfilId }: ClientesManagerProps = {}) {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -101,6 +107,8 @@ export function ClientesManager() {
   const [searchTerm, setSearchTerm] = useState("")
   const [filterEstado, setFilterEstado] = useState<string>("todos")
   const [filterClasificacion, setFilterClasificacion] = useState<string>("todos")
+  const [historialClienteId, setHistorialClienteId] = useState<string | null>(null)
+  const [currentPerfilId, setCurrentPerfilId] = useState<string | null>(perfilId || null)
   const { toast } = useToast()
   const supabase = createClient()
 
@@ -124,7 +132,29 @@ export function ClientesManager() {
 
   useEffect(() => {
     fetchClientes()
+    fetchPerfilId()
   }, [])
+
+  const fetchPerfilId = async () => {
+    if (perfilId) {
+      setCurrentPerfilId(perfilId)
+      return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    // Obtener perfil empresarial del usuario
+    const { data: perfil } = await supabase
+      .from("perfiles_empresariales")
+      .select("id")
+      .eq("user_id", user.id)
+      .limit(1)
+      .single()
+
+    if (perfil) {
+      setCurrentPerfilId(perfil.id)
+    }
+  }
 
   const fetchClientes = async () => {
     setIsLoading(true)
@@ -748,6 +778,12 @@ export function ClientesManager() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
+                              onClick={() => setHistorialClienteId(cliente.id)}
+                            >
+                              <History className="h-4 w-4 mr-2" />
+                              Ver Historial
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
                               onClick={() => handleOpenDialog(cliente)}
                             >
                               <Edit2 className="h-4 w-4 mr-2" />
@@ -771,6 +807,27 @@ export function ClientesManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog: Historial Unificado del Cliente */}
+      <Dialog open={!!historialClienteId} onOpenChange={(open) => !open && setHistorialClienteId(null)}>
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-cyan-600" />
+              Historial del Cliente
+            </DialogTitle>
+            <DialogDescription>
+              Toda la actividad relacionada con este cliente
+            </DialogDescription>
+          </DialogHeader>
+          {historialClienteId && currentPerfilId && (
+            <ClienteHistorialUnificado 
+              clienteId={historialClienteId} 
+              perfilId={currentPerfilId}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

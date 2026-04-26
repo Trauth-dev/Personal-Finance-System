@@ -43,7 +43,11 @@ import {
   Phone,
   Package,
   Briefcase,
-  X
+  X,
+  ClipboardList,
+  CalendarPlus,
+  Clock,
+  MessageSquare
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -151,6 +155,23 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
   const [editingOportunidad, setEditingOportunidad] = useState<Oportunidad | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
   const [tasaCambio, setTasaCambio] = useState<number>(7500)
+  
+  // Estados para dialogs de acciones rapidas
+  const [seguimientoDialogOpen, setSeguimientoDialogOpen] = useState(false)
+  const [agendamientoDialogOpen, setAgendamientoDialogOpen] = useState(false)
+  const [selectedOportunidad, setSelectedOportunidad] = useState<Oportunidad | null>(null)
+  
+  // Form state para seguimiento rapido
+  const [seguimientoNota, setSeguimientoNota] = useState("")
+  const [seguimientoTipo, setSeguimientoTipo] = useState<string>("semanal")
+  const [seguimientoFecha, setSeguimientoFecha] = useState("")
+  
+  // Form state para agendamiento rapido
+  const [agendamientoTitulo, setAgendamientoTitulo] = useState("")
+  const [agendamientoFecha, setAgendamientoFecha] = useState("")
+  const [agendamientoHora, setAgendamientoHora] = useState("")
+  const [agendamientoTipo, setAgendamientoTipo] = useState("reunion")
+  const [agendamientoNotas, setAgendamientoNotas] = useState("")
   
   // Form state
   const [clienteId, setClienteId] = useState("")
@@ -478,6 +499,9 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
       const oldOportunidad = oportunidades.find(o => o.id === oportunidadId)
       if (!oldOportunidad || oldOportunidad.etapa_id === newEtapaId) return
 
+      const newEtapa = etapas.find(e => e.id === newEtapaId)
+      if (!newEtapa) return
+
       const { error: updateError } = await supabase
         .from("crm_oportunidades")
         .update({ etapa_id: newEtapaId })
@@ -495,14 +519,22 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
           usuario_id: userId,
         })
 
+      // AUTOMATIZACION: Crear seguimiento automatico al cambiar etapa
+      await crearSeguimientoAutomatico(oldOportunidad, newEtapa)
+
+      // Actualizar ultima_actividad del cliente
+      await supabase
+        .from("clientes")
+        .update({ ultima_actividad: new Date().toISOString() })
+        .eq("id", oldOportunidad.cliente_id)
+
       setOportunidades(prev => 
         prev.map(o => o.id === oportunidadId ? { ...o, etapa_id: newEtapaId } : o)
       )
 
-      const newEtapa = etapas.find(e => e.id === newEtapaId)
       toast({ 
         title: "Oportunidad movida",
-        description: `Movida a "${newEtapa?.nombre}"` 
+        description: `Movida a "${newEtapa.nombre}" - Seguimiento creado automaticamente` 
       })
     } catch (error) {
       console.error("Error moving oportunidad:", error)
@@ -534,6 +566,155 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
   // Convertir PYG a USD
   const convertirAUsd = (pyg: number) => {
     return pyg / tasaCambio
+  }
+
+  // Funciones para acciones rapidas
+  const handleOpenSeguimiento = (oportunidad: Oportunidad) => {
+    setSelectedOportunidad(oportunidad)
+    setSeguimientoNota("")
+    setSeguimientoTipo("semanal")
+    setSeguimientoFecha("")
+    setSeguimientoDialogOpen(true)
+  }
+
+  const handleOpenAgendamiento = (oportunidad: Oportunidad) => {
+    setSelectedOportunidad(oportunidad)
+    setAgendamientoTitulo(`Reunion: ${oportunidad.titulo}`)
+    setAgendamientoFecha("")
+    setAgendamientoHora("")
+    setAgendamientoTipo("reunion")
+    setAgendamientoNotas("")
+    setAgendamientoDialogOpen(true)
+  }
+
+  const calcularFechaRecordatorio = (tipo: string) => {
+    const hoy = new Date()
+    switch (tipo) {
+      case "semanal":
+        return new Date(hoy.setDate(hoy.getDate() + 7)).toISOString().split("T")[0]
+      case "quincenal":
+        return new Date(hoy.setDate(hoy.getDate() + 14)).toISOString().split("T")[0]
+      case "mensual":
+        return new Date(hoy.setMonth(hoy.getMonth() + 1)).toISOString().split("T")[0]
+      default:
+        return ""
+    }
+  }
+
+  const handleCrearSeguimiento = async () => {
+    if (!selectedOportunidad || !seguimientoNota || !userId) return
+
+    try {
+      let fechaRecordatorio = seguimientoFecha
+      if (seguimientoTipo && seguimientoTipo !== "personalizado") {
+        fechaRecordatorio = calcularFechaRecordatorio(seguimientoTipo)
+      }
+
+      const { error } = await supabase
+        .from("crm_seguimientos")
+        .insert({
+          user_id: userId,
+          perfil_id: perfilId,
+          cliente_id: selectedOportunidad.cliente_id,
+          oportunidad_id: selectedOportunidad.id,
+          nota: seguimientoNota,
+          recordatorio_tipo: seguimientoTipo || null,
+          recordatorio_fecha: fechaRecordatorio || null,
+          recordatorio_completado: false
+        })
+
+      if (error) throw error
+
+      toast({ 
+        title: "Seguimiento creado",
+        description: `Vinculado a: ${selectedOportunidad.titulo}`
+      })
+      setSeguimientoDialogOpen(false)
+    } catch (error) {
+      console.error("Error creando seguimiento:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo crear el seguimiento",
+        variant: "destructive"
+      })
+    }
+  }
+
+  const handleCrearAgendamiento = async () => {
+    if (!selectedOportunidad || !agendamientoTitulo || !agendamientoFecha || !userId) return
+
+    try {
+      // Crear fecha con hora en GMT-3
+      const fechaHora = agendamientoHora 
+        ? `${agendamientoFecha}T${agendamientoHora}:00-03:00`
+        : `${agendamientoFecha}T09:00:00-03:00`
+
+      const { error } = await supabase
+        .from("crm_agendamientos")
+        .insert({
+          user_id: userId,
+          perfil_id: perfilId,
+          cliente_id: selectedOportunidad.cliente_id,
+          oportunidad_id: selectedOportunidad.id,
+          titulo: agendamientoTitulo,
+          tipo: agendamientoTipo,
+          fecha_hora: fechaHora,
+          notas: agendamientoNotas || null,
+          estado: "pendiente"
+        })
+
+      if (error) throw error
+
+      toast({ 
+        title: "Cita agendada",
+        description: `${formatDateGMT3(agendamientoFecha)} - ${selectedOportunidad.cliente?.nombre}`
+      })
+      setAgendamientoDialogOpen(false)
+    } catch (error) {
+      console.error("Error creando agendamiento:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo agendar la cita",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Automatizacion: crear seguimiento automatico al cambiar etapa
+  const crearSeguimientoAutomatico = async (oportunidad: Oportunidad, etapaNueva: Etapa) => {
+    if (!userId) return
+
+    const mensajesAutomaticos: Record<string, string> = {
+      "contactado": `Cliente contactado para oportunidad: ${oportunidad.titulo}`,
+      "propuesta": `Propuesta enviada para: ${oportunidad.titulo}`,
+      "negociacion": `En negociacion: ${oportunidad.titulo}`,
+      "ganado": `VENTA CERRADA: ${oportunidad.titulo} - ${formatMoney(oportunidad.valor_estimado || 0)}`,
+      "perdido": `Oportunidad perdida: ${oportunidad.titulo}`
+    }
+
+    const nombreEtapaNormalizado = etapaNueva.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    const mensaje = Object.entries(mensajesAutomaticos).find(([key]) => 
+      nombreEtapaNormalizado.includes(key)
+    )?.[1]
+
+    if (mensaje) {
+      try {
+        await supabase
+          .from("crm_seguimientos")
+          .insert({
+            user_id: userId,
+            perfil_id: perfilId,
+            cliente_id: oportunidad.cliente_id,
+            oportunidad_id: oportunidad.id,
+            nota: mensaje,
+            recordatorio_tipo: etapaNueva.es_etapa_final ? null : "semanal",
+            recordatorio_fecha: etapaNueva.es_etapa_final ? null : calcularFechaRecordatorio("semanal"),
+            recordatorio_completado: etapaNueva.es_etapa_final
+          })
+      } catch (error) {
+        console.error("Error creando seguimiento automatico:", error)
+      }
+    }
   }
 
   if (loading) {
@@ -929,6 +1110,14 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
                                   <Edit className="h-4 w-4 mr-2" />
                                   Editar
                                 </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleOpenSeguimiento(oportunidad)}>
+                                  <ClipboardList className="h-4 w-4 mr-2" />
+                                  Crear Seguimiento
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => handleOpenAgendamiento(oportunidad)}>
+                                  <CalendarPlus className="h-4 w-4 mr-2" />
+                                  Agendar Cita
+                                </DropdownMenuItem>
                                 <DropdownMenuItem 
                                   onClick={() => handleDelete(oportunidad.id)}
                                   className="text-destructive"
@@ -1039,6 +1228,169 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
           </Button>
         </Card>
       )}
+
+      {/* Dialog: Crear Seguimiento */}
+      <Dialog open={seguimientoDialogOpen} onOpenChange={setSeguimientoDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardList className="h-5 w-5 text-cyan-600" />
+              Crear Seguimiento
+            </DialogTitle>
+            <DialogDescription>
+              {selectedOportunidad && (
+                <span>
+                  Vinculado a: <strong>{selectedOportunidad.titulo}</strong> - {selectedOportunidad.cliente?.nombre}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-200">Nota del seguimiento *</Label>
+              <Textarea
+                value={seguimientoNota}
+                onChange={(e) => setSeguimientoNota(e.target.value)}
+                placeholder="Ej: Llamar al cliente para dar seguimiento a la propuesta..."
+                rows={4}
+                className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-200">Tipo de recordatorio</Label>
+              <Select value={seguimientoTipo} onValueChange={setSeguimientoTipo}>
+                <SelectTrigger className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="semanal">Cada semana</SelectItem>
+                  <SelectItem value="quincenal">Cada 2 semanas</SelectItem>
+                  <SelectItem value="mensual">Cada mes</SelectItem>
+                  <SelectItem value="personalizado">Fecha personalizada</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {seguimientoTipo === "personalizado" && (
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-200">Fecha del recordatorio</Label>
+                <Input
+                  type="date"
+                  value={seguimientoFecha}
+                  onChange={(e) => setSeguimientoFecha(e.target.value)}
+                  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                />
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setSeguimientoDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleCrearSeguimiento}
+              disabled={!seguimientoNota}
+              className="bg-cyan-600 hover:bg-cyan-700"
+            >
+              <ClipboardList className="h-4 w-4 mr-2" />
+              Crear Seguimiento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: Agendar Cita */}
+      <Dialog open={agendamientoDialogOpen} onOpenChange={setAgendamientoDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarPlus className="h-5 w-5 text-purple-600" />
+              Agendar Cita
+            </DialogTitle>
+            <DialogDescription>
+              {selectedOportunidad && (
+                <span>
+                  Para: <strong>{selectedOportunidad.cliente?.nombre}</strong> - {selectedOportunidad.titulo}
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-200">Titulo de la cita *</Label>
+              <Input
+                value={agendamientoTitulo}
+                onChange={(e) => setAgendamientoTitulo(e.target.value)}
+                placeholder="Ej: Reunion de presentacion"
+                className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-200">Tipo de cita</Label>
+              <Select value={agendamientoTipo} onValueChange={setAgendamientoTipo}>
+                <SelectTrigger className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="reunion">Reunion presencial</SelectItem>
+                  <SelectItem value="llamada">Llamada telefonica</SelectItem>
+                  <SelectItem value="videollamada">Videollamada</SelectItem>
+                  <SelectItem value="visita">Visita al cliente</SelectItem>
+                  <SelectItem value="presentacion">Presentacion</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-200">Fecha *</Label>
+                <Input
+                  type="date"
+                  value={agendamientoFecha}
+                  onChange={(e) => setAgendamientoFecha(e.target.value)}
+                  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-700 dark:text-slate-200">Hora</Label>
+                <Input
+                  type="time"
+                  value={agendamientoHora}
+                  onChange={(e) => setAgendamientoHora(e.target.value)}
+                  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-slate-700 dark:text-slate-200">Notas adicionales</Label>
+              <Textarea
+                value={agendamientoNotas}
+                onChange={(e) => setAgendamientoNotas(e.target.value)}
+                placeholder="Detalles de la reunion, temas a tratar..."
+                rows={3}
+                className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+              />
+            </div>
+            <div className="p-3 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+              <p className="text-xs text-purple-700 dark:text-purple-300 flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Zona horaria: GMT-3 (Paraguay/Asuncion)
+              </p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setAgendamientoDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={handleCrearAgendamiento}
+              disabled={!agendamientoTitulo || !agendamientoFecha}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              <CalendarPlus className="h-4 w-4 mr-2" />
+              Agendar Cita
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
