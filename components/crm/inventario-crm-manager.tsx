@@ -424,12 +424,21 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                       value={nuevaTasa}
                       onChange={(e) => setNuevaTasa(e.target.value)}
                       placeholder={tasaCambio.toString()}
-                      className="w-32 h-8 text-sm bg-white dark:bg-slate-800"
+                      className="w-32 h-8 text-sm bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600"
                     />
-                    <Button size="sm" onClick={handleGuardarTasa} className="h-8 bg-blue-600 hover:bg-blue-700">
+                    <Button 
+                      size="sm" 
+                      onClick={handleGuardarTasa} 
+                      disabled={!nuevaTasa}
+                      className="h-8 bg-green-600 hover:bg-green-700 text-white font-medium"
+                    >
                       Guardar
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditandoTasa(false)} className="h-8">
+                    <Button 
+                      size="sm" 
+                      onClick={() => setEditandoTasa(false)} 
+                      className="h-8 bg-red-600 hover:bg-red-700 text-white font-medium"
+                    >
                       Cancelar
                     </Button>
                   </div>
