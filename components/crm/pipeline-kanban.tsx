@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,26 +36,24 @@ import {
   User, 
   DollarSign, 
   Calendar,
-  GripVertical,
   ChevronRight,
   ChevronLeft,
   Trash2,
   Edit,
-  Eye,
   Phone,
-  Mail
+  Package,
+  Briefcase,
+  X
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { formatDistanceToNow } from "date-fns"
-import { es } from "date-fns/locale"
 
 interface Etapa {
   id: string
   nombre: string
   color: string
   orden: number
-  es_final: boolean
-  es_ganado: boolean
+  es_etapa_final: boolean
+  es_etapa_ganada: boolean
 }
 
 interface Cliente {
@@ -66,16 +64,38 @@ interface Cliente {
   ciudad: string | null
 }
 
+interface Producto {
+  id: string
+  nombre: string
+  precio_venta: number
+  precio_venta_usd: number | null
+  precio_costo: number
+  stock_actual: number
+  moneda: string | null
+}
+
+interface ProductoSeleccionado {
+  producto_id: string
+  nombre: string
+  cantidad: number
+  precio_unitario: number
+  precio_unitario_usd: number | null
+  subtotal: number
+  subtotal_usd: number | null
+}
+
 interface Oportunidad {
   id: string
   cliente_id: string
   etapa_id: string
   titulo: string
-  monto_estimado: number | null
+  valor_estimado: number | null
   probabilidad: number
   fecha_cierre_estimada: string | null
   notas: string | null
   prioridad: string
+  moneda: string | null
+  producto_interes: string | null
   created_at: string
   updated_at: string
   cliente?: Cliente
@@ -92,28 +112,53 @@ const PRIORIDAD_COLORS: Record<string, string> = {
   urgente: "bg-red-100 text-red-700 border-red-200",
 }
 
+// Formatear a GMT-3 (Paraguay)
+const formatDateGMT3 = (dateString: string) => {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('es-PY', { 
+    timeZone: 'America/Asuncion',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
+}
+
 const formatMoney = (amount: number) => {
   return new Intl.NumberFormat("es-PY", {
     style: "currency",
     currency: "PYG",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(amount).replace("PYG", "Gs")
+  }).format(amount).replace("PYG", "Gs.")
+}
+
+const formatUSD = (amount: number) => {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)
 }
 
 export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
   const [etapas, setEtapas] = useState<Etapa[]>([])
   const [oportunidades, setOportunidades] = useState<Oportunidad[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
+  const [productos, setProductos] = useState<Producto[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingOportunidad, setEditingOportunidad] = useState<Oportunidad | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [tasaCambio, setTasaCambio] = useState<number>(7500)
   
   // Form state
   const [clienteId, setClienteId] = useState("")
   const [titulo, setTitulo] = useState("")
+  const [tipoOportunidad, setTipoOportunidad] = useState<"producto" | "servicio">("producto")
+  const [productosSeleccionados, setProductosSeleccionados] = useState<ProductoSeleccionado[]>([])
   const [montoEstimado, setMontoEstimado] = useState("")
+  const [descuento, setDescuento] = useState("0")
   const [probabilidad, setProbabilidad] = useState("50")
   const [fechaCierreEstimada, setFechaCierreEstimada] = useState("")
   const [notas, setNotas] = useState("")
@@ -131,12 +176,26 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
     try {
       setLoading(true)
       
-      // Get user
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       setUserId(user.id)
 
-      // Load etapas
+      // Cargar tasa de cambio
+      const { data: tasaData } = await supabase
+        .from("tasas_cambio")
+        .select("tasa")
+        .eq("user_id", user.id)
+        .eq("moneda_origen", "USD")
+        .eq("moneda_destino", "PYG")
+        .order("fecha", { ascending: false })
+        .limit(1)
+        .single()
+
+      if (tasaData) {
+        setTasaCambio(tasaData.tasa)
+      }
+
+      // Cargar etapas
       const { data: etapasData, error: etapasError } = await supabase
         .from("crm_pipeline_etapas")
         .select("*")
@@ -146,12 +205,11 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
       if (etapasError) throw etapasError
       setEtapas(etapasData || [])
 
-      // Set default etapa for new oportunidades
       if (etapasData && etapasData.length > 0) {
         setEtapaId(etapasData[0].id)
       }
 
-      // Load oportunidades with cliente data
+      // Cargar oportunidades con cliente
       const { data: oportunidadesData, error: oportunidadesError } = await supabase
         .from("crm_oportunidades")
         .select(`
@@ -163,7 +221,7 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
       if (oportunidadesError) throw oportunidadesError
       setOportunidades(oportunidadesData || [])
 
-      // Load clientes for dropdown
+      // Cargar clientes
       const { data: clientesData, error: clientesError } = await supabase
         .from("clientes")
         .select("id, nombre, telefono, email, ciudad")
@@ -172,6 +230,18 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
 
       if (clientesError) throw clientesError
       setClientes(clientesData || [])
+
+      // Cargar productos del inventario
+      const { data: productosData, error: productosError } = await supabase
+        .from("inventario")
+        .select("id, nombre, precio_venta, precio_venta_usd, precio_costo, stock_actual, moneda")
+        .eq("user_id", user.id)
+        .eq("activo", true)
+        .gt("stock_actual", 0)
+        .order("nombre", { ascending: true })
+
+      if (productosError) throw productosError
+      setProductos(productosData || [])
 
     } catch (error) {
       console.error("Error loading pipeline data:", error)
@@ -188,7 +258,10 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
   const resetForm = () => {
     setClienteId("")
     setTitulo("")
+    setTipoOportunidad("producto")
+    setProductosSeleccionados([])
     setMontoEstimado("")
+    setDescuento("0")
     setProbabilidad("50")
     setFechaCierreEstimada("")
     setNotas("")
@@ -204,16 +277,97 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
       setEditingOportunidad(oportunidad)
       setClienteId(oportunidad.cliente_id)
       setTitulo(oportunidad.titulo)
-      setMontoEstimado(oportunidad.monto_estimado?.toString() || "")
+      
+      // Detectar si tiene productos
+      if (oportunidad.producto_interes) {
+        try {
+          const productos = JSON.parse(oportunidad.producto_interes)
+          if (Array.isArray(productos) && productos.length > 0) {
+            setTipoOportunidad("producto")
+            setProductosSeleccionados(productos)
+          } else {
+            setTipoOportunidad("servicio")
+          }
+        } catch {
+          setTipoOportunidad("servicio")
+        }
+      } else {
+        setTipoOportunidad("servicio")
+      }
+      
+      setMontoEstimado(oportunidad.valor_estimado?.toString() || "")
       setProbabilidad(oportunidad.probabilidad.toString())
       setFechaCierreEstimada(oportunidad.fecha_cierre_estimada || "")
       setNotas(oportunidad.notas || "")
-      setPrioridad(oportunidad.prioridad)
+      setPrioridad(oportunidad.prioridad || "media")
       setEtapaId(oportunidad.etapa_id)
     } else {
       resetForm()
     }
     setDialogOpen(true)
+  }
+
+  const agregarProducto = (productoId: string) => {
+    const producto = productos.find(p => p.id === productoId)
+    if (!producto) return
+
+    // Verificar si ya existe
+    if (productosSeleccionados.find(p => p.producto_id === productoId)) {
+      toast({ title: "Producto ya agregado", variant: "destructive" })
+      return
+    }
+
+    const nuevoProducto: ProductoSeleccionado = {
+      producto_id: producto.id,
+      nombre: producto.nombre,
+      cantidad: 1,
+      precio_unitario: producto.precio_venta,
+      precio_unitario_usd: producto.precio_venta_usd,
+      subtotal: producto.precio_venta,
+      subtotal_usd: producto.precio_venta_usd
+    }
+
+    setProductosSeleccionados([...productosSeleccionados, nuevoProducto])
+  }
+
+  const actualizarCantidad = (productoId: string, cantidad: number) => {
+    if (cantidad < 1) return
+    
+    setProductosSeleccionados(prev => 
+      prev.map(p => {
+        if (p.producto_id === productoId) {
+          return {
+            ...p,
+            cantidad,
+            subtotal: p.precio_unitario * cantidad,
+            subtotal_usd: p.precio_unitario_usd ? p.precio_unitario_usd * cantidad : null
+          }
+        }
+        return p
+      })
+    )
+  }
+
+  const eliminarProducto = (productoId: string) => {
+    setProductosSeleccionados(prev => prev.filter(p => p.producto_id !== productoId))
+  }
+
+  const calcularTotales = () => {
+    const subtotalPYG = productosSeleccionados.reduce((sum, p) => sum + p.subtotal, 0)
+    const subtotalUSD = productosSeleccionados.reduce((sum, p) => sum + (p.subtotal_usd || 0), 0)
+    const descuentoPct = parseFloat(descuento) || 0
+    const descuentoMonto = subtotalPYG * (descuentoPct / 100)
+    const descuentoMontoUSD = subtotalUSD * (descuentoPct / 100)
+    
+    return {
+      subtotalPYG,
+      subtotalUSD,
+      descuentoPct,
+      descuentoMonto,
+      descuentoMontoUSD,
+      totalPYG: subtotalPYG - descuentoMonto,
+      totalUSD: subtotalUSD - descuentoMontoUSD
+    }
   }
 
   const handleSave = async () => {
@@ -227,16 +381,44 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
     }
 
     try {
+      let valorEstimado: number | null = null
+      let productoInteres: string | null = null
+      let moneda = "PYG"
+
+      if (tipoOportunidad === "producto") {
+        if (productosSeleccionados.length === 0) {
+          toast({
+            title: "Error",
+            description: "Selecciona al menos un producto",
+            variant: "destructive",
+          })
+          return
+        }
+        const totales = calcularTotales()
+        valorEstimado = totales.totalPYG
+        productoInteres = JSON.stringify(productosSeleccionados)
+        
+        // Crear titulo automatico si esta vacio
+        if (!titulo) {
+          setTitulo(productosSeleccionados.map(p => p.nombre).join(", "))
+        }
+      } else {
+        valorEstimado = montoEstimado ? parseFloat(montoEstimado) : null
+      }
+
       const oportunidadData = {
         perfil_id: perfilId,
+        user_id: userId,
         cliente_id: clienteId,
         etapa_id: etapaId,
         titulo,
-        monto_estimado: montoEstimado ? parseInt(montoEstimado) : null,
+        valor_estimado: valorEstimado,
         probabilidad: parseInt(probabilidad),
         fecha_cierre_estimada: fechaCierreEstimada || null,
         notas: notas || null,
         prioridad,
+        moneda,
+        producto_interes: productoInteres,
       }
 
       if (editingOportunidad) {
@@ -296,7 +478,6 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
       const oldOportunidad = oportunidades.find(o => o.id === oportunidadId)
       if (!oldOportunidad || oldOportunidad.etapa_id === newEtapaId) return
 
-      // Update oportunidad
       const { error: updateError } = await supabase
         .from("crm_oportunidades")
         .update({ etapa_id: newEtapaId })
@@ -304,18 +485,16 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
 
       if (updateError) throw updateError
 
-      // Log history
-      const { error: historyError } = await supabase
+      // Log en historial
+      await supabase
         .from("crm_pipeline_historial")
         .insert({
           oportunidad_id: oportunidadId,
           etapa_anterior_id: oldOportunidad.etapa_id,
           etapa_nueva_id: newEtapaId,
+          usuario_id: userId,
         })
 
-      if (historyError) console.error("Error logging history:", historyError)
-
-      // Update local state immediately for better UX
       setOportunidades(prev => 
         prev.map(o => o.id === oportunidadId ? { ...o, etapa_id: newEtapaId } : o)
       )
@@ -341,7 +520,7 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
 
   const getTotalByEtapa = (etapaId: string) => {
     return getOportunidadesByEtapa(etapaId)
-      .reduce((sum, o) => sum + (o.monto_estimado || 0), 0)
+      .reduce((sum, o) => sum + (o.valor_estimado || 0), 0)
   }
 
   const getAdjacentEtapas = (currentEtapaId: string) => {
@@ -352,6 +531,11 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
     }
   }
 
+  // Convertir PYG a USD
+  const convertirAUsd = (pyg: number) => {
+    return pyg / tasaCambio
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -360,6 +544,8 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
     )
   }
 
+  const totales = calcularTotales()
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -367,7 +553,10 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
         <div>
           <h2 className="text-lg font-semibold">Pipeline de Ventas</h2>
           <p className="text-sm text-muted-foreground">
-            {oportunidades.length} oportunidades | Total: {formatMoney(oportunidades.reduce((sum, o) => sum + (o.monto_estimado || 0), 0))}
+            {oportunidades.length} oportunidades | Total: {formatMoney(oportunidades.reduce((sum, o) => sum + (o.valor_estimado || 0), 0))}
+            <span className="text-blue-500 ml-2">
+              ({formatUSD(convertirAUsd(oportunidades.reduce((sum, o) => sum + (o.valor_estimado || 0), 0)))})
+            </span>
           </p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -377,7 +566,7 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
               Nueva Oportunidad
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+          <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingOportunidad ? "Editar Oportunidad" : "Nueva Oportunidad"}
@@ -389,10 +578,11 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
+              {/* Cliente */}
               <div className="grid gap-2">
                 <Label htmlFor="cliente">Cliente *</Label>
                 <Select value={clienteId} onValueChange={setClienteId}>
-                  <SelectTrigger>
+                  <SelectTrigger className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                     <SelectValue placeholder="Seleccionar cliente" />
                   </SelectTrigger>
                   <SelectContent>
@@ -405,45 +595,185 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
                 </Select>
               </div>
 
+              {/* Titulo */}
               <div className="grid gap-2">
                 <Label htmlFor="titulo">Titulo *</Label>
                 <Input
                   id="titulo"
                   value={titulo}
                   onChange={(e) => setTitulo(e.target.value)}
-                  placeholder="Ej: Venta producto X"
+                  placeholder="Ej: Venta de productos X"
+                  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="monto">Monto Estimado (Gs)</Label>
-                  <Input
-                    id="monto"
-                    type="number"
-                    value={montoEstimado}
-                    onChange={(e) => setMontoEstimado(e.target.value)}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="probabilidad">Probabilidad (%)</Label>
-                  <Input
-                    id="probabilidad"
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={probabilidad}
-                    onChange={(e) => setProbabilidad(e.target.value)}
-                  />
+              {/* Tipo de Oportunidad */}
+              <div className="grid gap-2">
+                <Label>Tipo de Oportunidad</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={tipoOportunidad === "producto" ? "default" : "outline"}
+                    className={tipoOportunidad === "producto" ? "bg-cyan-600 hover:bg-cyan-700" : ""}
+                    onClick={() => setTipoOportunidad("producto")}
+                  >
+                    <Package className="h-4 w-4 mr-2" />
+                    Producto del Inventario
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={tipoOportunidad === "servicio" ? "default" : "outline"}
+                    className={tipoOportunidad === "servicio" ? "bg-purple-600 hover:bg-purple-700" : ""}
+                    onClick={() => setTipoOportunidad("servicio")}
+                  >
+                    <Briefcase className="h-4 w-4 mr-2" />
+                    Servicio / Otro
+                  </Button>
                 </div>
               </div>
 
+              {/* Seccion de Productos */}
+              {tipoOportunidad === "producto" && (
+                <div className="p-4 bg-cyan-50 dark:bg-slate-800 rounded-lg border border-cyan-200 dark:border-slate-600 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Package className="h-4 w-4 text-cyan-600" />
+                    <Label className="text-cyan-700 dark:text-cyan-300 font-medium">Productos del Inventario</Label>
+                  </div>
+                  
+                  {/* Selector de producto */}
+                  <div className="flex gap-2">
+                    <Select onValueChange={agregarProducto}>
+                      <SelectTrigger className="flex-1 bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
+                        <SelectValue placeholder="Agregar producto..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {productos.map(producto => (
+                          <SelectItem key={producto.id} value={producto.id}>
+                            {producto.nombre} - {formatMoney(producto.precio_venta)} (Stock: {producto.stock_actual})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Lista de productos seleccionados */}
+                  {productosSeleccionados.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-12 gap-2 text-xs font-medium text-slate-600 dark:text-slate-400 px-2">
+                        <div className="col-span-4">Producto</div>
+                        <div className="col-span-2 text-center">Cant.</div>
+                        <div className="col-span-2 text-right">Precio</div>
+                        <div className="col-span-3 text-right">Subtotal</div>
+                        <div className="col-span-1"></div>
+                      </div>
+                      {productosSeleccionados.map((prod) => (
+                        <div key={prod.producto_id} className="grid grid-cols-12 gap-2 items-center bg-white dark:bg-slate-900 p-2 rounded border">
+                          <div className="col-span-4 text-sm font-medium text-slate-900 dark:text-white truncate">
+                            {prod.nombre}
+                          </div>
+                          <div className="col-span-2">
+                            <Input
+                              type="number"
+                              min="1"
+                              value={prod.cantidad}
+                              onChange={(e) => actualizarCantidad(prod.producto_id, parseInt(e.target.value) || 1)}
+                              className="h-8 text-center text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div className="col-span-2 text-right text-sm text-slate-700 dark:text-slate-300">
+                            {formatMoney(prod.precio_unitario)}
+                          </div>
+                          <div className="col-span-3 text-right">
+                            <p className="text-sm font-medium text-slate-900 dark:text-white">{formatMoney(prod.subtotal)}</p>
+                            {prod.subtotal_usd && (
+                              <p className="text-xs text-blue-600">{formatUSD(prod.subtotal_usd)}</p>
+                            )}
+                          </div>
+                          <div className="col-span-1 flex justify-end">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => eliminarProducto(prod.producto_id)}
+                            >
+                              <X className="h-3 w-3 text-red-500" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Descuento y Total */}
+                  {productosSeleccionados.length > 0 && (
+                    <div className="space-y-3 pt-2 border-t border-cyan-200 dark:border-slate-600">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-sm text-slate-600 dark:text-slate-400">Descuento (%)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={descuento}
+                          onChange={(e) => setDescuento(e.target.value)}
+                          className="w-20 h-8 text-center bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                        />
+                      </div>
+                      <div className="bg-green-50 dark:bg-green-900/30 p-3 rounded-lg">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-slate-600 dark:text-slate-400">Subtotal:</span>
+                          <span className="text-slate-900 dark:text-white">{formatMoney(totales.subtotalPYG)}</span>
+                        </div>
+                        {totales.descuentoPct > 0 && (
+                          <div className="flex justify-between text-sm text-red-600">
+                            <span>Descuento ({totales.descuentoPct}%):</span>
+                            <span>-{formatMoney(totales.descuentoMonto)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-bold text-lg mt-2 pt-2 border-t border-green-200 dark:border-green-700">
+                          <span className="text-green-700 dark:text-green-300">Total:</span>
+                          <div className="text-right">
+                            <p className="text-green-700 dark:text-green-300">{formatMoney(totales.totalPYG)}</p>
+                            <p className="text-sm text-blue-600 font-normal">{formatUSD(totales.totalUSD || convertirAUsd(totales.totalPYG))}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Seccion de Servicio */}
+              {tipoOportunidad === "servicio" && (
+                <div className="p-4 bg-purple-50 dark:bg-slate-800 rounded-lg border border-purple-200 dark:border-slate-600 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Briefcase className="h-4 w-4 text-purple-600" />
+                    <Label className="text-purple-700 dark:text-purple-300 font-medium">Monto del Servicio</Label>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label className="text-slate-700 dark:text-slate-300">Monto Estimado (Gs.)</Label>
+                    <Input
+                      type="number"
+                      value={montoEstimado}
+                      onChange={(e) => setMontoEstimado(e.target.value)}
+                      placeholder="0"
+                      className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    />
+                    {montoEstimado && (
+                      <p className="text-sm text-blue-600">
+                        Equivalente: {formatUSD(convertirAUsd(parseFloat(montoEstimado)))}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Etapa y Prioridad */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="etapa">Etapa</Label>
+                  <Label>Etapa</Label>
                   <Select value={etapaId} onValueChange={setEtapaId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                       <SelectValue placeholder="Seleccionar etapa" />
                     </SelectTrigger>
                     <SelectContent>
@@ -456,9 +786,9 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="prioridad">Prioridad</Label>
+                  <Label>Prioridad</Label>
                   <Select value={prioridad} onValueChange={setPrioridad}>
-                    <SelectTrigger>
+                    <SelectTrigger className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -471,24 +801,39 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
                 </div>
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="fecha">Fecha Cierre Estimada</Label>
-                <Input
-                  id="fecha"
-                  type="date"
-                  value={fechaCierreEstimada}
-                  onChange={(e) => setFechaCierreEstimada(e.target.value)}
-                />
+              {/* Probabilidad y Fecha */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Probabilidad (%)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={probabilidad}
+                    onChange={(e) => setProbabilidad(e.target.value)}
+                    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Fecha Cierre Estimada</Label>
+                  <Input
+                    type="date"
+                    value={fechaCierreEstimada}
+                    onChange={(e) => setFechaCierreEstimada(e.target.value)}
+                    className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                  />
+                </div>
               </div>
 
+              {/* Notas */}
               <div className="grid gap-2">
-                <Label htmlFor="notas">Notas</Label>
+                <Label>Notas</Label>
                 <Textarea
-                  id="notas"
                   value={notas}
                   onChange={(e) => setNotas(e.target.value)}
                   placeholder="Notas adicionales..."
                   rows={3}
+                  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 />
               </div>
             </div>
@@ -496,7 +841,7 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleSave}>
+              <Button onClick={handleSave} className="bg-cyan-600 hover:bg-cyan-700">
                 {editingOportunidad ? "Guardar Cambios" : "Crear Oportunidad"}
               </Button>
             </DialogFooter>
@@ -533,9 +878,14 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
                   </div>
                 </div>
                 {total > 0 && (
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {formatMoney(total)}
-                  </p>
+                  <div className="mt-1">
+                    <p className="text-sm text-muted-foreground">
+                      {formatMoney(total)}
+                    </p>
+                    <p className="text-xs text-blue-500">
+                      {formatUSD(convertirAUsd(total))}
+                    </p>
+                  </div>
                 )}
               </div>
 
@@ -590,14 +940,29 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
                             </DropdownMenu>
                           </div>
 
+                          {/* Indicador de tipo */}
+                          {oportunidad.producto_interes && (
+                            <Badge variant="outline" className="text-xs mb-2 bg-cyan-50 text-cyan-700 border-cyan-200">
+                              <Package className="h-3 w-3 mr-1" />
+                              Productos
+                            </Badge>
+                          )}
+
                           {/* Monto y Probabilidad */}
-                          {oportunidad.monto_estimado && (
-                            <div className="flex items-center gap-1 text-sm font-medium text-green-600 mb-2">
-                              <DollarSign className="h-3 w-3" />
-                              {formatMoney(oportunidad.monto_estimado)}
-                              <span className="text-muted-foreground text-xs ml-1">
-                                ({oportunidad.probabilidad}%)
-                              </span>
+                          {oportunidad.valor_estimado && (
+                            <div className="mb-2">
+                              <div className="flex items-center gap-1 text-sm font-medium text-green-600">
+                                <DollarSign className="h-3 w-3" />
+                                {formatMoney(oportunidad.valor_estimado)}
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-blue-500">
+                                  {formatUSD(convertirAUsd(oportunidad.valor_estimado))}
+                                </span>
+                                <span className="text-muted-foreground text-xs">
+                                  ({oportunidad.probabilidad}%)
+                                </span>
+                              </div>
                             </div>
                           )}
 
@@ -618,13 +983,13 @@ export function PipelineKanban({ perfilId }: PipelineKanbanProps) {
 
                           {/* Prioridad y Fecha */}
                           <div className="flex items-center justify-between">
-                            <Badge className={`text-xs ${PRIORIDAD_COLORS[oportunidad.prioridad]}`}>
-                              {oportunidad.prioridad}
+                            <Badge className={`text-xs ${PRIORIDAD_COLORS[oportunidad.prioridad || "media"]}`}>
+                              {oportunidad.prioridad || "media"}
                             </Badge>
                             {oportunidad.fecha_cierre_estimada && (
                               <span className="text-xs text-muted-foreground flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
-                                {new Date(oportunidad.fecha_cierre_estimada).toLocaleDateString('es-PY')}
+                                {formatDateGMT3(oportunidad.fecha_cierre_estimada)}
                               </span>
                             )}
                           </div>
