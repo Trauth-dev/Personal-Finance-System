@@ -42,7 +42,8 @@ import {
   Boxes,
   Edit,
   Trash2,
-  BarChart3
+  BarChart3,
+  RefreshCw
 } from "lucide-react"
 
 interface Producto {
@@ -88,6 +89,8 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
   const [tasaCambio, setTasaCambio] = useState<number>(7500) // Tasa por defecto
   const [editandoTasa, setEditandoTasa] = useState(false)
   const [nuevaTasa, setNuevaTasa] = useState("")
+  const [cargandoTasa, setCargandoTasa] = useState(false)
+  const [fuenteTasa, setFuenteTasa] = useState<string>("")
   
   const [formData, setFormData] = useState({
     nombre: "",
@@ -181,6 +184,48 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
         description: "No se pudo guardar la tasa de cambio",
         variant: "destructive"
       })
+    }
+  }
+
+  // Funcion para obtener tasa de cambio automatica
+  const obtenerTasaAutomatica = async () => {
+    setCargandoTasa(true)
+    try {
+      const response = await fetch("/api/tasa-cambio")
+      const data = await response.json()
+      
+      if (data.success && data.tasa) {
+        setTasaCambio(data.tasa)
+        setFuenteTasa(data.fuente)
+        
+        // Guardar en la base de datos si el usuario esta logueado
+        if (userId) {
+          await supabase
+            .from("tasas_cambio")
+            .insert({
+              user_id: userId,
+              moneda_origen: "USD",
+              moneda_destino: "PYG",
+              tasa: data.tasa,
+              fecha: new Date().toISOString().split("T")[0],
+              es_automatica: true
+            })
+        }
+        
+        toast({
+          title: "Tasa actualizada",
+          description: `Nueva tasa: ${formatCurrency(data.tasa)} (${data.fuente === "fallback" ? "Respaldo" : "En tiempo real"})`
+        })
+      }
+    } catch (error) {
+      console.error("Error obteniendo tasa:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo obtener la tasa automatica",
+        variant: "destructive"
+      })
+    } finally {
+      setCargandoTasa(false)
     }
   }
 
@@ -363,15 +408,15 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
   return (
     <div className="space-y-6">
       {/* Tasa de Cambio */}
-      <Card className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
+      <Card className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-slate-800 dark:to-slate-900 border-blue-200 dark:border-slate-700">
         <CardContent className="pt-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                <DollarSign className="h-5 w-5 text-blue-600" />
+                <DollarSign className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-sm text-slate-600 dark:text-slate-400">Tasa de Cambio USD/PYG</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300 font-medium">Tasa de Cambio USD/PYG</p>
                 {editandoTasa ? (
                   <div className="flex items-center gap-2 mt-1">
                     <Input
@@ -379,7 +424,7 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                       value={nuevaTasa}
                       onChange={(e) => setNuevaTasa(e.target.value)}
                       placeholder={tasaCambio.toString()}
-                      className="w-32 h-8 text-sm"
+                      className="w-32 h-8 text-sm bg-white dark:bg-slate-800"
                     />
                     <Button size="sm" onClick={handleGuardarTasa} className="h-8 bg-blue-600 hover:bg-blue-700">
                       Guardar
@@ -389,28 +434,47 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                     </Button>
                   </div>
                 ) : (
-                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                    {formatCurrency(tasaCambio)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                      {formatCurrency(tasaCambio)}
+                    </p>
+                    {fuenteTasa && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300">
+                        {fuenteTasa === "fallback" ? "Manual" : "Actualizado"}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
             {!editandoTasa && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  setNuevaTasa(tasaCambio.toString())
-                  setEditandoTasa(true)
-                }}
-                className="text-blue-600 border-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
-              >
-                <Edit className="h-4 w-4 mr-1" />
-                Editar
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={obtenerTasaAutomatica}
+                  disabled={cargandoTasa}
+                  className="text-green-600 border-green-300 hover:bg-green-100 dark:text-green-400 dark:border-green-700 dark:hover:bg-green-900"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-1 ${cargandoTasa ? "animate-spin" : ""}`} />
+                  {cargandoTasa ? "Actualizando..." : "Obtener Tasa Actual"}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setNuevaTasa(tasaCambio.toString())
+                    setEditandoTasa(true)
+                  }}
+                  className="text-blue-600 border-blue-300 hover:bg-blue-100 dark:text-blue-400 dark:border-blue-700 dark:hover:bg-blue-900"
+                >
+                  <Edit className="h-4 w-4 mr-1" />
+                  Manual
+                </Button>
+              </div>
             )}
           </div>
-          <p className="text-xs text-slate-500 mt-2">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
             1 USD = {formatCurrency(tasaCambio)} | Los precios se convierten automaticamente
           </p>
         </CardContent>
@@ -578,14 +642,16 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                     {/* Precios segun moneda seleccionada */}
                     {formData.moneda === "USD" ? (
                       <>
-                        <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                          <p className="text-xs text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1">
+                        <div className="p-3 bg-blue-50 dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-slate-600">
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mb-3 flex items-center gap-1">
                             <DollarSign className="h-3 w-3" />
                             Precios en Dolares (Tasa: {formatCurrency(tasaCambio)} por USD)
                           </p>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <Label htmlFor="precio_costo_usd">Costo USD *</Label>
+                              <Label htmlFor="precio_costo_usd" className="text-slate-700 dark:text-slate-200 font-medium">
+                                Costo USD *
+                              </Label>
                               <Input
                                 id="precio_costo_usd"
                                 type="number"
@@ -593,11 +659,14 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                                 placeholder="0.00"
                                 value={formData.precio_costo_usd}
                                 onChange={(e) => setFormData({ ...formData, precio_costo_usd: e.target.value })}
+                                className="bg-white dark:bg-slate-900"
                                 required
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="precio_venta_usd">Venta USD *</Label>
+                              <Label htmlFor="precio_venta_usd" className="text-slate-700 dark:text-slate-200 font-medium">
+                                Venta USD *
+                              </Label>
                               <Input
                                 id="precio_venta_usd"
                                 type="number"
@@ -605,6 +674,7 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                                 placeholder="0.00"
                                 value={formData.precio_venta_usd}
                                 onChange={(e) => setFormData({ ...formData, precio_venta_usd: e.target.value })}
+                                className="bg-white dark:bg-slate-900"
                                 required
                               />
                             </div>
@@ -612,16 +682,16 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                         </div>
                         
                         {formData.precio_costo_usd && formData.precio_venta_usd && (
-                          <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                            <p className="text-xs text-slate-500 mb-2">Equivalente en Guaranies</p>
+                          <div className="p-3 bg-green-50 dark:bg-slate-800 rounded-lg border border-green-200 dark:border-slate-600">
+                            <p className="text-xs text-green-600 dark:text-green-400 mb-2 font-medium">Equivalente en Guaranies</p>
                             <div className="grid grid-cols-2 gap-4 text-sm">
                               <div>
-                                <span className="text-slate-500">Costo:</span>{" "}
-                                <span className="font-medium">{formatCurrency(convertirUsdAPyg(parseFloat(formData.precio_costo_usd)))}</span>
+                                <span className="text-slate-600 dark:text-slate-400">Costo:</span>{" "}
+                                <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(convertirUsdAPyg(parseFloat(formData.precio_costo_usd)))}</span>
                               </div>
                               <div>
-                                <span className="text-slate-500">Venta:</span>{" "}
-                                <span className="font-medium">{formatCurrency(convertirUsdAPyg(parseFloat(formData.precio_venta_usd)))}</span>
+                                <span className="text-slate-600 dark:text-slate-400">Venta:</span>{" "}
+                                <span className="font-semibold text-slate-900 dark:text-white">{formatCurrency(convertirUsdAPyg(parseFloat(formData.precio_venta_usd)))}</span>
                               </div>
                             </div>
                           </div>
@@ -629,28 +699,34 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                       </>
                     ) : (
                       <>
-                        <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
-                          <p className="text-xs text-green-600 dark:text-green-400 mb-2">Precios en Guaranies</p>
+                        <div className="p-3 bg-green-50 dark:bg-slate-800 rounded-lg border border-green-200 dark:border-slate-600">
+                          <p className="text-xs text-green-600 dark:text-green-400 mb-3 font-medium">Precios en Guaranies</p>
                           <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                              <Label htmlFor="precio_costo">Costo Gs. *</Label>
+                              <Label htmlFor="precio_costo" className="text-slate-700 dark:text-slate-200 font-medium">
+                                Costo Gs. *
+                              </Label>
                               <Input
                                 id="precio_costo"
                                 type="number"
                                 placeholder="0"
                                 value={formData.precio_costo}
                                 onChange={(e) => setFormData({ ...formData, precio_costo: e.target.value })}
+                                className="bg-white dark:bg-slate-900"
                                 required
                               />
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="precio_venta">Venta Gs. *</Label>
+                              <Label htmlFor="precio_venta" className="text-slate-700 dark:text-slate-200 font-medium">
+                                Venta Gs. *
+                              </Label>
                               <Input
                                 id="precio_venta"
                                 type="number"
                                 placeholder="0"
                                 value={formData.precio_venta}
                                 onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })}
+                                className="bg-white dark:bg-slate-900"
                                 required
                               />
                             </div>
@@ -658,16 +734,16 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                         </div>
 
                         {formData.precio_costo && formData.precio_venta && (
-                          <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                            <p className="text-xs text-slate-500 mb-2">Equivalente en Dolares (Tasa: {formatCurrency(tasaCambio)})</p>
+                          <div className="p-3 bg-blue-50 dark:bg-slate-800 rounded-lg border border-blue-200 dark:border-slate-600">
+                            <p className="text-xs text-blue-600 dark:text-blue-400 mb-2 font-medium">Equivalente en Dolares (Tasa: {formatCurrency(tasaCambio)})</p>
                             <div className="grid grid-cols-2 gap-4 text-sm">
                               <div>
-                                <span className="text-slate-500">Costo:</span>{" "}
-                                <span className="font-medium">{formatUSD(convertirPygAUsd(parseFloat(formData.precio_costo)))}</span>
+                                <span className="text-slate-600 dark:text-slate-400">Costo:</span>{" "}
+                                <span className="font-semibold text-slate-900 dark:text-white">{formatUSD(convertirPygAUsd(parseFloat(formData.precio_costo)))}</span>
                               </div>
                               <div>
-                                <span className="text-slate-500">Venta:</span>{" "}
-                                <span className="font-medium">{formatUSD(convertirPygAUsd(parseFloat(formData.precio_venta)))}</span>
+                                <span className="text-slate-600 dark:text-slate-400">Venta:</span>{" "}
+                                <span className="font-semibold text-slate-900 dark:text-white">{formatUSD(convertirPygAUsd(parseFloat(formData.precio_venta)))}</span>
                               </div>
                             </div>
                           </div>
