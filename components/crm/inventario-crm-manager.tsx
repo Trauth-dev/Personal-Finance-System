@@ -54,11 +54,23 @@ interface Producto {
   sku: string | null
   precio_costo: number
   precio_venta: number
+  precio_costo_usd: number | null
+  precio_venta_usd: number | null
+  moneda: string
   stock_actual: number
   stock_minimo: number
   unidad_medida: string
   activo: boolean
   created_at: string
+}
+
+interface TasaCambio {
+  id: string
+  user_id: string
+  moneda_origen: string
+  moneda_destino: string
+  tasa: number
+  fecha: string
 }
 
 interface InventarioCRMManagerProps {
@@ -73,11 +85,17 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null)
   const [userId, setUserId] = useState<string | null>(null)
+  const [tasaCambio, setTasaCambio] = useState<number>(7500) // Tasa por defecto
+  const [editandoTasa, setEditandoTasa] = useState(false)
+  const [nuevaTasa, setNuevaTasa] = useState("")
   
   const [formData, setFormData] = useState({
     nombre: "",
     descripcion: "",
     sku: "",
+    moneda: "USD" as "USD" | "PYG",
+    precio_costo_usd: "",
+    precio_venta_usd: "",
     precio_costo: "",
     precio_venta: "",
     stock_actual: "",
@@ -98,6 +116,21 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
       if (!user) return
       
       setUserId(user.id)
+
+      // Obtener tasa de cambio del usuario
+      const { data: tasaData } = await supabase
+        .from("tasas_cambio")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("moneda_origen", "USD")
+        .eq("moneda_destino", "PYG")
+        .order("fecha", { ascending: false })
+        .limit(1)
+        .single()
+
+      if (tasaData) {
+        setTasaCambio(tasaData.tasa)
+      }
 
       // Obtener productos del usuario (compartidos entre perfiles)
       const { data, error } = await supabase
@@ -121,19 +154,74 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
     }
   }
 
+  const handleGuardarTasa = async () => {
+    if (!userId || !nuevaTasa) return
+    
+    try {
+      const { error } = await supabase
+        .from("tasas_cambio")
+        .insert({
+          user_id: userId,
+          moneda_origen: "USD",
+          moneda_destino: "PYG",
+          tasa: parseFloat(nuevaTasa),
+          fecha: new Date().toISOString().split("T")[0]
+        })
+
+      if (error) throw error
+      
+      setTasaCambio(parseFloat(nuevaTasa))
+      setEditandoTasa(false)
+      setNuevaTasa("")
+      toast({ title: "Tasa de cambio actualizada" })
+    } catch (error) {
+      console.error("Error saving tasa:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo guardar la tasa de cambio",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Funciones de conversion
+  const convertirUsdAPyg = (usd: number) => Math.round(usd * tasaCambio)
+  const convertirPygAUsd = (pyg: number) => Number((pyg / tasaCambio).toFixed(2))
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!userId) return
 
     try {
+      // Calcular precios segun la moneda seleccionada
+      let precioCosto: number
+      let precioVenta: number
+      let precioCostoUsd: number | null = null
+      let precioVentaUsd: number | null = null
+
+      if (formData.moneda === "USD") {
+        precioCostoUsd = parseFloat(formData.precio_costo_usd) || 0
+        precioVentaUsd = parseFloat(formData.precio_venta_usd) || 0
+        precioCosto = convertirUsdAPyg(precioCostoUsd)
+        precioVenta = convertirUsdAPyg(precioVentaUsd)
+      } else {
+        precioCosto = parseFloat(formData.precio_costo) || 0
+        precioVenta = parseFloat(formData.precio_venta) || 0
+        precioCostoUsd = convertirPygAUsd(precioCosto)
+        precioVentaUsd = convertirPygAUsd(precioVenta)
+      }
+
       const productoData = {
         user_id: userId,
         perfil_id: perfilId,
         nombre: formData.nombre,
         descripcion: formData.descripcion || null,
         sku: formData.sku || null,
-        precio_costo: parseFloat(formData.precio_costo) || 0,
-        precio_venta: parseFloat(formData.precio_venta) || 0,
+        moneda: formData.moneda,
+        precio_costo: precioCosto,
+        precio_venta: precioVenta,
+        precio_costo_usd: precioCostoUsd,
+        precio_venta_usd: precioVentaUsd,
         stock_actual: parseInt(formData.stock_actual) || 0,
         stock_minimo: parseInt(formData.stock_minimo) || 5,
         unidad_medida: formData.unidad_medida,
@@ -176,6 +264,9 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
       nombre: producto.nombre,
       descripcion: producto.descripcion || "",
       sku: producto.sku || "",
+      moneda: (producto.moneda || "PYG") as "USD" | "PYG",
+      precio_costo_usd: producto.precio_costo_usd?.toString() || "",
+      precio_venta_usd: producto.precio_venta_usd?.toString() || "",
       precio_costo: producto.precio_costo.toString(),
       precio_venta: producto.precio_venta.toString(),
       stock_actual: producto.stock_actual.toString(),
@@ -213,6 +304,9 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
       nombre: "",
       descripcion: "",
       sku: "",
+      moneda: "USD",
+      precio_costo_usd: "",
+      precio_venta_usd: "",
       precio_costo: "",
       precio_venta: "",
       stock_actual: "",
@@ -227,6 +321,15 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
       currency: "PYG",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
+    }).format(value)
+  }
+
+  const formatUSD = (value: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     }).format(value)
   }
 
@@ -259,6 +362,60 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
 
   return (
     <div className="space-y-6">
+      {/* Tasa de Cambio */}
+      <Card className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 border-blue-200 dark:border-blue-800">
+        <CardContent className="pt-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+                <DollarSign className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-600 dark:text-slate-400">Tasa de Cambio USD/PYG</p>
+                {editandoTasa ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <Input
+                      type="number"
+                      value={nuevaTasa}
+                      onChange={(e) => setNuevaTasa(e.target.value)}
+                      placeholder={tasaCambio.toString()}
+                      className="w-32 h-8 text-sm"
+                    />
+                    <Button size="sm" onClick={handleGuardarTasa} className="h-8 bg-blue-600 hover:bg-blue-700">
+                      Guardar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditandoTasa(false)} className="h-8">
+                      Cancelar
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                    {formatCurrency(tasaCambio)}
+                  </p>
+                )}
+              </div>
+            </div>
+            {!editandoTasa && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setNuevaTasa(tasaCambio.toString())
+                  setEditandoTasa(true)
+                }}
+                className="text-blue-600 border-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900"
+              >
+                <Edit className="h-4 w-4 mr-1" />
+                Editar
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            1 USD = {formatCurrency(tasaCambio)} | Los precios se convierten automaticamente
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Metricas */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <Card>
@@ -382,53 +539,160 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                       />
                     </div>
                     
-                    <div className="space-y-2">
-                      <Label htmlFor="unidad_medida">Unidad de Medida</Label>
-                      <Select
-                        value={formData.unidad_medida}
-                        onValueChange={(v) => setFormData({ ...formData, unidad_medida: v })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unidad">Unidad</SelectItem>
-                          <SelectItem value="caja">Caja</SelectItem>
-                          <SelectItem value="paquete">Paquete</SelectItem>
-                          <SelectItem value="kg">Kilogramo</SelectItem>
-                          <SelectItem value="litro">Litro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="precio_costo">Precio Costo *</Label>
-                        <Input
-                          id="precio_costo"
-                          type="number"
-                          value={formData.precio_costo}
-                          onChange={(e) => setFormData({ ...formData, precio_costo: e.target.value })}
-                          required
-                        />
+                        <Label htmlFor="unidad_medida">Unidad de Medida</Label>
+                        <Select
+                          value={formData.unidad_medida}
+                          onValueChange={(v) => setFormData({ ...formData, unidad_medida: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unidad">Unidad</SelectItem>
+                            <SelectItem value="caja">Caja</SelectItem>
+                            <SelectItem value="paquete">Paquete</SelectItem>
+                            <SelectItem value="kg">Kilogramo</SelectItem>
+                            <SelectItem value="litro">Litro</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="precio_venta">Precio Venta *</Label>
-                        <Input
-                          id="precio_venta"
-                          type="number"
-                          value={formData.precio_venta}
-                          onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })}
-                          required
-                        />
+                        <Label>Moneda de Carga</Label>
+                        <Select
+                          value={formData.moneda}
+                          onValueChange={(v) => setFormData({ ...formData, moneda: v as "USD" | "PYG" })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="USD">USD (Dolares)</SelectItem>
+                            <SelectItem value="PYG">PYG (Guaranies)</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
-                    
-                    {formData.precio_costo && formData.precio_venta && (
-                      <div className="bg-green-50 dark:bg-green-950 p-3 rounded-lg">
-                        <p className="text-sm text-green-700 dark:text-green-300">
-                          Ganancia por unidad: {formatCurrency(parseFloat(formData.precio_venta) - parseFloat(formData.precio_costo))}
-                          {" "}({(((parseFloat(formData.precio_venta) - parseFloat(formData.precio_costo)) / parseFloat(formData.precio_costo)) * 100).toFixed(1)}%)
+
+                    {/* Precios segun moneda seleccionada */}
+                    {formData.moneda === "USD" ? (
+                      <>
+                        <div className="p-3 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mb-2 flex items-center gap-1">
+                            <DollarSign className="h-3 w-3" />
+                            Precios en Dolares (Tasa: {formatCurrency(tasaCambio)} por USD)
+                          </p>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="precio_costo_usd">Costo USD *</Label>
+                              <Input
+                                id="precio_costo_usd"
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={formData.precio_costo_usd}
+                                onChange={(e) => setFormData({ ...formData, precio_costo_usd: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="precio_venta_usd">Venta USD *</Label>
+                              <Input
+                                id="precio_venta_usd"
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                value={formData.precio_venta_usd}
+                                onChange={(e) => setFormData({ ...formData, precio_venta_usd: e.target.value })}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {formData.precio_costo_usd && formData.precio_venta_usd && (
+                          <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                            <p className="text-xs text-slate-500 mb-2">Equivalente en Guaranies</p>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-slate-500">Costo:</span>{" "}
+                                <span className="font-medium">{formatCurrency(convertirUsdAPyg(parseFloat(formData.precio_costo_usd)))}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">Venta:</span>{" "}
+                                <span className="font-medium">{formatCurrency(convertirUsdAPyg(parseFloat(formData.precio_venta_usd)))}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
+                          <p className="text-xs text-green-600 dark:text-green-400 mb-2">Precios en Guaranies</p>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                              <Label htmlFor="precio_costo">Costo Gs. *</Label>
+                              <Input
+                                id="precio_costo"
+                                type="number"
+                                placeholder="0"
+                                value={formData.precio_costo}
+                                onChange={(e) => setFormData({ ...formData, precio_costo: e.target.value })}
+                                required
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label htmlFor="precio_venta">Venta Gs. *</Label>
+                              <Input
+                                id="precio_venta"
+                                type="number"
+                                placeholder="0"
+                                value={formData.precio_venta}
+                                onChange={(e) => setFormData({ ...formData, precio_venta: e.target.value })}
+                                required
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {formData.precio_costo && formData.precio_venta && (
+                          <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                            <p className="text-xs text-slate-500 mb-2">Equivalente en Dolares (Tasa: {formatCurrency(tasaCambio)})</p>
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="text-slate-500">Costo:</span>{" "}
+                                <span className="font-medium">{formatUSD(convertirPygAUsd(parseFloat(formData.precio_costo)))}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500">Venta:</span>{" "}
+                                <span className="font-medium">{formatUSD(convertirPygAUsd(parseFloat(formData.precio_venta)))}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {/* Calculo de ganancia */}
+                    {((formData.moneda === "USD" && formData.precio_costo_usd && formData.precio_venta_usd) ||
+                      (formData.moneda === "PYG" && formData.precio_costo && formData.precio_venta)) && (
+                      <div className="bg-emerald-50 dark:bg-emerald-950 p-3 rounded-lg border border-emerald-200 dark:border-emerald-800">
+                        <p className="text-sm text-emerald-700 dark:text-emerald-300 font-medium">
+                          Ganancia por unidad:{" "}
+                          {formData.moneda === "USD" 
+                            ? `${formatUSD(parseFloat(formData.precio_venta_usd) - parseFloat(formData.precio_costo_usd))} (${formatCurrency(convertirUsdAPyg(parseFloat(formData.precio_venta_usd) - parseFloat(formData.precio_costo_usd)))})`
+                            : formatCurrency(parseFloat(formData.precio_venta) - parseFloat(formData.precio_costo))
+                          }
+                          {" - "}
+                          {(((formData.moneda === "USD" 
+                            ? parseFloat(formData.precio_venta_usd) - parseFloat(formData.precio_costo_usd)
+                            : parseFloat(formData.precio_venta) - parseFloat(formData.precio_costo)
+                          ) / (formData.moneda === "USD" 
+                            ? parseFloat(formData.precio_costo_usd)
+                            : parseFloat(formData.precio_costo)
+                          )) * 100).toFixed(1)}% margen
                         </p>
                       </div>
                     )}
@@ -524,12 +788,20 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                     const margen = producto.precio_costo > 0 
                       ? ((ganancia / producto.precio_costo) * 100).toFixed(1) 
                       : "0"
+                    const gananciaUsd = (producto.precio_venta_usd || 0) - (producto.precio_costo_usd || 0)
                     
                     return (
                       <TableRow key={producto.id}>
                         <TableCell>
                           <div>
-                            <p className="font-medium">{producto.nombre}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium">{producto.nombre}</p>
+                              {producto.moneda === "USD" && (
+                                <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200">
+                                  USD
+                                </Badge>
+                              )}
+                            </div>
                             {producto.descripcion && (
                               <p className="text-xs text-muted-foreground">{producto.descripcion}</p>
                             )}
@@ -539,14 +811,27 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                           {producto.sku || "-"}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(producto.precio_costo)}
+                          <div>
+                            <p>{formatCurrency(producto.precio_costo)}</p>
+                            {producto.precio_costo_usd && (
+                              <p className="text-xs text-blue-600">{formatUSD(producto.precio_costo_usd)}</p>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right font-medium">
-                          {formatCurrency(producto.precio_venta)}
+                          <div>
+                            <p>{formatCurrency(producto.precio_venta)}</p>
+                            {producto.precio_venta_usd && (
+                              <p className="text-xs text-blue-600">{formatUSD(producto.precio_venta_usd)}</p>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div>
                             <p className="text-green-600 font-medium">{formatCurrency(ganancia)}</p>
+                            {producto.precio_venta_usd && (
+                              <p className="text-xs text-green-500">{formatUSD(gananciaUsd)}</p>
+                            )}
                             <p className="text-xs text-muted-foreground">{margen}%</p>
                           </div>
                         </TableCell>
