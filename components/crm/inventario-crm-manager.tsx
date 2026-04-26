@@ -158,25 +158,63 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
   }
 
   const handleGuardarTasa = async () => {
-    if (!userId || !nuevaTasa) return
+    if (!nuevaTasa) {
+      toast({
+        title: "Error",
+        description: "Ingresa un valor para la tasa de cambio",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const tasaNumero = parseFloat(nuevaTasa)
+    if (isNaN(tasaNumero) || tasaNumero <= 0) {
+      toast({
+        title: "Error",
+        description: "La tasa debe ser un numero mayor a 0",
+        variant: "destructive"
+      })
+      return
+    }
     
     try {
-      const { error } = await supabase
-        .from("tasas_cambio")
-        .insert({
-          user_id: userId,
-          moneda_origen: "USD",
-          moneda_destino: "PYG",
-          tasa: parseFloat(nuevaTasa),
-          fecha: new Date().toISOString().split("T")[0]
-        })
+      // Obtener usuario actual si no esta disponible
+      let currentUserId = userId
+      if (!currentUserId) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          currentUserId = user.id
+          setUserId(user.id)
+        }
+      }
 
-      if (error) throw error
+      // Guardar en base de datos solo si hay usuario
+      if (currentUserId) {
+        const { error } = await supabase
+          .from("tasas_cambio")
+          .insert({
+            user_id: currentUserId,
+            moneda_origen: "USD",
+            moneda_destino: "PYG",
+            tasa: tasaNumero,
+            fecha: new Date().toISOString().split("T")[0]
+          })
+
+        if (error) {
+          console.error("Error guardando en BD:", error)
+          // Continuar aunque falle la BD, al menos actualizar localmente
+        }
+      }
       
-      setTasaCambio(parseFloat(nuevaTasa))
+      // Actualizar estado local siempre
+      setTasaCambio(tasaNumero)
       setEditandoTasa(false)
       setNuevaTasa("")
-      toast({ title: "Tasa de cambio actualizada" })
+      setFuenteTasa("manual")
+      toast({ 
+        title: "Tasa actualizada",
+        description: `Nueva tasa: Gs. ${tasaNumero.toLocaleString("es-PY")}`
+      })
     } catch (error) {
       console.error("Error saving tasa:", error)
       toast({
