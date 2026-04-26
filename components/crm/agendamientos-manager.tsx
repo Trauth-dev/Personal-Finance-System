@@ -280,7 +280,7 @@ export function AgendamientosManager({ perfilId }: { perfilId: string }) {
   })
 
   const getDateLabel = (fecha: string) => {
-    const date = parseISO(fecha)
+    const date = new Date(fecha)
     if (isToday(date)) return "Hoy"
     if (isTomorrow(date)) return "Manana"
     if (isPast(date)) return "Pasado"
