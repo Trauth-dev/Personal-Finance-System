@@ -36,8 +36,16 @@ import {
   XCircle,
   Calendar
 } from "lucide-react"
-import { format, isPast, isToday, isTomorrow, parseISO } from "date-fns"
-import { es } from "date-fns/locale"
+import { 
+  formatDateGMT3, 
+  formatDateTimeGMT3, 
+  formatTimeGMT3,
+  formatForCalendar,
+  isToday, 
+  isPast, 
+  isTomorrow,
+  toISOWithGMT3
+} from "@/lib/utils/timezone"
 
 interface Cliente {
   id: string
@@ -166,8 +174,8 @@ export function AgendamientosManager({ perfilId }: { perfilId: string }) {
         titulo: agendamiento.titulo,
         tipo: agendamiento.tipo,
         lugar: agendamiento.lugar || "",
-        fecha: format(fechaHora, "yyyy-MM-dd"),
-        hora: format(fechaHora, "HH:mm"),
+        fecha: fechaHora.toISOString().split("T")[0],
+        hora: fechaHora.toTimeString().slice(0, 5),
         duracion_minutos: agendamiento.duracion_minutos,
         notas: agendamiento.notas || "",
       })
@@ -183,7 +191,7 @@ export function AgendamientosManager({ perfilId }: { perfilId: string }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const fechaHora = `${formData.fecha}T${formData.hora}:00`
+    const fechaHora = toISOWithGMT3(formData.fecha, formData.hora)
 
     const agendamientoData = {
       user_id: user.id,
@@ -276,7 +284,7 @@ export function AgendamientosManager({ perfilId }: { perfilId: string }) {
     if (isToday(date)) return "Hoy"
     if (isTomorrow(date)) return "Manana"
     if (isPast(date)) return "Pasado"
-    return format(date, "EEEE d", { locale: es })
+    return formatForCalendar(date)
   }
 
   if (isLoading) {
@@ -532,10 +540,10 @@ export function AgendamientosManager({ perfilId }: { perfilId: string }) {
                             {getDateLabel(agendamiento.fecha_hora)}
                           </span>
                           <span className="text-2xl font-bold">
-                            {format(fechaHora, "d")}
+                            {new Date(agendamiento.fecha_hora).getDate()}
                           </span>
                           <span className="text-xs text-muted-foreground">
-                            {format(fechaHora, "HH:mm")}
+                            {formatTimeGMT3(agendamiento.fecha_hora)}
                           </span>
                         </div>
                         <div className="flex-1 min-w-0">

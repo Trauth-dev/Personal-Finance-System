@@ -36,8 +36,7 @@ import {
   Trash2,
   Edit2
 } from "lucide-react"
-import { format, addDays, addWeeks, addMonths, isPast, isToday } from "date-fns"
-import { es } from "date-fns/locale"
+import { formatDateGMT3, formatDateLongGMT3, isToday, isPast } from "@/lib/utils/timezone"
 
 interface Cliente {
   id: string
@@ -137,11 +136,11 @@ export function SeguimientosManager({ perfilId }: { perfilId: string }) {
     const hoy = new Date()
     switch (tipo) {
       case "semanal":
-        return format(addWeeks(hoy, 1), "yyyy-MM-dd")
+        return new Date(hoy.setDate(hoy.getDate() + 7)).toISOString().split("T")[0]
       case "quincenal":
-        return format(addDays(hoy, 14), "yyyy-MM-dd")
+        return new Date(hoy.setDate(hoy.getDate() + 14)).toISOString().split("T")[0]
       case "mensual":
-        return format(addMonths(hoy, 1), "yyyy-MM-dd")
+        return new Date(hoy.setMonth(hoy.getMonth() + 1)).toISOString().split("T")[0]
       default:
         return ""
     }
@@ -486,7 +485,7 @@ export function SeguimientosManager({ perfilId }: { perfilId: string }) {
                             {seguimiento.recordatorio_fecha && (
                               <span className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
-                                {format(new Date(seguimiento.recordatorio_fecha), "PPP", { locale: es })}
+                                {formatDateLongGMT3(seguimiento.recordatorio_fecha)}
                               </span>
                             )}
                             {seguimiento.recordatorio_tipo && (
