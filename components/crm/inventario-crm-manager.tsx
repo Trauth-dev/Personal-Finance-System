@@ -43,8 +43,10 @@ import {
   Edit,
   Trash2,
   BarChart3,
-  RefreshCw
+  RefreshCw,
+  Wrench
 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 interface Producto {
   id: string
@@ -61,6 +63,8 @@ interface Producto {
   stock_actual: number
   stock_minimo: number
   unidad_medida: string
+  requiere_mantenimiento: boolean
+  ciclo_mantenimiento_meses: number | null
   activo: boolean
   created_at: string
 }
@@ -92,18 +96,20 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
   const [cargandoTasa, setCargandoTasa] = useState(false)
   const [fuenteTasa, setFuenteTasa] = useState<string>("")
   
-  const [formData, setFormData] = useState({
-    nombre: "",
-    descripcion: "",
-    sku: "",
-    moneda: "USD" as "USD" | "PYG",
-    precio_costo_usd: "",
-    precio_venta_usd: "",
-    precio_costo: "",
-    precio_venta: "",
-    stock_actual: "",
-    stock_minimo: "5",
-    unidad_medida: "unidad"
+const [formData, setFormData] = useState({
+  nombre: "",
+  descripcion: "",
+  sku: "",
+  moneda: "USD" as "USD" | "PYG",
+  precio_costo_usd: "",
+  precio_venta_usd: "",
+  precio_costo: "",
+  precio_venta: "",
+  stock_actual: "",
+  stock_minimo: "5",
+  unidad_medida: "unidad",
+  requiere_mantenimiento: false,
+  ciclo_mantenimiento_meses: "6"
   })
 
   const { toast } = useToast()
@@ -294,22 +300,26 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
         precioVentaUsd = convertirPygAUsd(precioVenta)
       }
 
-      const productoData = {
-        user_id: userId,
-        perfil_id: perfilId,
-        nombre: formData.nombre,
-        descripcion: formData.descripcion || null,
-        sku: formData.sku || null,
-        moneda: formData.moneda,
-        precio_costo: precioCosto,
-        precio_venta: precioVenta,
-        precio_costo_usd: precioCostoUsd,
-        precio_venta_usd: precioVentaUsd,
-        stock_actual: parseInt(formData.stock_actual) || 0,
-        stock_minimo: parseInt(formData.stock_minimo) || 5,
-        unidad_medida: formData.unidad_medida,
-        activo: true
-      }
+const productoData = {
+  user_id: userId,
+  perfil_id: perfilId,
+  nombre: formData.nombre,
+  descripcion: formData.descripcion || null,
+  sku: formData.sku || null,
+  moneda: formData.moneda,
+  precio_costo: precioCosto,
+  precio_venta: precioVenta,
+  precio_costo_usd: precioCostoUsd,
+  precio_venta_usd: precioVentaUsd,
+  stock_actual: parseInt(formData.stock_actual) || 0,
+  stock_minimo: parseInt(formData.stock_minimo) || 5,
+  unidad_medida: formData.unidad_medida,
+  requiere_mantenimiento: formData.requiere_mantenimiento,
+  ciclo_mantenimiento_meses: formData.requiere_mantenimiento 
+    ? parseInt(formData.ciclo_mantenimiento_meses) || 6 
+    : null,
+  activo: true
+  }
 
       if (editingProducto) {
         const { error } = await supabase
@@ -341,22 +351,24 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
     }
   }
 
-  const handleEdit = (producto: Producto) => {
-    setEditingProducto(producto)
-    setFormData({
-      nombre: producto.nombre,
-      descripcion: producto.descripcion || "",
-      sku: producto.sku || "",
-      moneda: (producto.moneda || "PYG") as "USD" | "PYG",
-      precio_costo_usd: producto.precio_costo_usd?.toString() || "",
-      precio_venta_usd: producto.precio_venta_usd?.toString() || "",
-      precio_costo: producto.precio_costo.toString(),
-      precio_venta: producto.precio_venta.toString(),
-      stock_actual: producto.stock_actual.toString(),
-      stock_minimo: producto.stock_minimo.toString(),
-      unidad_medida: producto.unidad_medida
-    })
-    setDialogOpen(true)
+const handleEdit = (producto: Producto) => {
+  setEditingProducto(producto)
+  setFormData({
+  nombre: producto.nombre,
+  descripcion: producto.descripcion || "",
+  sku: producto.sku || "",
+  moneda: (producto.moneda || "PYG") as "USD" | "PYG",
+  precio_costo_usd: producto.precio_costo_usd?.toString() || "",
+  precio_venta_usd: producto.precio_venta_usd?.toString() || "",
+  precio_costo: producto.precio_costo.toString(),
+  precio_venta: producto.precio_venta.toString(),
+  stock_actual: producto.stock_actual.toString(),
+  stock_minimo: producto.stock_minimo.toString(),
+  unidad_medida: producto.unidad_medida,
+  requiere_mantenimiento: producto.requiere_mantenimiento || false,
+  ciclo_mantenimiento_meses: producto.ciclo_mantenimiento_meses?.toString() || "6"
+  })
+  setDialogOpen(true)
   }
 
   const handleDelete = async (id: string) => {
@@ -381,21 +393,23 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
     }
   }
 
-  const resetForm = () => {
-    setEditingProducto(null)
-    setFormData({
-      nombre: "",
-      descripcion: "",
-      sku: "",
-      moneda: "USD",
-      precio_costo_usd: "",
-      precio_venta_usd: "",
-      precio_costo: "",
-      precio_venta: "",
-      stock_actual: "",
-      stock_minimo: "5",
-      unidad_medida: "unidad"
-    })
+const resetForm = () => {
+  setEditingProducto(null)
+  setFormData({
+  nombre: "",
+  descripcion: "",
+  sku: "",
+  moneda: "USD",
+  precio_costo_usd: "",
+  precio_venta_usd: "",
+  precio_costo: "",
+  precio_venta: "",
+  stock_actual: "",
+  stock_minimo: "5",
+  unidad_medida: "unidad",
+  requiere_mantenimiento: false,
+  ciclo_mantenimiento_meses: "6"
+  })
   }
 
   const formatCurrency = (value: number) => {
@@ -840,6 +854,46 @@ export function InventarioCRMManager({ perfilId }: InventarioCRMManagerProps) {
                           onChange={(e) => setFormData({ ...formData, stock_minimo: e.target.value })}
                         />
                       </div>
+                    </div>
+
+                    {/* Seccion Mantenimiento */}
+                    <div className="p-3 bg-orange-50 dark:bg-orange-950/30 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Wrench className="h-4 w-4 text-orange-600" />
+                          <Label className="text-orange-700 dark:text-orange-400 font-medium">
+                            Requiere Mantenimiento
+                          </Label>
+                        </div>
+                        <Checkbox
+                          checked={formData.requiere_mantenimiento}
+                          onCheckedChange={(checked) => setFormData({ 
+                            ...formData, 
+                            requiere_mantenimiento: !!checked 
+                          })}
+                        />
+                      </div>
+                      {formData.requiere_mantenimiento && (
+                        <div className="space-y-2">
+                          <Label className="text-slate-700 dark:text-slate-200 text-sm">
+                            Ciclo de mantenimiento (meses)
+                          </Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={formData.ciclo_mantenimiento_meses}
+                            onChange={(e) => setFormData({ 
+                              ...formData, 
+                              ciclo_mantenimiento_meses: e.target.value 
+                            })}
+                            placeholder="6"
+                            className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                          />
+                          <p className="text-xs text-orange-600 dark:text-orange-400">
+                            Se creara un seguimiento de mantenimiento cada {formData.ciclo_mantenimiento_meses || 6} meses
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <DialogFooter>
