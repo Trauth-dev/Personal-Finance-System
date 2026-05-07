@@ -4,6 +4,7 @@ import { UserPlus, CalendarClock, ShoppingCart, Clock, Kanban } from "lucide-rea
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { CRMMetricsDashboard } from "@/components/crm/crm-metrics-dashboard"
+import { CalendarioUnificadoCRM } from "@/components/crm/calendario-unificado-crm"
 
 export default async function DashboardCRMPage() {
   const supabase = await createClient()
@@ -46,6 +47,9 @@ export default async function DashboardCRMPage() {
       <DashboardHeader title="Dashboard CRM" description="Metricas y KPIs de tu gestion comercial" />
 
       <div className="p-4 md:p-6 space-y-6">
+        {/* Calendario Unificado CRM - Vista principal de la agenda */}
+        <CalendarioUnificadoCRM perfilId={perfilCRM.id} />
+
         {/* Accesos rapidos */}
         <Card className="border-2 border-slate-200 dark:border-slate-700">
           <CardHeader className="pb-3">
