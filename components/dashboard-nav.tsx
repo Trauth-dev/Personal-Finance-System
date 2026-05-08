@@ -38,6 +38,7 @@ import {
   Handshake,
   XCircle,
   Kanban,
+  Snowflake,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -88,6 +89,11 @@ const navItemsPersonal = [
     title: "Deudas",
     href: "/dashboard/personal/deudas",
     icon: CreditCard,
+  },
+  {
+    title: "Plan Anti-Deudas",
+    href: "/dashboard/personal/plan-anti-deudas",
+    icon: Snowflake,
   },
   {
     title: "Historial",
