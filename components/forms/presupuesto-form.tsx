@@ -2,15 +2,16 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp } from 'lucide-react'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, Edit2 } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
@@ -30,16 +31,41 @@ const MESES = [
 ]
 
 const CATEGORIAS_CONFIG = [
-  { key: 'pct_donacion', label: 'Donación', icon: Heart, color: 'text-pink-600', default: 0 },
-  { key: 'pct_ahorro_2025', label: 'Ahorro 2025', icon: PiggyBank, color: 'text-green-600', default: 10 },
-  { key: 'pct_gastos_varios', label: 'Gastos Varios', icon: ShoppingBag, color: 'text-blue-600', default: 20 },
-  { key: 'pct_gastos_vivienda', label: 'Gastos Vivienda', icon: Home, color: 'text-orange-600', default: 30 },
-  { key: 'pct_pago_deudas', label: 'Pago Deudas', icon: CreditCard, color: 'text-red-600', default: 20 },
-  { key: 'pct_disfrute', label: 'Disfrute', icon: Smile, color: 'text-yellow-600', default: 20 },
-  { key: 'pct_educacion', label: 'Educación', icon: GraduationCap, color: 'text-indigo-600', default: 0 },
-  { key: 'pct_suenos', label: 'Sueños', icon: Star, color: 'text-purple-600', default: 0 },
-  { key: 'pct_libertad_financiera', label: 'Libertad Financiera', icon: TrendingUp, color: 'text-cyan-600', default: 0 },
+  { key: 'pct_donacion', label: 'Donacion', icon: Heart, color: 'text-pink-500', bgColor: 'bg-pink-500/10', borderColor: 'border-pink-500/30' },
+  { key: 'pct_ahorro_2025', label: 'Ahorro 2025', icon: PiggyBank, color: 'text-green-500', bgColor: 'bg-green-500/10', borderColor: 'border-green-500/30' },
+  { key: 'pct_gastos_varios', label: 'Gastos Varios', icon: ShoppingBag, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30' },
+  { key: 'pct_gastos_vivienda', label: 'Gastos Vivienda', icon: Home, color: 'text-orange-500', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30' },
+  { key: 'pct_pago_deudas', label: 'Pago Deudas', icon: CreditCard, color: 'text-red-500', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30' },
+  { key: 'pct_disfrute', label: 'Disfrute', icon: Smile, color: 'text-yellow-500', bgColor: 'bg-yellow-500/10', borderColor: 'border-yellow-500/30' },
+  { key: 'pct_educacion', label: 'Educacion', icon: GraduationCap, color: 'text-indigo-500', bgColor: 'bg-indigo-500/10', borderColor: 'border-indigo-500/30' },
+  { key: 'pct_suenos', label: 'Suenos', icon: Star, color: 'text-purple-500', bgColor: 'bg-purple-500/10', borderColor: 'border-purple-500/30' },
+  { key: 'pct_libertad_financiera', label: 'Libertad Financiera', icon: TrendingUp, color: 'text-cyan-500', bgColor: 'bg-cyan-500/10', borderColor: 'border-cyan-500/30' },
 ]
+
+// Mapeo de categoría a tipo_categoria_id (se cargará dinámicamente)
+const CATEGORIA_TO_TIPO: Record<string, string> = {
+  'pct_donacion': 'Donacion',
+  'pct_ahorro_2025': 'Ahorro',
+  'pct_gastos_varios': 'Gastos Varios',
+  'pct_gastos_vivienda': 'Gastos Vivienda',
+  'pct_pago_deudas': 'Pago Deudas',
+  'pct_disfrute': 'Disfrute',
+  'pct_educacion': 'Educacion',
+  'pct_suenos': 'Suenos',
+  'pct_libertad_financiera': 'Libertad Financiera',
+}
+
+interface SubcategoriaItem {
+  id: string
+  nombre: string
+  monto: number
+  isNew?: boolean
+}
+
+interface CategoriaData {
+  subcategorias: SubcategoriaItem[]
+  total: number
+}
 
 export function PresupuestoForm() {
   const { perfilActual } = usePerfil()
@@ -47,13 +73,124 @@ export function PresupuestoForm() {
   const [presupuesto, setPresupuesto] = useState("")
   const [mesSeleccionado, setMesSeleccionado] = useState(todayStr.slice(5, 7))
   const [anioSeleccionado, setAnioSeleccionado] = useState(todayStr.slice(0, 4))
-  const [porcentajes, setPorcentajes] = useState<Record<string, number>>(
-    CATEGORIAS_CONFIG.reduce((acc, cat) => ({ ...acc, [cat.key]: cat.default }), {})
-  )
+  const [categoriasData, setCategoriasData] = useState<Record<string, CategoriaData>>({})
+  const [tiposCategoriaMap, setTiposCategoriaMap] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingData, setIsLoadingData] = useState(true)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [editingItem, setEditingItem] = useState<{ categoria: string; id: string } | null>(null)
+  const [newItemName, setNewItemName] = useState("")
+  const [addingToCategoria, setAddingToCategoria] = useState<string | null>(null)
   const router = useRouter()
+  const supabase = createClient()
+
+  // Cargar tipos de categoría y subcategorías del usuario
+  const loadUserData = useCallback(async () => {
+    if (!perfilActual?.id) return
+
+    setIsLoadingData(true)
+
+    try {
+      // 1. Cargar tipos de categoría de egreso del usuario
+      const { data: tiposData } = await supabase
+        .from("tipos_categoria_egreso")
+        .select("id, nombre")
+        .eq("perfil_id", perfilActual.id)
+
+      // Crear mapa de nombre a ID
+      const tiposMap: Record<string, string> = {}
+      tiposData?.forEach(tipo => {
+        tiposMap[tipo.nombre] = tipo.id
+      })
+      setTiposCategoriaMap(tiposMap)
+
+      // 2. Cargar categorías de egreso (subcategorías) del usuario
+      const { data: categoriasEgreso } = await supabase
+        .from("categorias_egreso")
+        .select("id, nombre, tipo_categoria_id")
+        .eq("perfil_id", perfilActual.id)
+
+      // 3. Cargar presupuesto existente para el mes seleccionado
+      const primerDiaMes = `${anioSeleccionado}-${mesSeleccionado}-01`
+      const { data: presupuestoExistente } = await supabase
+        .from("presupuesto_mensual")
+        .select("*")
+        .eq("perfil_id", perfilActual.id)
+        .eq("fecha", primerDiaMes)
+        .single()
+
+      // 4. Cargar items de presupuesto detallado si existe
+      const { data: itemsPresupuesto } = await supabase
+        .from("presupuesto_categorias")
+        .select("*")
+        .eq("perfil_id", perfilActual.id)
+        .eq("mes", primerDiaMes)
+
+      // Inicializar estructura de datos por categoría
+      const initialData: Record<string, CategoriaData> = {}
+      
+      CATEGORIAS_CONFIG.forEach(cat => {
+        initialData[cat.key] = {
+          subcategorias: [],
+          total: 0
+        }
+      })
+
+      // Si hay items de presupuesto guardados, usarlos
+      if (itemsPresupuesto && itemsPresupuesto.length > 0) {
+        itemsPresupuesto.forEach(item => {
+          // Encontrar a qué categoría pertenece
+          const categoriaKey = Object.entries(CATEGORIA_TO_TIPO).find(
+            ([, tipoNombre]) => tipoNombre === item.tipo_categoria
+          )?.[0]
+
+          if (categoriaKey && initialData[categoriaKey]) {
+            initialData[categoriaKey].subcategorias.push({
+              id: item.id,
+              nombre: item.categoria,
+              monto: Number(item.monto_presupuestado) || 0
+            })
+            initialData[categoriaKey].total += Number(item.monto_presupuestado) || 0
+          }
+        })
+      } else {
+        // Si no hay items guardados, cargar las subcategorías del usuario sin montos
+        categoriasEgreso?.forEach(catEgreso => {
+          // Buscar el tipo de categoría
+          const tipoId = catEgreso.tipo_categoria_id
+          const tipoNombre = tiposData?.find(t => t.id === tipoId)?.nombre
+
+          if (tipoNombre) {
+            // Encontrar a qué categoría de presupuesto pertenece
+            const categoriaKey = Object.entries(CATEGORIA_TO_TIPO).find(
+              ([, nombre]) => nombre === tipoNombre
+            )?.[0]
+
+            if (categoriaKey && initialData[categoriaKey]) {
+              initialData[categoriaKey].subcategorias.push({
+                id: catEgreso.id,
+                nombre: catEgreso.nombre,
+                monto: 0
+              })
+            }
+          }
+        })
+      }
+
+      setCategoriasData(initialData)
+
+      // Cargar presupuesto total si existe
+      if (presupuestoExistente) {
+        setPresupuesto(String(presupuestoExistente.meta_salario || ""))
+      }
+
+    } catch (err) {
+      console.error("Error loading user data:", err)
+    } finally {
+      setIsLoadingData(false)
+    }
+  }, [perfilActual?.id, mesSeleccionado, anioSeleccionado, supabase])
 
   useEffect(() => {
     const hoy = getTodayDate()
@@ -61,20 +198,85 @@ export function PresupuestoForm() {
     setAnioSeleccionado(hoy.slice(0, 4))
   }, [])
 
-  // Construir fecha en formato YYYY-MM-DD (primer día del mes)
-  const fecha = `${anioSeleccionado}-${mesSeleccionado}-01`
+  useEffect(() => {
+    if (perfilActual?.id) {
+      loadUserData()
+    }
+  }, [perfilActual?.id, mesSeleccionado, anioSeleccionado, loadUserData])
 
   // Generar opciones de año (actual y +-2)
   const anioActual = parseInt(todayStr.slice(0, 4))
   const aniosDisponibles = Array.from({ length: 5 }, (_, i) => String(anioActual - 2 + i))
 
-  const totalPorcentajes = Object.values(porcentajes).reduce((sum, val) => sum + val, 0)
+  // Calcular totales
+  const totalAsignado = Object.values(categoriasData).reduce((sum, cat) => sum + cat.total, 0)
+  const presupuestoNum = Number(presupuesto) || 0
+  const porcentajeTotal = presupuestoNum > 0 ? (totalAsignado / presupuestoNum) * 100 : 0
 
-  const handlePorcentajeChange = (key: string, value: string) => {
-    const num = parseFloat(value) || 0
-    if (num >= 0 && num <= 100) {
-      setPorcentajes(prev => ({ ...prev, [key]: num }))
-    }
+  // Manejar cambio de monto en subcategoría
+  const handleMontoChange = (categoriaKey: string, itemId: string, newMonto: string) => {
+    const montoNum = Number(newMonto.replace(/[^0-9]/g, "")) || 0
+    
+    setCategoriasData(prev => {
+      const categoria = prev[categoriaKey]
+      if (!categoria) return prev
+
+      const updatedSubcategorias = categoria.subcategorias.map(sub => 
+        sub.id === itemId ? { ...sub, monto: montoNum } : sub
+      )
+      
+      const newTotal = updatedSubcategorias.reduce((sum, sub) => sum + sub.monto, 0)
+
+      return {
+        ...prev,
+        [categoriaKey]: {
+          subcategorias: updatedSubcategorias,
+          total: newTotal
+        }
+      }
+    })
+  }
+
+  // Agregar nueva subcategoría
+  const handleAddSubcategoria = (categoriaKey: string) => {
+    if (!newItemName.trim()) return
+
+    const newId = `new_${Date.now()}`
+    
+    setCategoriasData(prev => {
+      const categoria = prev[categoriaKey]
+      if (!categoria) return prev
+
+      return {
+        ...prev,
+        [categoriaKey]: {
+          subcategorias: [...categoria.subcategorias, { id: newId, nombre: newItemName.trim(), monto: 0, isNew: true }],
+          total: categoria.total
+        }
+      }
+    })
+
+    setNewItemName("")
+    setAddingToCategoria(null)
+  }
+
+  // Eliminar subcategoría
+  const handleDeleteSubcategoria = (categoriaKey: string, itemId: string) => {
+    setCategoriasData(prev => {
+      const categoria = prev[categoriaKey]
+      if (!categoria) return prev
+
+      const updatedSubcategorias = categoria.subcategorias.filter(sub => sub.id !== itemId)
+      const newTotal = updatedSubcategorias.reduce((sum, sub) => sum + sub.monto, 0)
+
+      return {
+        ...prev,
+        [categoriaKey]: {
+          subcategorias: updatedSubcategorias,
+          total: newTotal
+        }
+      }
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -85,8 +287,8 @@ export function PresupuestoForm() {
       return
     }
 
-    if (Math.abs(totalPorcentajes - 100) > 0.01) {
-      setError(`El total de porcentajes debe sumar 100% (actual: ${totalPorcentajes.toFixed(1)}%)`)
+    if (!presupuesto || presupuestoNum <= 0) {
+      setError("Ingresa un presupuesto mensual valido.")
       return
     }
 
@@ -94,77 +296,145 @@ export function PresupuestoForm() {
     setError(null)
     setSuccess(false)
 
-    const supabase = createClient()
-
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       
       if (userError) throw userError
       if (!user) throw new Error("Usuario no autenticado")
 
-      const porcentajesDecimales = Object.fromEntries(
-        Object.entries(porcentajes).map(([key, value]) => [key, value / 100])
-      )
+      const primerDiaMes = `${anioSeleccionado}-${mesSeleccionado}-01`
 
-      // fecha ya es el primer día del mes (YYYY-MM-01)
-      const primerDiaMes = fecha
-      const anio = parseInt(anioSeleccionado)
-      const mes = parseInt(mesSeleccionado)
-      const ultimoDiaMes = new Date(anio, mes, 0)
-      const ultimoDiaStr = `${anioSeleccionado}-${mesSeleccionado}-${String(ultimoDiaMes.getDate()).padStart(2, "0")}`
+      // Calcular porcentajes basados en los montos
+      const porcentajes: Record<string, number> = {}
+      CATEGORIAS_CONFIG.forEach(cat => {
+        const catData = categoriasData[cat.key]
+        porcentajes[cat.key] = presupuestoNum > 0 ? catData.total / presupuestoNum : 0
+      })
 
-      const dataToUpsert = {
-        user_id: user.id,
-        perfil_id: perfilActual.id,
-        meta_salario: Number.parseFloat(presupuesto),
-        fecha: primerDiaMes,
-        ...porcentajesDecimales
-      }
-
-      // Primero buscar si ya existe un presupuesto para este mes
+      // 1. Guardar/actualizar presupuesto mensual
       const { data: existente } = await supabase
         .from("presupuesto_mensual")
         .select("id")
         .eq("perfil_id", perfilActual.id)
-        .gte("fecha", primerDiaMes)
-        .lte("fecha", ultimoDiaStr)
-        .limit(1)
+        .eq("fecha", primerDiaMes)
+        .single()
 
-      let data, upsertError
-      if (existente && existente.length > 0) {
-        // Actualizar el registro existente
-        const result = await supabase
-          .from("presupuesto_mensual")
-          .update({
-            meta_salario: Number.parseFloat(presupuesto),
-            fecha: primerDiaMes,
-            ...porcentajesDecimales
-          })
-          .eq("id", existente[0].id)
-          .select()
-        data = result.data
-        upsertError = result.error
-      } else {
-        // Insertar nuevo registro
-        const result = await supabase
-          .from("presupuesto_mensual")
-          .insert(dataToUpsert)
-          .select()
-        data = result.data
-        upsertError = result.error
+      const presupuestoData = {
+        user_id: user.id,
+        perfil_id: perfilActual.id,
+        meta_salario: presupuestoNum,
+        fecha: primerDiaMes,
+        ...porcentajes
       }
 
-      if (upsertError) throw upsertError
+      if (existente) {
+        await supabase
+          .from("presupuesto_mensual")
+          .update(presupuestoData)
+          .eq("id", existente.id)
+      } else {
+        await supabase
+          .from("presupuesto_mensual")
+          .insert(presupuestoData)
+      }
+
+      // 2. Eliminar items de presupuesto anteriores para este mes
+      await supabase
+        .from("presupuesto_categorias")
+        .delete()
+        .eq("perfil_id", perfilActual.id)
+        .eq("mes", primerDiaMes)
+
+      // 3. Insertar nuevos items de presupuesto detallado
+      const itemsToInsert: Array<{
+        perfil_id: string
+        tipo_categoria: string
+        categoria: string
+        monto_presupuestado: number
+        mes: string
+      }> = []
+
+      Object.entries(categoriasData).forEach(([categoriaKey, data]) => {
+        const tipoCategoria = CATEGORIA_TO_TIPO[categoriaKey]
+        
+        data.subcategorias.forEach(sub => {
+          if (sub.monto > 0 || sub.nombre.trim()) {
+            itemsToInsert.push({
+              perfil_id: perfilActual.id,
+              tipo_categoria: tipoCategoria,
+              categoria: sub.nombre,
+              monto_presupuestado: sub.monto,
+              mes: primerDiaMes
+            })
+          }
+        })
+      })
+
+      if (itemsToInsert.length > 0) {
+        const { error: insertError } = await supabase
+          .from("presupuesto_categorias")
+          .insert(itemsToInsert)
+
+        if (insertError) throw insertError
+      }
+
+      // 4. Crear categorías de egreso nuevas si no existen
+      for (const [categoriaKey, data] of Object.entries(categoriasData)) {
+        const tipoNombre = CATEGORIA_TO_TIPO[categoriaKey]
+        
+        for (const sub of data.subcategorias) {
+          if (sub.isNew && sub.nombre.trim()) {
+            // Buscar o crear el tipo de categoría
+            let tipoId = tiposCategoriaMap[tipoNombre]
+            
+            if (!tipoId) {
+              const { data: newTipo } = await supabase
+                .from("tipos_categoria_egreso")
+                .insert({
+                  user_id: user.id,
+                  perfil_id: perfilActual.id,
+                  nombre: tipoNombre,
+                  color: CATEGORIAS_CONFIG.find(c => c.key === categoriaKey)?.color || 'text-gray-500'
+                })
+                .select("id")
+                .single()
+              
+              if (newTipo) {
+                tipoId = newTipo.id
+                setTiposCategoriaMap(prev => ({ ...prev, [tipoNombre]: tipoId }))
+              }
+            }
+
+            if (tipoId) {
+              // Verificar si ya existe la categoría de egreso
+              const { data: existingCat } = await supabase
+                .from("categorias_egreso")
+                .select("id")
+                .eq("perfil_id", perfilActual.id)
+                .eq("nombre", sub.nombre)
+                .eq("tipo_categoria_id", tipoId)
+                .single()
+
+              if (!existingCat) {
+                await supabase
+                  .from("categorias_egreso")
+                  .insert({
+                    user_id: user.id,
+                    perfil_id: perfilActual.id,
+                    nombre: sub.nombre,
+                    tipo_categoria_id: tipoId
+                  })
+              }
+            }
+          }
+        }
+      }
 
       setSuccess(true)
-      setPresupuesto("")
-      const hoyReset = getTodayDate()
-      setMesSeleccionado(hoyReset.slice(5, 7))
-      setAnioSeleccionado(hoyReset.slice(0, 4))
-      setPorcentajes(CATEGORIAS_CONFIG.reduce((acc, cat) => ({ ...acc, [cat.key]: cat.default }), {}))
 
       setTimeout(() => {
         router.refresh()
+        loadUserData()
       }, 1500)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al registrar presupuesto")
@@ -175,7 +445,7 @@ export function PresupuestoForm() {
 
   if (!perfilActual) {
     return (
-      <Card className="max-w-4xl mx-auto glass-effect border-border/50">
+      <Card className="max-w-6xl mx-auto glass-effect border-border/50">
         <CardContent className="py-12 text-center text-muted-foreground">
           <AlertCircle className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
           <p>Cargando perfil...</p>
@@ -185,18 +455,19 @@ export function PresupuestoForm() {
   }
 
   return (
-    <Card className="max-w-4xl mx-auto glass-effect border-border/50">
+    <Card className="max-w-6xl mx-auto glass-effect border-border/50">
       <CardHeader>
         <CardTitle className="text-2xl">Establecer Presupuesto Mensual</CardTitle>
-        <CardDescription>Define tu presupuesto mensual y distribúyelo por categorías en {perfilActual.nombre}</CardDescription>
+        <CardDescription>Define tu presupuesto mensual y distribuyelo por categorias en {perfilActual.nombre}</CardDescription>
       </CardHeader>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="grid gap-6 md:grid-cols-2">
+          {/* Presupuesto y Mes */}
+          <div className="grid gap-6 md:grid-cols-3">
             <div className="space-y-2">
               <Label htmlFor="presupuesto" className="flex items-center gap-2">
                 <DollarSign className="w-4 h-4" />
-                Presupuesto Mensual (Guaraníes)
+                Presupuesto Mensual (Guaranies)
               </Label>
               <Input
                 id="presupuesto"
@@ -213,7 +484,7 @@ export function PresupuestoForm() {
                 className="bg-background/50"
               />
               {presupuesto && (
-                <p className="text-sm text-muted-foreground">{formatGuaranies(Number.parseFloat(presupuesto) || 0)}</p>
+                <p className="text-sm text-muted-foreground">{formatGuaranies(presupuestoNum)}</p>
               )}
             </div>
 
@@ -222,81 +493,167 @@ export function PresupuestoForm() {
                 <Calendar className="w-4 h-4" />
                 Mes del Presupuesto
               </Label>
-              <div className="grid grid-cols-2 gap-2">
-                <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Mes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MESES.map((mes) => (
-                      <SelectItem key={mes.value} value={mes.value}>
-                        {mes.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select value={anioSeleccionado} onValueChange={setAnioSeleccionado}>
-                  <SelectTrigger className="bg-background/50">
-                    <SelectValue placeholder="Año" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {aniosDisponibles.map((anio) => (
-                      <SelectItem key={anio} value={anio}>
-                        {anio}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Select value={mesSeleccionado} onValueChange={setMesSeleccionado}>
+                <SelectTrigger className="bg-background/50">
+                  <SelectValue placeholder="Mes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MESES.map((mes) => (
+                    <SelectItem key={mes.value} value={mes.value}>
+                      {mes.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Ano</Label>
+              <Select value={anioSeleccionado} onValueChange={setAnioSeleccionado}>
+                <SelectTrigger className="bg-background/50">
+                  <SelectValue placeholder="Ano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {aniosDisponibles.map((anio) => (
+                    <SelectItem key={anio} value={anio}>
+                      {anio}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
+          {/* Distribución por Categorías */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b pb-2">
-              <Label className="text-lg font-semibold">Distribución por Categorías</Label>
-              <div className={`text-lg font-bold ${Math.abs(totalPorcentajes - 100) < 0.01 ? 'text-green-600' : 'text-red-600'}`}>
-                Total: {totalPorcentajes.toFixed(1)}%
+              <Label className="text-lg font-semibold">Distribucion por Categorias</Label>
+              <div className={`text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
+                Total: {formatGuaranies(totalAsignado)} ({porcentajeTotal.toFixed(1)}%)
               </div>
             </div>
-            
-            <div className="grid gap-4 md:grid-cols-3">
-              {CATEGORIAS_CONFIG.map((categoria) => {
-                const Icon = categoria.icon
-                const montoAsignado = presupuesto ? (Number.parseFloat(presupuesto) * porcentajes[categoria.key] / 100) : 0
-                
-                return (
-                  <div key={categoria.key} className="space-y-2 p-3 rounded-lg border bg-card">
-                    <Label className={`flex items-center gap-2 ${categoria.color}`}>
-                      <Icon className="w-4 h-4" />
-                      {categoria.label}
-                    </Label>
-                    <div className="flex items-center gap-2">
-                      <Input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        value={porcentajes[categoria.key]}
-                        onChange={(e) => handlePorcentajeChange(categoria.key, e.target.value)}
-                        className="text-right"
-                      />
-                      <span className="text-sm font-medium">%</span>
-                    </div>
-                    {presupuesto && porcentajes[categoria.key] > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        {formatGuaranies(montoAsignado)}
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
 
-            {Math.abs(totalPorcentajes - 100) > 0.01 && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
-                <AlertCircle className="w-4 h-4 text-amber-600" />
-                <p className="text-sm text-amber-800">
-                  El total debe sumar exactamente 100%. {totalPorcentajes < 100 ? `Faltan ${(100 - totalPorcentajes).toFixed(1)}%` : `Sobran ${(totalPorcentajes - 100).toFixed(1)}%`}
+            {isLoadingData ? (
+              <div className="text-center py-8 text-muted-foreground">
+                Cargando categorias...
+              </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-3">
+                {CATEGORIAS_CONFIG.map((categoria) => {
+                  const Icon = categoria.icon
+                  const catData = categoriasData[categoria.key] || { subcategorias: [], total: 0 }
+                  const porcentajeCategoria = presupuestoNum > 0 ? (catData.total / presupuestoNum) * 100 : 0
+                  
+                  return (
+                    <Card key={categoria.key} className={`${categoria.bgColor} ${categoria.borderColor} border`}>
+                      <CardHeader className="pb-2 pt-3 px-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Icon className={`w-4 h-4 ${categoria.color}`} />
+                            <span className={`font-semibold ${categoria.color}`}>{categoria.label}</span>
+                          </div>
+                          <span className="text-sm font-medium text-foreground">
+                            {formatGuaranies(catData.total)} ({porcentajeCategoria.toFixed(1)}%)
+                          </span>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="px-4 pb-3 space-y-2">
+                        {/* Lista de subcategorías */}
+                        {catData.subcategorias.map((sub) => (
+                          <div key={sub.id} className="flex items-center justify-between gap-2 py-1">
+                            <span className="text-sm text-foreground truncate flex-1">{sub.nombre}</span>
+                            <div className="flex items-center gap-1">
+                              <Input
+                                type="text"
+                                inputMode="numeric"
+                                value={sub.monto > 0 ? sub.monto.toLocaleString('es-PY') : ""}
+                                onChange={(e) => handleMontoChange(categoria.key, sub.id, e.target.value)}
+                                placeholder="0"
+                                className="w-28 h-7 text-right text-sm bg-background/50"
+                              />
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem 
+                                    className="text-destructive"
+                                    onClick={() => handleDeleteSubcategoria(categoria.key, sub.id)}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Eliminar
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Agregar nueva subcategoría */}
+                        {addingToCategoria === categoria.key ? (
+                          <div className="flex items-center gap-2 pt-2">
+                            <Input
+                              type="text"
+                              value={newItemName}
+                              onChange={(e) => setNewItemName(e.target.value)}
+                              placeholder="Nombre..."
+                              className="h-8 text-sm bg-background/50 flex-1"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault()
+                                  handleAddSubcategoria(categoria.key)
+                                } else if (e.key === 'Escape') {
+                                  setAddingToCategoria(null)
+                                  setNewItemName("")
+                                }
+                              }}
+                            />
+                            <Button 
+                              type="button"
+                              size="sm" 
+                              variant="secondary"
+                              className="h-8"
+                              onClick={() => handleAddSubcategoria(categoria.key)}
+                            >
+                              Agregar
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full mt-2 text-muted-foreground hover:text-foreground"
+                            onClick={() => setAddingToCategoria(categoria.key)}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Agregar
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+
+            {presupuestoNum > 0 && totalAsignado > presupuestoNum && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                <AlertCircle className="w-4 h-4 text-red-500" />
+                <p className="text-sm text-red-500">
+                  Has excedido el presupuesto por {formatGuaranies(totalAsignado - presupuestoNum)}
+                </p>
+              </div>
+            )}
+
+            {presupuestoNum > 0 && totalAsignado < presupuestoNum && totalAsignado > 0 && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                <AlertCircle className="w-4 h-4 text-amber-500" />
+                <p className="text-sm text-amber-500">
+                  Te faltan {formatGuaranies(presupuestoNum - totalAsignado)} por asignar ({(100 - porcentajeTotal).toFixed(1)}%)
                 </p>
               </div>
             )}
@@ -316,7 +673,7 @@ export function PresupuestoForm() {
             </div>
           )}
 
-          <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700 text-white" disabled={isLoading || Math.abs(totalPorcentajes - 100) > 0.01}>
+          <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700 text-white" disabled={isLoading || !presupuesto}>
             {isLoading ? "Registrando..." : "Establecer Presupuesto"}
           </Button>
         </form>
