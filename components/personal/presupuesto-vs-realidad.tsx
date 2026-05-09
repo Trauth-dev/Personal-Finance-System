@@ -58,7 +58,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     const primerDia = new Date(year, month - 1, 1).toISOString().split("T")[0]
     const ultimoDia = new Date(year, month, 0).toISOString().split("T")[0]
 
-    // Fetch presupuesto_mensual with all pct_* fields
+    // Fetch presupuesto_mensual
     const { data: presupuestoMensual } = await supabase
       .from("presupuesto_mensual")
       .select("*")
@@ -73,6 +73,35 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
       .select("id, nombre")
       .eq("perfil_id", perfilId)
 
+    // Obtener montos exactos desde presupuesto_categorias
+    const { data: presupuestoCategorias } = await supabase
+      .from("presupuesto_categorias")
+      .select("categoria, monto_presupuestado")
+      .eq("perfil_id", perfilId)
+      .gte("mes", primerDia)
+      .lte("mes", ultimoDia)
+
+    // Obtener relación categorias_egreso -> tipos_categoria_egreso
+    const { data: categoriasEgreso } = await supabase
+      .from("categorias_egreso")
+      .select("nombre, tipos_categoria_egreso!inner(nombre)")
+      .eq("perfil_id", perfilId)
+
+    // Crear mapa de subcategoría -> tipo principal
+    const subcategoriaToTipo: Record<string, string> = {}
+    categoriasEgreso?.forEach((ce: any) => {
+      subcategoriaToTipo[ce.nombre] = ce.tipos_categoria_egreso?.nombre || ""
+    })
+
+    // Sumar montos por tipo de categoría desde presupuesto_categorias
+    const montosPorTipo: Record<string, number> = {}
+    presupuestoCategorias?.forEach((pc: any) => {
+      const tipoPrincipal = subcategoriaToTipo[pc.categoria]
+      if (tipoPrincipal) {
+        montosPorTipo[tipoPrincipal] = (montosPorTipo[tipoPrincipal] || 0) + Number(pc.monto_presupuestado || 0)
+      }
+    })
+
     const { data: egresos } = await supabase
       .from("egresos")
       .select("monto, tipo_categoria_id, tipo_categoria:tipos_categoria_egreso(nombre)")
@@ -82,21 +111,6 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
 
     const presupuesto = presupuestoMensual?.[0]
     const metaSalario = Number(presupuesto?.meta_salario || 0)
-
-    // Map category names to their pct_* column in presupuesto_mensual
-    // The form saves percentages as decimals (e.g., 68.6% -> 0.686)
-    // So the budget per category = metaSalario * decimal_value (NOT / 100)
-    const categoriasPctMap: Record<string, string> = {
-      "Donación": "pct_donacion",
-      "Ahorro 2025": "pct_ahorro_2025",
-      "Gastos Varios": "pct_gastos_varios",
-      "Gastos Vivienda": "pct_gastos_vivienda",
-      "Pago Deudas": "pct_pago_deudas",
-      "Disfrute": "pct_disfrute",
-      "Educación": "pct_educacion",
-      "Sueños": "pct_suenos",
-      "Libertad Financiera": "pct_libertad_financiera",
-    }
 
     const gastosMap = new Map<string, number>()
     egresos?.forEach((e: any) => {
@@ -111,10 +125,8 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
 
     if (tiposCategorias) {
       for (const tipo of tiposCategorias) {
-        const pctField = categoriasPctMap[tipo.nombre]
-        // pct values are stored as decimals (0.686 = 68.6%), so multiply directly
-        const porcentajeDecimal = presupuesto && pctField ? Number((presupuesto as any)[pctField] || 0) : 0
-        const montoPresupuestado = metaSalario * porcentajeDecimal
+        // Usar monto exacto desde presupuesto_categorias
+        const montoPresupuestado = montosPorTipo[tipo.nombre] || 0
         const montoGastado = gastosMap.get(tipo.nombre) || 0
         const diferencia = montoPresupuestado - montoGastado
         const porcentaje = montoPresupuestado > 0 ? (montoGastado / montoPresupuestado) * 100 : montoGastado > 0 ? 100 : 0

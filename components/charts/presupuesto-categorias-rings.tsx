@@ -20,7 +20,7 @@ export async function PresupuestoCategoriasRings({ perfilId, fechaInicio, fechaF
     ultimoDia = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split("T")[0]
   }
 
-  // Obtener presupuesto con porcentajes
+  // Obtener presupuesto mensual
   const { data: presupuestos } = await supabase
     .from("presupuesto_mensual")
     .select("*")
@@ -35,6 +35,36 @@ export async function PresupuestoCategoriasRings({ perfilId, fechaInicio, fechaF
   if (!presupuesto) {
     return null
   }
+
+  // Obtener montos exactos desde presupuesto_categorias
+  const { data: presupuestoCategorias } = await supabase
+    .from("presupuesto_categorias")
+    .select("categoria, monto_presupuestado")
+    .eq("perfil_id", perfilId)
+    .gte("mes", primerDia)
+    .lte("mes", ultimoDia)
+
+  // Agrupar montos por categoría de egreso (tipos_categoria_egreso)
+  // Primero obtener la relación categorias_egreso -> tipos_categoria_egreso
+  const { data: categoriasEgreso } = await supabase
+    .from("categorias_egreso")
+    .select("nombre, tipos_categoria_egreso!inner(nombre)")
+    .eq("perfil_id", perfilId)
+
+  // Crear mapa de subcategoría -> tipo principal
+  const subcategoriaToTipo: Record<string, string> = {}
+  categoriasEgreso?.forEach((ce: any) => {
+    subcategoriaToTipo[ce.nombre] = ce.tipos_categoria_egreso?.nombre || ""
+  })
+
+  // Sumar montos por tipo de categoría
+  const montosPorTipo: Record<string, number> = {}
+  presupuestoCategorias?.forEach((pc: any) => {
+    const tipoPrincipal = subcategoriaToTipo[pc.categoria]
+    if (tipoPrincipal) {
+      montosPorTipo[tipoPrincipal] = (montosPorTipo[tipoPrincipal] || 0) + Number(pc.monto_presupuestado || 0)
+    }
+  })
 
   // Obtener egresos agrupados por tipo de categoría
   const { data: egresos } = await supabase
@@ -58,54 +88,58 @@ export async function PresupuestoCategoriasRings({ perfilId, fechaInicio, fechaF
 
   const presupuestoTotal = Number(presupuesto.meta_salario)
 
-  // Mapear categorías con sus datos
+  // Mapear categorías con sus montos exactos desde presupuesto_categorias
   const categorias = [
     {
-      nombre: 'Donación',
-      porcentaje: Number(presupuesto.pct_donacion || 0),
-      gastado: gastosPorCategoria['Donación'] || 0,
+      nombre: 'Donacion',
+      monto: montosPorTipo['Donacion'] || 0,
+      gastado: gastosPorCategoria['Donacion'] || gastosPorCategoria['Donación'] || 0,
     },
     {
-      nombre: 'Ahorro 2025',
-      porcentaje: Number(presupuesto.pct_ahorro_2025 || 0),
-      gastado: gastosPorCategoria['Ahorro 2025'] || 0,
+      nombre: 'Ahorro',
+      monto: montosPorTipo['Ahorro'] || montosPorTipo['Ahorro 2025'] || 0,
+      gastado: gastosPorCategoria['Ahorro'] || gastosPorCategoria['Ahorro 2025'] || 0,
     },
     {
       nombre: 'Gastos Varios',
-      porcentaje: Number(presupuesto.pct_gastos_varios || 0),
+      monto: montosPorTipo['Gastos Varios'] || 0,
       gastado: gastosPorCategoria['Gastos Varios'] || 0,
     },
     {
       nombre: 'Gastos Vivienda',
-      porcentaje: Number(presupuesto.pct_gastos_vivienda || 0),
+      monto: montosPorTipo['Gastos Vivienda'] || 0,
       gastado: gastosPorCategoria['Gastos Vivienda'] || 0,
     },
     {
       nombre: 'Pago Deudas',
-      porcentaje: Number(presupuesto.pct_pago_deudas || 0),
+      monto: montosPorTipo['Pago Deudas'] || 0,
       gastado: gastosPorCategoria['Pago Deudas'] || 0,
     },
     {
       nombre: 'Disfrute',
-      porcentaje: Number(presupuesto.pct_disfrute || 0),
+      monto: montosPorTipo['Disfrute'] || 0,
       gastado: gastosPorCategoria['Disfrute'] || 0,
     },
     {
-      nombre: 'Educación',
-      porcentaje: Number(presupuesto.pct_educacion || 0),
-      gastado: gastosPorCategoria['Educación'] || 0,
+      nombre: 'Educacion',
+      monto: montosPorTipo['Educacion'] || montosPorTipo['Educación'] || 0,
+      gastado: gastosPorCategoria['Educacion'] || gastosPorCategoria['Educación'] || 0,
     },
     {
-      nombre: 'Sueños',
-      porcentaje: Number(presupuesto.pct_suenos || 0),
-      gastado: gastosPorCategoria['Sueños'] || 0,
+      nombre: 'Suenos',
+      monto: montosPorTipo['Suenos'] || montosPorTipo['Sueños'] || 0,
+      gastado: gastosPorCategoria['Suenos'] || gastosPorCategoria['Sueños'] || 0,
     },
     {
       nombre: 'Libertad Financiera',
-      porcentaje: Number(presupuesto.pct_libertad_financiera || 0),
+      monto: montosPorTipo['Libertad Financiera'] || 0,
       gastado: gastosPorCategoria['Libertad Financiera'] || 0,
     },
-  ].filter(cat => cat.porcentaje > 0) // Solo mostrar categorías con presupuesto asignado
+  ].filter(cat => cat.monto > 0) // Solo mostrar categorías con presupuesto asignado
+    .map(cat => ({
+      ...cat,
+      porcentaje: presupuestoTotal > 0 ? (cat.monto / presupuestoTotal) * 100 : 0
+    }))
 
   return <PresupuestoCategoriasRingsClient categorias={categorias} presupuestoTotal={presupuestoTotal} />
 }
