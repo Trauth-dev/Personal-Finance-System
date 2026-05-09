@@ -140,56 +140,40 @@ export function PresupuestoForm() {
         }
       })
 
-      // Si hay items de presupuesto guardados, usarlos
-      if (itemsPresupuesto && itemsPresupuesto.length > 0) {
-        itemsPresupuesto.forEach(item => {
-          // Encontrar a qué categoría pertenece
+      // Crear mapa de montos guardados por nombre de categoría
+      const montosGuardados: Record<string, number> = {}
+      itemsPresupuesto?.forEach(item => {
+        montosGuardados[item.categoria] = Number(item.monto_presupuestado) || 0
+      })
+
+      // Siempre cargar las subcategorías desde categorias_egreso
+      // y aplicar los montos guardados si existen
+      categoriasEgreso?.forEach(catEgreso => {
+        // Buscar el tipo de categoría
+        const tipoId = catEgreso.tipo_categoria_id
+        const tipoNombre = tiposData?.find(t => t.id === tipoId)?.nombre
+
+        if (tipoNombre) {
+          // Encontrar a qué categoría de presupuesto pertenece
           const categoriaKey = Object.entries(CATEGORIA_TO_TIPO).find(
-            ([, tipoNombre]) => tipoNombre === item.tipo_categoria
+            ([, nombre]) => nombre === tipoNombre
           )?.[0]
 
           if (categoriaKey && initialData[categoriaKey]) {
-            // Buscar el ID de la categoría de egreso correspondiente
-            const catEgreso = categoriasEgreso?.find(ce => 
-              ce.nombre === item.categoria && 
-              tiposData?.find(t => t.id === ce.tipo_categoria_id)?.nombre === item.tipo_categoria
-            )
-
+            // Obtener el monto guardado si existe
+            const montoGuardado = montosGuardados[catEgreso.nombre] || 0
+            
             initialData[categoriaKey].subcategorias.push({
-              id: item.id,
-              nombre: item.categoria,
-              monto: Number(item.monto_presupuestado) || 0,
-              categoriaEgresoId: catEgreso?.id,
-              tipoId: catEgreso?.tipo_categoria_id
+              id: `egreso_${catEgreso.id}`,
+              nombre: catEgreso.nombre,
+              monto: montoGuardado,
+              categoriaEgresoId: catEgreso.id,
+              tipoId: tipoId
             })
-            initialData[categoriaKey].total += Number(item.monto_presupuestado) || 0
+            initialData[categoriaKey].total += montoGuardado
           }
-        })
-      } else {
-        // Si no hay items guardados, cargar las subcategorías del usuario sin montos
-        categoriasEgreso?.forEach(catEgreso => {
-          // Buscar el tipo de categoría
-          const tipoId = catEgreso.tipo_categoria_id
-          const tipoNombre = tiposData?.find(t => t.id === tipoId)?.nombre
-
-          if (tipoNombre) {
-            // Encontrar a qué categoría de presupuesto pertenece
-            const categoriaKey = Object.entries(CATEGORIA_TO_TIPO).find(
-              ([, nombre]) => nombre === tipoNombre
-            )?.[0]
-
-            if (categoriaKey && initialData[categoriaKey]) {
-              initialData[categoriaKey].subcategorias.push({
-                id: `egreso_${catEgreso.id}`,
-                nombre: catEgreso.nombre,
-                monto: 0,
-                categoriaEgresoId: catEgreso.id,
-                tipoId: tipoId
-              })
-            }
-          }
-        })
-      }
+        }
+      })
 
       setCategoriasData(initialData)
 
