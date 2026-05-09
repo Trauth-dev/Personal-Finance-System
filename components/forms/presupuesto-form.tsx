@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, Edit2 } from 'lucide-react'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2 } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
@@ -42,7 +42,7 @@ const CATEGORIAS_CONFIG = [
   { key: 'pct_libertad_financiera', label: 'Libertad Financiera', icon: TrendingUp, color: 'text-cyan-500', bgColor: 'bg-cyan-500/10', borderColor: 'border-cyan-500/30' },
 ]
 
-// Mapeo de categoría a tipo_categoria_id (se cargará dinámicamente)
+// Mapeo de categoría a tipo_categoria nombre
 const CATEGORIA_TO_TIPO: Record<string, string> = {
   'pct_donacion': 'Donacion',
   'pct_ahorro_2025': 'Ahorro',
@@ -59,12 +59,14 @@ interface SubcategoriaItem {
   id: string
   nombre: string
   monto: number
-  isNew?: boolean
+  categoriaEgresoId?: string // ID en categorias_egreso
+  tipoId?: string // ID del tipo_categoria_egreso
 }
 
 interface CategoriaData {
   subcategorias: SubcategoriaItem[]
   total: number
+  tipoId?: string // ID del tipo en tipos_categoria_egreso
 }
 
 export function PresupuestoForm() {
@@ -79,7 +81,6 @@ export function PresupuestoForm() {
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [editingItem, setEditingItem] = useState<{ categoria: string; id: string } | null>(null)
   const [newItemName, setNewItemName] = useState("")
   const [addingToCategoria, setAddingToCategoria] = useState<string | null>(null)
   const router = useRouter()
@@ -131,9 +132,11 @@ export function PresupuestoForm() {
       const initialData: Record<string, CategoriaData> = {}
       
       CATEGORIAS_CONFIG.forEach(cat => {
+        const tipoNombre = CATEGORIA_TO_TIPO[cat.key]
         initialData[cat.key] = {
           subcategorias: [],
-          total: 0
+          total: 0,
+          tipoId: tiposMap[tipoNombre]
         }
       })
 
@@ -146,10 +149,18 @@ export function PresupuestoForm() {
           )?.[0]
 
           if (categoriaKey && initialData[categoriaKey]) {
+            // Buscar el ID de la categoría de egreso correspondiente
+            const catEgreso = categoriasEgreso?.find(ce => 
+              ce.nombre === item.categoria && 
+              tiposData?.find(t => t.id === ce.tipo_categoria_id)?.nombre === item.tipo_categoria
+            )
+
             initialData[categoriaKey].subcategorias.push({
               id: item.id,
               nombre: item.categoria,
-              monto: Number(item.monto_presupuestado) || 0
+              monto: Number(item.monto_presupuestado) || 0,
+              categoriaEgresoId: catEgreso?.id,
+              tipoId: catEgreso?.tipo_categoria_id
             })
             initialData[categoriaKey].total += Number(item.monto_presupuestado) || 0
           }
@@ -169,9 +180,11 @@ export function PresupuestoForm() {
 
             if (categoriaKey && initialData[categoriaKey]) {
               initialData[categoriaKey].subcategorias.push({
-                id: catEgreso.id,
+                id: `egreso_${catEgreso.id}`,
                 nombre: catEgreso.nombre,
-                monto: 0
+                monto: 0,
+                categoriaEgresoId: catEgreso.id,
+                tipoId: tipoId
               })
             }
           }
@@ -230,6 +243,7 @@ export function PresupuestoForm() {
       return {
         ...prev,
         [categoriaKey]: {
+          ...categoria,
           subcategorias: updatedSubcategorias,
           total: newTotal
         }
@@ -237,31 +251,117 @@ export function PresupuestoForm() {
     })
   }
 
-  // Agregar nueva subcategoría
-  const handleAddSubcategoria = (categoriaKey: string) => {
-    if (!newItemName.trim()) return
+  // Agregar nueva subcategoría - también crea en categorias_egreso
+  const handleAddSubcategoria = async (categoriaKey: string) => {
+    if (!newItemName.trim() || !perfilActual?.id) return
 
-    const newId = `new_${Date.now()}`
-    
-    setCategoriasData(prev => {
-      const categoria = prev[categoriaKey]
-      if (!categoria) return prev
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
 
-      return {
-        ...prev,
-        [categoriaKey]: {
-          subcategorias: [...categoria.subcategorias, { id: newId, nombre: newItemName.trim(), monto: 0, isNew: true }],
-          total: categoria.total
+      const tipoNombre = CATEGORIA_TO_TIPO[categoriaKey]
+      let tipoId = tiposCategoriaMap[tipoNombre]
+
+      // Si no existe el tipo, crearlo
+      if (!tipoId) {
+        const { data: newTipo, error: tipoError } = await supabase
+          .from("tipos_categoria_egreso")
+          .insert({
+            user_id: user.id,
+            perfil_id: perfilActual.id,
+            nombre: tipoNombre,
+            color: CATEGORIAS_CONFIG.find(c => c.key === categoriaKey)?.color || 'text-gray-500'
+          })
+          .select("id")
+          .single()
+        
+        if (tipoError) throw tipoError
+        if (newTipo) {
+          tipoId = newTipo.id
+          setTiposCategoriaMap(prev => ({ ...prev, [tipoNombre]: tipoId }))
         }
       }
-    })
 
-    setNewItemName("")
-    setAddingToCategoria(null)
+      if (!tipoId) return
+
+      // Verificar si ya existe la categoría de egreso con ese nombre
+      const { data: existingCat } = await supabase
+        .from("categorias_egreso")
+        .select("id")
+        .eq("perfil_id", perfilActual.id)
+        .eq("nombre", newItemName.trim())
+        .eq("tipo_categoria_id", tipoId)
+        .single()
+
+      let categoriaEgresoId = existingCat?.id
+
+      // Si no existe, crearla
+      if (!categoriaEgresoId) {
+        const { data: newCat, error: catError } = await supabase
+          .from("categorias_egreso")
+          .insert({
+            user_id: user.id,
+            perfil_id: perfilActual.id,
+            nombre: newItemName.trim(),
+            tipo_categoria_id: tipoId
+          })
+          .select("id")
+          .single()
+
+        if (catError) throw catError
+        categoriaEgresoId = newCat?.id
+      }
+
+      // Agregar a la UI
+      const newId = `new_${Date.now()}`
+      
+      setCategoriasData(prev => {
+        const categoria = prev[categoriaKey]
+        if (!categoria) return prev
+
+        return {
+          ...prev,
+          [categoriaKey]: {
+            ...categoria,
+            subcategorias: [...categoria.subcategorias, { 
+              id: newId, 
+              nombre: newItemName.trim(), 
+              monto: 0,
+              categoriaEgresoId: categoriaEgresoId,
+              tipoId: tipoId
+            }],
+            tipoId: tipoId
+          }
+        }
+      })
+
+      setNewItemName("")
+      setAddingToCategoria(null)
+
+    } catch (err) {
+      console.error("Error adding subcategoria:", err)
+      setError("Error al agregar subcategoría")
+    }
   }
 
-  // Eliminar subcategoría
-  const handleDeleteSubcategoria = (categoriaKey: string, itemId: string) => {
+  // Eliminar subcategoría - también elimina de categorias_egreso
+  const handleDeleteSubcategoria = async (categoriaKey: string, itemId: string) => {
+    const categoria = categoriasData[categoriaKey]
+    const item = categoria?.subcategorias.find(s => s.id === itemId)
+
+    // Eliminar de categorias_egreso si tiene ID
+    if (item?.categoriaEgresoId) {
+      try {
+        await supabase
+          .from("categorias_egreso")
+          .delete()
+          .eq("id", item.categoriaEgresoId)
+      } catch (err) {
+        console.error("Error deleting from categorias_egreso:", err)
+      }
+    }
+
+    // Actualizar UI
     setCategoriasData(prev => {
       const categoria = prev[categoriaKey]
       if (!categoria) return prev
@@ -272,6 +372,7 @@ export function PresupuestoForm() {
       return {
         ...prev,
         [categoriaKey]: {
+          ...categoria,
           subcategorias: updatedSubcategorias,
           total: newTotal
         }
@@ -308,7 +409,7 @@ export function PresupuestoForm() {
       const porcentajes: Record<string, number> = {}
       CATEGORIAS_CONFIG.forEach(cat => {
         const catData = categoriasData[cat.key]
-        porcentajes[cat.key] = presupuestoNum > 0 ? catData.total / presupuestoNum : 0
+        porcentajes[cat.key] = presupuestoNum > 0 ? catData?.total / presupuestoNum : 0
       })
 
       // 1. Guardar/actualizar presupuesto mensual
@@ -328,14 +429,18 @@ export function PresupuestoForm() {
       }
 
       if (existente) {
-        await supabase
+        const { error: updateError } = await supabase
           .from("presupuesto_mensual")
           .update(presupuestoData)
           .eq("id", existente.id)
+        
+        if (updateError) throw updateError
       } else {
-        await supabase
+        const { error: insertError } = await supabase
           .from("presupuesto_mensual")
           .insert(presupuestoData)
+        
+        if (insertError) throw insertError
       }
 
       // 2. Eliminar items de presupuesto anteriores para este mes
@@ -346,6 +451,7 @@ export function PresupuestoForm() {
         .eq("mes", primerDiaMes)
 
       // 3. Insertar nuevos items de presupuesto detallado
+      // Solo insertar items que tengan nombre
       const itemsToInsert: Array<{
         perfil_id: string
         tipo_categoria: string
@@ -354,11 +460,11 @@ export function PresupuestoForm() {
         mes: string
       }> = []
 
-      Object.entries(categoriasData).forEach(([categoriaKey, data]) => {
+      for (const [categoriaKey, data] of Object.entries(categoriasData)) {
         const tipoCategoria = CATEGORIA_TO_TIPO[categoriaKey]
         
-        data.subcategorias.forEach(sub => {
-          if (sub.monto > 0 || sub.nombre.trim()) {
+        for (const sub of data.subcategorias) {
+          if (sub.nombre.trim()) {
             itemsToInsert.push({
               perfil_id: perfilActual.id,
               tipo_categoria: tipoCategoria,
@@ -367,66 +473,17 @@ export function PresupuestoForm() {
               mes: primerDiaMes
             })
           }
-        })
-      })
+        }
+      }
 
       if (itemsToInsert.length > 0) {
-        const { error: insertError } = await supabase
+        const { error: insertItemsError } = await supabase
           .from("presupuesto_categorias")
           .insert(itemsToInsert)
 
-        if (insertError) throw insertError
-      }
-
-      // 4. Crear categorías de egreso nuevas si no existen
-      for (const [categoriaKey, data] of Object.entries(categoriasData)) {
-        const tipoNombre = CATEGORIA_TO_TIPO[categoriaKey]
-        
-        for (const sub of data.subcategorias) {
-          if (sub.isNew && sub.nombre.trim()) {
-            // Buscar o crear el tipo de categoría
-            let tipoId = tiposCategoriaMap[tipoNombre]
-            
-            if (!tipoId) {
-              const { data: newTipo } = await supabase
-                .from("tipos_categoria_egreso")
-                .insert({
-                  user_id: user.id,
-                  perfil_id: perfilActual.id,
-                  nombre: tipoNombre,
-                  color: CATEGORIAS_CONFIG.find(c => c.key === categoriaKey)?.color || 'text-gray-500'
-                })
-                .select("id")
-                .single()
-              
-              if (newTipo) {
-                tipoId = newTipo.id
-                setTiposCategoriaMap(prev => ({ ...prev, [tipoNombre]: tipoId }))
-              }
-            }
-
-            if (tipoId) {
-              // Verificar si ya existe la categoría de egreso
-              const { data: existingCat } = await supabase
-                .from("categorias_egreso")
-                .select("id")
-                .eq("perfil_id", perfilActual.id)
-                .eq("nombre", sub.nombre)
-                .eq("tipo_categoria_id", tipoId)
-                .single()
-
-              if (!existingCat) {
-                await supabase
-                  .from("categorias_egreso")
-                  .insert({
-                    user_id: user.id,
-                    perfil_id: perfilActual.id,
-                    nombre: sub.nombre,
-                    tipo_categoria_id: tipoId
-                  })
-              }
-            }
-          }
+        if (insertItemsError) {
+          console.error("Error inserting items:", insertItemsError)
+          throw insertItemsError
         }
       }
 
@@ -437,6 +494,7 @@ export function PresupuestoForm() {
         loadUserData()
       }, 1500)
     } catch (err) {
+      console.error("Submit error:", err)
       setError(err instanceof Error ? err.message : "Error al registrar presupuesto")
     } finally {
       setIsLoading(false)
