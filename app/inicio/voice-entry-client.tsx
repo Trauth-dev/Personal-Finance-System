@@ -981,12 +981,14 @@ export function VoiceEntryClient({
     c => c.tipo_categoria_id === selectedTipoCategoria
   )
 
-  const getGreeting = () => {
+const [greeting, setGreeting] = useState("Hola")
+  
+  useEffect(() => {
     const hour = new Date().getHours()
-    if (hour < 12) return "Buenos dias"
-    if (hour < 18) return "Buenas tardes"
-    return "Buenas noches"
-  }
+    if (hour < 12) setGreeting("Buenos dias")
+    else if (hour < 18) setGreeting("Buenas tardes")
+    else setGreeting("Buenas noches")
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
@@ -1018,7 +1020,7 @@ export function VoiceEntryClient({
         {/* Saludo */}
         <div className="text-center mb-8">
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-2">
-            {getGreeting()}, {userName}
+            {greeting}, {userName}
           </h2>
           <p className="text-slate-400">
             Carga tus ingresos y egresos con tu voz
