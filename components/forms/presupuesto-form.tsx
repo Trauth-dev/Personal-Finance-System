@@ -32,7 +32,7 @@ const MESES = [
 
 const CATEGORIAS_CONFIG = [
   { key: 'pct_donacion', label: 'Donacion', icon: Heart, color: 'text-pink-500', bgColor: 'bg-pink-500/10', borderColor: 'border-pink-500/30' },
-  { key: 'pct_ahorro_2025', label: 'Ahorro 2025', icon: PiggyBank, color: 'text-green-500', bgColor: 'bg-green-500/10', borderColor: 'border-green-500/30' },
+  { key: 'pct_ahorro_2025', label: 'Ahorro', icon: PiggyBank, color: 'text-green-500', bgColor: 'bg-green-500/10', borderColor: 'border-green-500/30' },
   { key: 'pct_gastos_varios', label: 'Gastos Varios', icon: ShoppingBag, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30' },
   { key: 'pct_gastos_vivienda', label: 'Gastos Vivienda', icon: Home, color: 'text-orange-500', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30' },
   { key: 'pct_pago_deudas', label: 'Pago Deudas', icon: CreditCard, color: 'text-red-500', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30' },

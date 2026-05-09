@@ -8,6 +8,7 @@ import { formatGuaranies } from "@/lib/utils"
 interface Categoria {
   nombre: string
   porcentaje: number
+  monto: number
   gastado: number
 }
 
@@ -17,25 +18,33 @@ interface PresupuestoCategoriasRingsClientProps {
 }
 
 const ICONOS_MAP: Record<string, any> = {
+  'Donacion': Heart,
   'Donación': Heart,
+  'Ahorro': PiggyBank,
   'Ahorro 2025': PiggyBank,
   'Gastos Varios': ShoppingBag,
   'Gastos Vivienda': Home,
   'Pago Deudas': CreditCard,
   'Disfrute': Smile,
+  'Educacion': GraduationCap,
   'Educación': GraduationCap,
+  'Suenos': Star,
   'Sueños': Star,
   'Libertad Financiera': TrendingUp,
 }
 
 const COLORES_BASE: Record<string, string> = {
+  'Donacion': '#ec4899',
   'Donación': '#ec4899',
+  'Ahorro': '#10b981',
   'Ahorro 2025': '#10b981',
   'Gastos Varios': '#3b82f6',
   'Gastos Vivienda': '#f97316',
   'Pago Deudas': '#ef4444',
   'Disfrute': '#eab308',
+  'Educacion': '#6366f1',
   'Educación': '#6366f1',
+  'Suenos': '#a855f7',
   'Sueños': '#a855f7',
   'Libertad Financiera': '#06b6d4',
 }
@@ -56,7 +65,8 @@ export function PresupuestoCategoriasRingsClient({
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {categorias.map((categoria) => {
-            const presupuestoAsignado = (presupuestoTotal * categoria.porcentaje) / 100
+            // Usar monto exacto directamente, no calcular con porcentaje
+            const presupuestoAsignado = categoria.monto
             const porcentajeUsado = presupuestoAsignado > 0 ? (categoria.gastado / presupuestoAsignado) * 100 : 0
             
             // Determinar color según el uso
