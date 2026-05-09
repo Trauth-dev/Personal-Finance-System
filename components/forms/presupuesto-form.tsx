@@ -460,14 +460,12 @@ export function PresupuestoForm() {
         mes: string
       }> = []
 
-      for (const [categoriaKey, data] of Object.entries(categoriasData)) {
-        const tipoCategoria = CATEGORIA_TO_TIPO[categoriaKey]
-        
+      for (const [, data] of Object.entries(categoriasData)) {
         for (const sub of data.subcategorias) {
           if (sub.nombre.trim()) {
             itemsToInsert.push({
               perfil_id: perfilActual.id,
-              tipo_categoria: tipoCategoria,
+              tipo_categoria: 'egreso', // La tabla solo acepta 'ingreso' o 'egreso'
               categoria: sub.nombre,
               monto_presupuestado: sub.monto,
               mes: primerDiaMes
@@ -482,7 +480,6 @@ export function PresupuestoForm() {
           .insert(itemsToInsert)
 
         if (insertItemsError) {
-          console.error("Error inserting items:", insertItemsError)
           throw insertItemsError
         }
       }
@@ -493,9 +490,10 @@ export function PresupuestoForm() {
         router.refresh()
         loadUserData()
       }, 1500)
-    } catch (err) {
-      console.error("Submit error:", err)
-      setError(err instanceof Error ? err.message : "Error al registrar presupuesto")
+    } catch (err: unknown) {
+      console.error("Error al guardar presupuesto:", err)
+      const errorObj = err as { message?: string; details?: string }
+      setError(errorObj?.message || errorObj?.details || "Error al registrar presupuesto")
     } finally {
       setIsLoading(false)
     }
