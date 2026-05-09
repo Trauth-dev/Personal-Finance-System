@@ -27,6 +27,7 @@ interface Egreso {
 
 const CATEGORIAS_CONFIG = {
   "Donación": { icon: Heart, color: "from-pink-500 to-rose-500", textColor: "text-pink-600", bgColor: "bg-pink-50" },
+  "Ahorro": { icon: PiggyBank, color: "from-green-500 to-emerald-500", textColor: "text-green-600", bgColor: "bg-green-50" },
   "Ahorro 2025": { icon: PiggyBank, color: "from-green-500 to-emerald-500", textColor: "text-green-600", bgColor: "bg-green-50" },
   "Gastos Varios": { icon: ShoppingBag, color: "from-purple-500 to-violet-500", textColor: "text-purple-600", bgColor: "bg-purple-50" },
   "Gastos Vivienda": { icon: Home, color: "from-orange-500 to-amber-500", textColor: "text-orange-600", bgColor: "bg-orange-50" },
@@ -40,9 +41,11 @@ const CATEGORIAS_CONFIG = {
 export function PresupuestoCategoriasComparativoClient({
   presupuesto,
   egresos,
+  montosPorTipo,
 }: {
   presupuesto: Presupuesto | null
   egresos: Egreso[]
+  montosPorTipo: Record<string, number>
 }) {
   if (!presupuesto) {
     return null
@@ -60,21 +63,21 @@ export function PresupuestoCategoriasComparativoClient({
     {} as Record<string, number>
   )
 
-  // Mapear las categorías con sus datos
+  // Mapear las categorías con sus montos exactos desde presupuesto_categorias
   const categoriasConDatos = [
-    { nombre: "Donación", pct: Number(presupuesto.pct_donacion || 0), gastado: egresosPorCategoria["Donación"] || 0 },
-    { nombre: "Ahorro 2025", pct: Number(presupuesto.pct_ahorro_2025 || 0), gastado: egresosPorCategoria["Ahorro 2025"] || 0 },
-    { nombre: "Gastos Varios", pct: Number(presupuesto.pct_gastos_varios || 0), gastado: egresosPorCategoria["Gastos Varios"] || 0 },
-    { nombre: "Gastos Vivienda", pct: Number(presupuesto.pct_gastos_vivienda || 0), gastado: egresosPorCategoria["Gastos Vivienda"] || 0 },
-    { nombre: "Pago Deudas", pct: Number(presupuesto.pct_pago_deudas || 0), gastado: egresosPorCategoria["Pago Deudas"] || 0 },
-    { nombre: "Disfrute", pct: Number(presupuesto.pct_disfrute || 0), gastado: egresosPorCategoria["Disfrute"] || 0 },
-    { nombre: "Educación", pct: Number(presupuesto.pct_educacion || 0), gastado: egresosPorCategoria["Educación"] || 0 },
-    { nombre: "Sueños", pct: Number(presupuesto.pct_suenos || 0), gastado: egresosPorCategoria["Sueños"] || 0 },
-    { nombre: "Libertad Financiera", pct: Number(presupuesto.pct_libertad_financiera || 0), gastado: egresosPorCategoria["Libertad Financiera"] || 0 },
+    { nombre: "Donación", monto: montosPorTipo["Donación"] || montosPorTipo["Donacion"] || 0, gastado: egresosPorCategoria["Donación"] || 0 },
+    { nombre: "Ahorro", monto: montosPorTipo["Ahorro"] || montosPorTipo["Ahorro 2025"] || 0, gastado: egresosPorCategoria["Ahorro"] || egresosPorCategoria["Ahorro 2025"] || 0 },
+    { nombre: "Gastos Varios", monto: montosPorTipo["Gastos Varios"] || 0, gastado: egresosPorCategoria["Gastos Varios"] || 0 },
+    { nombre: "Gastos Vivienda", monto: montosPorTipo["Gastos Vivienda"] || 0, gastado: egresosPorCategoria["Gastos Vivienda"] || 0 },
+    { nombre: "Pago Deudas", monto: montosPorTipo["Pago Deudas"] || 0, gastado: egresosPorCategoria["Pago Deudas"] || 0 },
+    { nombre: "Disfrute", monto: montosPorTipo["Disfrute"] || 0, gastado: egresosPorCategoria["Disfrute"] || 0 },
+    { nombre: "Educación", monto: montosPorTipo["Educación"] || montosPorTipo["Educacion"] || 0, gastado: egresosPorCategoria["Educación"] || 0 },
+    { nombre: "Sueños", monto: montosPorTipo["Sueños"] || montosPorTipo["Suenos"] || 0, gastado: egresosPorCategoria["Sueños"] || 0 },
+    { nombre: "Libertad Financiera", monto: montosPorTipo["Libertad Financiera"] || 0, gastado: egresosPorCategoria["Libertad Financiera"] || 0 },
   ]
 
-  // Filtrar solo las categorías que tienen presupuesto asignado
-  const categoriasActivas = categoriasConDatos.filter(cat => cat.pct > 0)
+  // Filtrar solo las categorías que tienen presupuesto asignado (monto > 0)
+  const categoriasActivas = categoriasConDatos.filter(cat => cat.monto > 0)
 
   if (categoriasActivas.length === 0) {
     return null
@@ -91,9 +94,10 @@ export function PresupuestoCategoriasComparativoClient({
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {categoriasActivas.map((categoria) => {
-            const config = CATEGORIAS_CONFIG[categoria.nombre as keyof typeof CATEGORIAS_CONFIG]
-            const Icon = config.icon
-            const presupuestoCategoria = totalPresupuesto * categoria.pct
+            const config = CATEGORIAS_CONFIG[categoria.nombre as keyof typeof CATEGORIAS_CONFIG] || CATEGORIAS_CONFIG["Ahorro 2025"]
+            const Icon = config?.icon || PiggyBank
+            // Usar monto exacto directamente desde presupuesto_categorias
+            const presupuestoCategoria = categoria.monto
             const porcentajeUsado = presupuestoCategoria > 0 ? (categoria.gastado / presupuestoCategoria) * 100 : 0
             
             // Determinar color según el porcentaje usado
