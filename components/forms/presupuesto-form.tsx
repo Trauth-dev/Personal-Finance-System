@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2 } from 'lucide-react'
+import Link from "next/link"
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3 } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
@@ -716,6 +717,18 @@ export function PresupuestoForm() {
           <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700 text-white" disabled={isLoading || !presupuesto}>
             {isLoading ? "Registrando..." : "Establecer Presupuesto"}
           </Button>
+
+          {/* Botón para ver Presupuesto vs Realidad */}
+          <Link href="/dashboard/personal/terciario?tab=presupuesto-vs-realidad" className="block">
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full border-purple-500/50 text-purple-600 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/10"
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Ver Presupuesto vs Realidad
+            </Button>
+          </Link>
         </form>
       </CardContent>
     </Card>
