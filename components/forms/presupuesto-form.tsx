@@ -564,10 +564,10 @@ export function PresupuestoForm() {
             </div>
 
             <div className="space-y-2">
-              <Label>Ano</Label>
+              <Label>Año</Label>
               <Select value={anioSeleccionado} onValueChange={setAnioSeleccionado}>
                 <SelectTrigger className="bg-background/50">
-                  <SelectValue placeholder="Ano" />
+                  <SelectValue placeholder="Año" />
                 </SelectTrigger>
                 <SelectContent>
                   {aniosDisponibles.map((anio) => (
@@ -585,7 +585,7 @@ export function PresupuestoForm() {
             <div className="flex items-center justify-between border-b pb-2">
               <Label className="text-lg font-semibold">Distribucion por Categorias</Label>
               <div className={`text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
-                Total: {formatGuaranies(totalAsignado)} de {formatGuaranies(presupuestoNum)} ({porcentajeTotal.toFixed(1)}%)
+                Total: {formatGuaranies(presupuestoNum)} ({porcentajeTotal.toFixed(1)}%)
               </div>
             </div>
 
