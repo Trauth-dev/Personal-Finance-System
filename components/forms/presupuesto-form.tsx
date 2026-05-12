@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2 } from 'lucide-react'
+import Link from "next/link"
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3 } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
@@ -497,8 +498,23 @@ export function PresupuestoForm() {
   return (
     <Card className="max-w-6xl mx-auto glass-effect border-border/50">
       <CardHeader>
-        <CardTitle className="text-2xl">Establecer Presupuesto Mensual</CardTitle>
-        <CardDescription>Define tu presupuesto mensual y distribuyelo por categorias en {perfilActual.nombre}</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-2xl">Establecer Presupuesto Mensual</CardTitle>
+            <CardDescription>Define tu presupuesto mensual y distribuyelo por categorias en {perfilActual.nombre}</CardDescription>
+          </div>
+          <Link href="/dashboard/personal/analisis?tab=presupuesto-vs-realidad">
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              className="border-purple-500/50 text-purple-600 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/10"
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Ver Presupuesto vs Realidad
+            </Button>
+          </Link>
+        </div>
       </CardHeader>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -548,10 +564,10 @@ export function PresupuestoForm() {
             </div>
 
             <div className="space-y-2">
-              <Label>Ano</Label>
+              <Label>Año</Label>
               <Select value={anioSeleccionado} onValueChange={setAnioSeleccionado}>
                 <SelectTrigger className="bg-background/50">
-                  <SelectValue placeholder="Ano" />
+                  <SelectValue placeholder="Año" />
                 </SelectTrigger>
                 <SelectContent>
                   {aniosDisponibles.map((anio) => (
@@ -569,7 +585,7 @@ export function PresupuestoForm() {
             <div className="flex items-center justify-between border-b pb-2">
               <Label className="text-lg font-semibold">Distribucion por Categorias</Label>
               <div className={`text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
-                Total: {formatGuaranies(totalAsignado)} ({porcentajeTotal.toFixed(1)}%)
+                Total: {formatGuaranies(presupuestoNum)} ({porcentajeTotal.toFixed(1)}%)
               </div>
             </div>
 
@@ -716,6 +732,18 @@ export function PresupuestoForm() {
           <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700 text-white" disabled={isLoading || !presupuesto}>
             {isLoading ? "Registrando..." : "Establecer Presupuesto"}
           </Button>
+
+          {/* Botón para ver Presupuesto vs Realidad */}
+          <Link href="/dashboard/personal/analisis?tab=presupuesto-vs-realidad" className="block">
+            <Button 
+              type="button" 
+              variant="outline" 
+              className="w-full border-purple-500/50 text-purple-600 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/10"
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Ver Presupuesto vs Realidad
+            </Button>
+          </Link>
         </form>
       </CardContent>
     </Card>
