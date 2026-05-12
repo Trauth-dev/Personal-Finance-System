@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import React, { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { MonthSelector } from "@/components/personal/month-selector"
 import { Card, CardContent } from "@/components/ui/card"
@@ -596,7 +596,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
             </div>
           )}
 
-          {/* Summary Table */}
+          {/* Summary Table with Expandable Rows */}
           <Card className="border bg-white dark:bg-slate-50 border-slate-200">
             <CardContent className="pt-5 pb-3">
               <h3 className="text-sm font-bold text-slate-900 mb-3">Resumen por Categoria</h3>
@@ -604,6 +604,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-slate-200">
+                      <th className="text-left py-2 px-2 font-semibold text-slate-500 w-8"></th>
                       <th className="text-left py-2 px-2 font-semibold text-slate-500">Categoria</th>
                       <th className="text-right py-2 px-2 font-semibold text-slate-500">Presupuestado</th>
                       <th className="text-right py-2 px-2 font-semibold text-slate-500">Gastado</th>
@@ -614,27 +615,77 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                   <tbody>
                     {filteredCategorias.map((cat) => {
                       const status = getStatusInfo(cat.porcentaje)
+                      const isExpanded = categoriasExpandidas.has(`resumen_${cat.nombre}`)
+                      const hasTransactions = cat.transacciones && cat.transacciones.length > 0
+                      
                       return (
-                        <tr key={cat.nombre} className="border-b border-slate-100 last:border-0">
-                          <td className="py-2.5 px-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: status.ring }} />
-                              <span className="font-medium text-slate-800">{cat.nombre}</span>
-                            </div>
-                          </td>
-                          <td className="text-right py-2.5 px-2 text-slate-700 font-medium">{formatGuaranies(cat.presupuestado)}</td>
-                          <td className="text-right py-2.5 px-2 text-slate-700 font-medium">{formatGuaranies(cat.gastado)}</td>
-                          <td className={`text-right py-2.5 px-2 font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
-                            {cat.diferencia >= 0 ? "+" : ""}{formatGuaranies(cat.diferencia)}
-                          </td>
-                          <td className={`text-right py-2.5 px-2 font-bold ${cat.porcentaje > 100 ? "text-red-600" : "text-teal-600"}`}>
-                            {cat.porcentaje.toFixed(1)}%
-                          </td>
-                        </tr>
+                        <React.Fragment key={cat.nombre}>
+                          <tr 
+                            className={`border-b border-slate-100 last:border-0 ${hasTransactions ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                            onClick={() => hasTransactions && toggleCategoriaExpandida(`resumen_${cat.nombre}`)}
+                          >
+                            <td className="py-2.5 px-2">
+                              {hasTransactions && (
+                                isExpanded 
+                                  ? <ChevronDown className="w-4 h-4 text-slate-400" />
+                                  : <ChevronRight className="w-4 h-4 text-slate-400" />
+                              )}
+                            </td>
+                            <td className="py-2.5 px-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: status.ring }} />
+                                <span className="font-medium text-slate-800">{cat.nombre}</span>
+                                {hasTransactions && (
+                                  <span className="text-[10px] text-slate-400">({cat.transacciones!.length})</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="text-right py-2.5 px-2 text-slate-700 font-medium">{formatGuaranies(cat.presupuestado)}</td>
+                            <td className="text-right py-2.5 px-2 text-slate-700 font-medium">{formatGuaranies(cat.gastado)}</td>
+                            <td className={`text-right py-2.5 px-2 font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
+                              {cat.diferencia >= 0 ? "+" : ""}{formatGuaranies(cat.diferencia)}
+                            </td>
+                            <td className={`text-right py-2.5 px-2 font-bold ${cat.porcentaje > 100 ? "text-red-600" : "text-teal-600"}`}>
+                              {cat.porcentaje.toFixed(1)}%
+                            </td>
+                          </tr>
+                          {/* Expanded Transactions */}
+                          {isExpanded && hasTransactions && (
+                            <>
+                              <tr className="bg-slate-50/80">
+                                <td></td>
+                                <td colSpan={5} className="py-1 px-2">
+                                  <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-500 uppercase pl-4">
+                                    <div className="col-span-2">Fecha</div>
+                                    <div className="col-span-4">Concepto</div>
+                                    <div className="col-span-3">Subcategoría</div>
+                                    <div className="col-span-3 text-right">Monto</div>
+                                  </div>
+                                </td>
+                              </tr>
+                              {cat.transacciones!.map((trans) => (
+                                <tr key={trans.id} className="bg-slate-50/50 border-b border-slate-100">
+                                  <td></td>
+                                  <td colSpan={5} className="py-1.5 px-2">
+                                    <div className="grid grid-cols-12 gap-2 text-xs pl-4">
+                                      <div className="col-span-2 text-slate-500">{formatFecha(trans.fecha)}</div>
+                                      <div className="col-span-4 text-slate-700 truncate">{trans.concepto}</div>
+                                      <div className="col-span-3 text-slate-500 truncate">{trans.subcategoria}</div>
+                                      <div className="col-span-3 text-right font-medium text-slate-800">
+                                        {formatGuaranies(trans.monto)}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </>
+                          )}
+                        </React.Fragment>
                       )
                     })}
                     {/* Totals row */}
                     <tr className="border-t-2 border-slate-300 bg-slate-50">
+                      <td></td>
                       <td className="py-2.5 px-2 font-bold text-slate-900">TOTAL</td>
                       <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(presupuestoDisplay)}</td>
                       <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(totalGastado)}</td>
