@@ -498,8 +498,23 @@ export function PresupuestoForm() {
   return (
     <Card className="max-w-6xl mx-auto glass-effect border-border/50">
       <CardHeader>
-        <CardTitle className="text-2xl">Establecer Presupuesto Mensual</CardTitle>
-        <CardDescription>Define tu presupuesto mensual y distribuyelo por categorias en {perfilActual.nombre}</CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-2xl">Establecer Presupuesto Mensual</CardTitle>
+            <CardDescription>Define tu presupuesto mensual y distribuyelo por categorias en {perfilActual.nombre}</CardDescription>
+          </div>
+          <Link href="/dashboard/personal/analisis?tab=presupuesto-vs-realidad">
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm"
+              className="border-purple-500/50 text-purple-600 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/10"
+            >
+              <BarChart3 className="w-4 h-4 mr-2" />
+              Ver Presupuesto vs Realidad
+            </Button>
+          </Link>
+        </div>
       </CardHeader>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -570,7 +585,7 @@ export function PresupuestoForm() {
             <div className="flex items-center justify-between border-b pb-2">
               <Label className="text-lg font-semibold">Distribucion por Categorias</Label>
               <div className={`text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
-                Total: {formatGuaranies(totalAsignado)} ({porcentajeTotal.toFixed(1)}%)
+                Total: {formatGuaranies(totalAsignado)} de {formatGuaranies(presupuestoNum)} ({porcentajeTotal.toFixed(1)}%)
               </div>
             </div>
 
@@ -719,7 +734,7 @@ export function PresupuestoForm() {
           </Button>
 
           {/* Botón para ver Presupuesto vs Realidad */}
-          <Link href="/dashboard/personal/terciario?tab=presupuesto-vs-realidad" className="block">
+          <Link href="/dashboard/personal/analisis?tab=presupuesto-vs-realidad" className="block">
             <Button 
               type="button" 
               variant="outline" 
