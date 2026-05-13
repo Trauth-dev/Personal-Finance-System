@@ -65,7 +65,14 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
       setPerfiles(data || [])
 
       const perfilGuardadoId = typeof window !== "undefined" ? localStorage.getItem("perfil_actual_id") : null
-      const perfilInicial = perfilGuardadoId ? data?.find((p) => p.id === perfilGuardadoId) || data?.[0] : data?.[0]
+      
+      // Priorizar: 1) Perfil guardado, 2) Perfil "Personal", 3) Primer perfil disponible
+      let perfilInicial = perfilGuardadoId ? data?.find((p) => p.id === perfilGuardadoId) : null
+      
+      // Si no hay perfil guardado o no se encontró, usar el perfil "Personal" por defecto
+      if (!perfilInicial) {
+        perfilInicial = data?.find((p) => p.tipo === "personal") || data?.[0]
+      }
 
       if (perfilInicial) {
         setPerfilActual(perfilInicial)
