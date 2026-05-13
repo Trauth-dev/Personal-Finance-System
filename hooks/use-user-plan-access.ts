@@ -61,6 +61,30 @@ export function useUserPlanAccess(): UseUserPlanAccessReturn {
         throw fetchError
       }
 
+      // Si el usuario no tiene acceso a "personal", crearlo automáticamente
+      const hasPersonalAccess = data?.some((access: PlanAccess) => access.plan_type === "personal")
+      if (!hasPersonalAccess) {
+        const { error: insertError } = await supabase
+          .from("user_plan_access")
+          .insert({
+            user_id: user.id,
+            plan_type: "personal",
+            is_active: true,
+            granted_by: "system_auto"
+          })
+        
+        if (!insertError) {
+          // Agregar el acceso personal a los datos
+          data?.push({
+            plan_type: "personal",
+            is_active: true,
+            granted_at: new Date().toISOString(),
+            expires_at: null,
+            granted_by: "system_auto"
+          })
+        }
+      }
+
       // Filtrar los que no han expirado
       const now = new Date()
       const validAccesses = (data || []).filter((access: PlanAccess) => {
