@@ -51,25 +51,25 @@ export function PerfilSelector() {
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="flex items-center gap-2 min-w-[180px] justify-between bg-transparent"
+            className="flex items-center gap-1.5 sm:gap-2 min-w-0 sm:min-w-[160px] justify-between bg-transparent px-2 sm:px-3"
             style={{
               borderColor: perfilActual.color,
               backgroundColor: `${perfilActual.color}10`,
             }}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white"
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-white flex-shrink-0"
                 style={{ backgroundColor: perfilActual.color }}
               >
                 {getIconForTipo(perfilActual.tipo)}
               </div>
-              <div className="flex flex-col items-start">
-                <span className="font-semibold text-sm">{perfilActual.nombre}</span>
-                <span className="text-xs text-muted-foreground capitalize">{perfilActual.tipo}</span>
+              <div className="flex flex-col items-start min-w-0">
+                <span className="font-semibold text-xs sm:text-sm truncate max-w-[70px] sm:max-w-[100px]">{perfilActual.nombre}</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground capitalize hidden sm:block">{perfilActual.tipo}</span>
               </div>
             </div>
-            <ChevronDown className="h-4 w-4 opacity-50" />
+            <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4 opacity-50 flex-shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-64">
