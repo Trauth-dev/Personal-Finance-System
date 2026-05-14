@@ -498,20 +498,20 @@ export function PresupuestoForm() {
   return (
     <Card className="max-w-6xl mx-auto glass-effect border-border/50">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl">Establecer Presupuesto Mensual</CardTitle>
-            <CardDescription>Define tu presupuesto mensual y distribuyelo por categorias en {perfilActual.nombre}</CardDescription>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-xl sm:text-2xl">Establecer Presupuesto Mensual</CardTitle>
+            <CardDescription className="text-sm">Define tu presupuesto mensual y distribuyelo por categorias en {perfilActual.nombre}</CardDescription>
           </div>
-          <Link href="/dashboard/personal/analisis?tab=presupuesto-vs-realidad">
+          <Link href="/dashboard/personal/analisis?tab=presupuesto-vs-realidad" className="flex-shrink-0">
             <Button 
               type="button" 
               variant="outline" 
               size="sm"
-              className="border-purple-500/50 text-purple-600 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/10"
+              className="w-full sm:w-auto border-purple-500/50 text-purple-600 hover:bg-purple-50 hover:text-purple-700 dark:hover:bg-purple-500/10 text-xs sm:text-sm"
             >
-              <BarChart3 className="w-4 h-4 mr-2" />
-              Ver Presupuesto vs Realidad
+              <BarChart3 className="w-4 h-4 mr-1.5 sm:mr-2 flex-shrink-0" />
+              <span className="truncate">Ver Presupuesto vs Realidad</span>
             </Button>
           </Link>
         </div>
@@ -582,9 +582,9 @@ export function PresupuestoForm() {
 
           {/* Distribución por Categorías */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b pb-2">
-              <Label className="text-lg font-semibold">Distribucion por Categorias</Label>
-              <div className={`text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 border-b pb-2">
+              <Label className="text-base sm:text-lg font-semibold">Distribucion por Categorias</Label>
+              <div className={`text-sm sm:text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
                 Total: {formatGuaranies(presupuestoNum)} ({porcentajeTotal.toFixed(1)}%)
               </div>
             </div>
