@@ -314,7 +314,7 @@ export default async function DashboardPersonalPage({
             <Card className="bg-gradient-to-br from-blue-50 to-cyan-50 border-2 border-blue-200">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-semibold text-slate-700">Balance Actual</CardTitle>
+                  <CardTitle className="text-sm font-semibold text-slate-700">Saldo del Mes</CardTitle>
                   <div className="w-9 h-9 rounded-lg bg-blue-500 flex items-center justify-center shadow-md">
                     <Wallet className="w-5 h-5 text-white" />
                   </div>
