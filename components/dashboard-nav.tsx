@@ -269,7 +269,8 @@ function NavContent({
   isCollapsed,
   onToggleCollapse,
   isMobile = false,
-}: DashboardNavProps & { isMobile?: boolean }) {
+  onNavigate,
+}: DashboardNavProps & { isMobile?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { perfilActual } = usePerfil()
@@ -278,6 +279,12 @@ function NavContent({
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push("/auth/login")
+  }
+
+  const handleNavClick = () => {
+    if (isMobile && onNavigate) {
+      onNavigate()
+    }
   }
 
   const getNavItems = () => {
@@ -332,7 +339,7 @@ function NavContent({
       {/* Boton destacado para Carga por Voz - Solo visible en perfil Personal */}
       {perfilActual?.tipo === "personal" && (
         <div className={cn("px-2 pt-2", isCollapsed && !isMobile && "px-1")}>
-          <Link href="/inicio">
+          <Link href="/inicio" onClick={handleNavClick}>
             <div
               className={cn(
                 "relative overflow-hidden rounded-xl p-3 transition-all group cursor-pointer",
@@ -370,7 +377,7 @@ function NavContent({
           const Icon = item.icon
 
           return (
-            <Link key={item.href} href={item.href}>
+            <Link key={item.href} href={item.href} onClick={handleNavClick}>
               <div
                 className={cn(
                   "flex items-center gap-3 px-3 py-3 rounded-lg transition-all group",
@@ -444,7 +451,7 @@ export function DashboardNav({ userName, isCollapsed, onToggleCollapse }: Dashbo
             </Button>
           </SheetTrigger>
           <SheetContent side="left" className="p-0 w-72">
-            <NavContent userName={userName} isMobile={true} />
+            <NavContent userName={userName} isMobile={true} onNavigate={() => setIsMobileMenuOpen(false)} />
           </SheetContent>
         </Sheet>
       </div>
