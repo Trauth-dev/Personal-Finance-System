@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3 } from 'lucide-react'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
@@ -70,6 +70,12 @@ interface CategoriaData {
   tipoId?: string // ID del tipo en tipos_categoria_egreso
 }
 
+interface IngresoCategoria {
+  id: string
+  nombre: string
+  montoPresupuestado: number
+}
+
 export function PresupuestoForm() {
   const { perfilActual } = usePerfil()
   const todayStr = getTodayDate()
@@ -84,6 +90,8 @@ export function PresupuestoForm() {
   const [error, setError] = useState<string | null>(null)
   const [newItemName, setNewItemName] = useState("")
   const [addingToCategoria, setAddingToCategoria] = useState<string | null>(null)
+  const [ingresosCategoria, setIngresosCategoria] = useState<IngresoCategoria[]>([])
+  const [showIngresos, setShowIngresos] = useState(true)
   const router = useRouter()
   const supabase = createClient()
 
@@ -183,6 +191,34 @@ export function PresupuestoForm() {
         setPresupuesto(String(presupuestoExistente.meta_salario || ""))
       }
 
+      // 5. Cargar categorías de ingresos del usuario
+      const { data: categoriasIngresos } = await supabase
+        .from("categorias_ingresos")
+        .select("id, nombre")
+        .eq("perfil_id", perfilActual.id)
+        .order("nombre")
+
+      // 6. Cargar montos presupuestados de ingresos para el mes
+      const { data: ingresosPresupuesto } = await supabase
+        .from("presupuesto_ingresos")
+        .select("categoria_ingreso_id, monto_presupuestado")
+        .eq("perfil_id", perfilActual.id)
+        .eq("mes", primerDiaMes)
+
+      // Crear mapa de montos presupuestados
+      const ingresosMontoMap: Record<string, number> = {}
+      ingresosPresupuesto?.forEach(item => {
+        ingresosMontoMap[item.categoria_ingreso_id] = Number(item.monto_presupuestado) || 0
+      })
+
+      // Mapear categorías de ingresos con sus montos
+      const ingresosData: IngresoCategoria[] = (categoriasIngresos || []).map(cat => ({
+        id: cat.id,
+        nombre: cat.nombre,
+        montoPresupuestado: ingresosMontoMap[cat.id] || 0
+      }))
+      setIngresosCategoria(ingresosData)
+
     } catch (err) {
       console.error("Error loading user data:", err)
     } finally {
@@ -208,8 +244,17 @@ export function PresupuestoForm() {
 
   // Calcular totales
   const totalAsignado = Object.values(categoriasData).reduce((sum, cat) => sum + cat.total, 0)
-  const presupuestoNum = Number(presupuesto) || 0
+  const totalIngresos = ingresosCategoria.reduce((sum, ing) => sum + ing.montoPresupuestado, 0)
+  const presupuestoNum = totalIngresos > 0 ? totalIngresos : Number(presupuesto) || 0
   const porcentajeTotal = presupuestoNum > 0 ? (totalAsignado / presupuestoNum) * 100 : 0
+
+  // Manejar cambio de monto en ingreso
+  const handleIngresoMontoChange = (ingresoId: string, newMonto: string) => {
+    const montoNum = Number(newMonto.replace(/[^0-9]/g, "")) || 0
+    setIngresosCategoria(prev => 
+      prev.map(ing => ing.id === ingresoId ? { ...ing, montoPresupuestado: montoNum } : ing)
+    )
+  }
 
   // Manejar cambio de monto en subcategoría
   const handleMontoChange = (categoriaKey: string, itemId: string, newMonto: string) => {
@@ -373,8 +418,8 @@ export function PresupuestoForm() {
       return
     }
 
-    if (!presupuesto || presupuestoNum <= 0) {
-      setError("Ingresa un presupuesto mensual valido.")
+    if (totalIngresos <= 0 && (!presupuesto || presupuestoNum <= 0)) {
+      setError("Ingresa al menos un monto en los ingresos.")
       return
     }
 
@@ -466,6 +511,34 @@ export function PresupuestoForm() {
 
         if (insertItemsError) {
           throw insertItemsError
+        }
+      }
+
+      // 4. Eliminar presupuestos de ingresos anteriores para este mes
+      await supabase
+        .from("presupuesto_ingresos")
+        .delete()
+        .eq("perfil_id", perfilActual.id)
+        .eq("mes", primerDiaMes)
+
+      // 5. Insertar nuevos presupuestos de ingresos
+      const ingresosToInsert = ingresosCategoria
+        .filter(ing => ing.montoPresupuestado > 0)
+        .map(ing => ({
+          perfil_id: perfilActual.id,
+          user_id: user.id,
+          categoria_ingreso_id: ing.id,
+          monto_presupuestado: ing.montoPresupuestado,
+          mes: primerDiaMes
+        }))
+
+      if (ingresosToInsert.length > 0) {
+        const { error: insertIngresosError } = await supabase
+          .from("presupuesto_ingresos")
+          .insert(ingresosToInsert)
+
+        if (insertIngresosError) {
+          throw insertIngresosError
         }
       }
 
