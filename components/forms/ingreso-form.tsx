@@ -9,10 +9,19 @@ import { Button } from "@/components/ui/button"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Settings, Plus, ChevronDown, ChevronUp, Building2, Wallet, Landmark, Smartphone, PiggyBank, ArrowRight, Banknote } from "lucide-react"
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Plus, ChevronDown, ChevronUp, Building2, Wallet, Landmark, Smartphone, PiggyBank, ArrowRight, Banknote, Pencil, Trash2, X, Check } from "lucide-react"
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
-import Link from "next/link"
 import { usePerfil } from "@/lib/contexts/perfil-context"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 type CajaDestino = {
   id: string
@@ -38,6 +47,10 @@ export function IngresoForm() {
   const [isExpanded, setIsExpanded] = useState(true)
   const [cajasDestino, setCajasDestino] = useState<CajaDestino[]>([])
   const [destinoCajaId, setDestinoCajaId] = useState<string>("")
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+  const [editingCategoryName, setEditingCategoryName] = useState("")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [categoryToDelete, setCategoryToDelete] = useState<{ id: string; nombre: string } | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -119,6 +132,98 @@ export function IngresoForm() {
     } catch (error) {
       // Manejar error silenciosamente
     }
+  }
+
+  const handleEditCategory = async (categoryId: string) => {
+    if (!editingCategoryName.trim() || !perfilActual?.id) return
+
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      const categoria = categorias.find(c => c.id === categoryId)
+      const oldName = categoria?.nombre
+
+      // Actualizar el nombre de la categoría
+      const { error: updateError } = await supabase
+        .from("categorias_ingresos")
+        .update({ nombre: editingCategoryName.trim() })
+        .eq("id", categoryId)
+        .eq("user_id", user.id)
+
+      if (!updateError) {
+        // Actualizar también los ingresos que usan esta categoría
+        if (oldName) {
+          await supabase
+            .from("ingresos")
+            .update({ tipo_ingreso: editingCategoryName.trim() })
+            .eq("tipo_ingreso", oldName)
+            .eq("user_id", user.id)
+            .eq("perfil_id", perfilActual.id)
+        }
+
+        // Si el tipo seleccionado era el anterior, actualizar al nuevo
+        if (tipoIngreso === oldName) {
+          setTipoIngreso(editingCategoryName.trim())
+        }
+
+        await loadCategorias()
+        setEditingCategoryId(null)
+        setEditingCategoryName("")
+      }
+    } catch (error) {
+      // Manejar error silenciosamente
+    }
+  }
+
+  const handleDeleteCategory = async () => {
+    if (!categoryToDelete || !perfilActual?.id) return
+
+    try {
+      const supabase = createClient()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Eliminar la categoría
+      const { error: deleteError } = await supabase
+        .from("categorias_ingresos")
+        .delete()
+        .eq("id", categoryToDelete.id)
+        .eq("user_id", user.id)
+
+      if (!deleteError) {
+        // Si el tipo seleccionado era la categoría eliminada, limpiar selección
+        if (tipoIngreso === categoryToDelete.nombre) {
+          setTipoIngreso("")
+        }
+
+        await loadCategorias()
+        setDeleteDialogOpen(false)
+        setCategoryToDelete(null)
+      }
+    } catch (error) {
+      // Manejar error silenciosamente
+    }
+  }
+
+  const startEditCategory = (category: { id: string; nombre: string }) => {
+    setEditingCategoryId(category.id)
+    setEditingCategoryName(category.nombre)
+  }
+
+  const cancelEditCategory = () => {
+    setEditingCategoryId(null)
+    setEditingCategoryName("")
+  }
+
+  const openDeleteDialog = (category: { id: string; nombre: string }) => {
+    setCategoryToDelete(category)
+    setDeleteDialogOpen(true)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -214,19 +319,12 @@ export function IngresoForm() {
   }
 
   return (
-    <Card className="max-w-2xl mx-auto glass-effect border-border/50">
+    <>
+      <Card className="max-w-2xl mx-auto glass-effect border-border/50">
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-2xl">Registrar Ingreso</CardTitle>
-            <CardDescription>Completa los datos de tu ingreso para {perfilActual.nombre}</CardDescription>
-          </div>
-          <Link href="/dashboard/configuracion">
-            <Button variant="outline" size="sm" className="gap-2 bg-transparent">
-              <Settings className="w-4 h-4" />
-              Gestionar Categorías
-            </Button>
-          </Link>
+        <div>
+          <CardTitle className="text-2xl">Registrar Ingreso</CardTitle>
+          <CardDescription>Completa los datos de tu ingreso para {perfilActual.nombre}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="pt-6">
@@ -253,12 +351,78 @@ export function IngresoForm() {
                     {categorias.map((cat) => (
                       <div
                         key={cat.id}
-                        className="flex items-center space-x-3 p-2 rounded hover:bg-green-500/5 transition-colors"
+                        className="flex items-center space-x-3 p-2 rounded hover:bg-green-500/5 transition-colors group"
                       >
                         <RadioGroupItem value={cat.nombre} id={cat.id} className="border-green-500" />
-                        <Label htmlFor={cat.id} className="flex-1 cursor-pointer font-normal">
-                          {cat.nombre}
-                        </Label>
+                        
+                        {editingCategoryId === cat.id ? (
+                          <div className="flex-1 flex items-center gap-2">
+                            <Input
+                              value={editingCategoryName}
+                              onChange={(e) => setEditingCategoryName(e.target.value)}
+                              className="h-8 bg-background/50 text-sm"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  handleEditCategory(cat.id)
+                                } else if (e.key === "Escape") {
+                                  cancelEditCategory()
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-green-500 hover:text-green-600 hover:bg-green-500/10"
+                              onClick={() => handleEditCategory(cat.id)}
+                            >
+                              <Check className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                              onClick={cancelEditCategory}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <Label htmlFor={cat.id} className="flex-1 cursor-pointer font-normal">
+                              {cat.nombre}
+                            </Label>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  startEditCategory(cat)
+                                }}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  openDeleteDialog(cat)
+                                }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </RadioGroup>
@@ -482,5 +646,28 @@ export function IngresoForm() {
         </form>
       </CardContent>
     </Card>
+
+      {/* Dialog de confirmación para eliminar categoría */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar categoria</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estas seguro de eliminar la categoria &quot;{categoryToDelete?.nombre}&quot;? 
+              Los ingresos registrados con esta categoria no seran eliminados, pero la categoria ya no estara disponible para nuevos registros.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteCategory}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
