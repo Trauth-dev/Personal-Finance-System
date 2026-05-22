@@ -591,31 +591,65 @@ export function PresupuestoForm() {
       </CardHeader>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Presupuesto y Mes */}
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="presupuesto" className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
-                Presupuesto Mensual (Guaranies)
+          {/* Sección INGRESOS */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setShowIngresos(!showIngresos)}
+              className="flex items-center justify-between w-full"
+            >
+              <Label className="flex items-center gap-2 text-base sm:text-lg font-semibold cursor-pointer">
+                <TrendingUp className="w-5 h-5 text-green-500" />
+                INGRESOS
+                {totalIngresos > 0 && (
+                  <span className="text-green-500 font-bold ml-2">
+                    {formatGuaranies(totalIngresos)}
+                  </span>
+                )}
               </Label>
-              <Input
-                id="presupuesto"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="15000000"
-                value={presupuesto}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, "")
-                  setPresupuesto(value)
-                }}
-                required
-                className="bg-background/50"
-              />
-              {presupuesto && (
-                <p className="text-sm text-muted-foreground">{formatGuaranies(presupuestoNum)}</p>
-              )}
-            </div>
+              {showIngresos ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+            
+            {showIngresos && (
+              <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4 space-y-3">
+                {ingresosCategoria.length > 0 ? (
+                  ingresosCategoria.map((ingreso) => (
+                    <div key={ingreso.id} className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      <span className="flex-1 text-sm font-medium">{ingreso.nombre}</span>
+                      <div className="w-32 sm:w-40">
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="0"
+                          value={ingreso.montoPresupuestado || ""}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/[^0-9]/g, "")
+                            handleIngresoMontoChange(ingreso.id, value)
+                          }}
+                          className="h-8 text-right bg-background/50 text-sm"
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    No hay categorias de ingreso. Crea una en la seccion de Ingresos.
+                  </p>
+                )}
+                {totalIngresos > 0 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-green-500/20">
+                    <span className="font-semibold text-green-600">Total Ingresos:</span>
+                    <span className="font-bold text-green-600">{formatGuaranies(totalIngresos)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Mes y Año */}
+          <div className="grid gap-6 md:grid-cols-2">
 
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
@@ -653,10 +687,10 @@ export function PresupuestoForm() {
             </div>
           </div>
 
-          {/* Distribución por Categorías */}
+          {/* Gastos por categorias */}
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 border-b pb-2">
-              <Label className="text-base sm:text-lg font-semibold">Distribucion por Categorias</Label>
+              <Label className="text-base sm:text-lg font-semibold">Gastos por categorias</Label>
               <div className={`text-sm sm:text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
                 Total: {formatGuaranies(presupuestoNum)} ({porcentajeTotal.toFixed(1)}%)
               </div>
