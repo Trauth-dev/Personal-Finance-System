@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3 } from 'lucide-react'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp } from 'lucide-react'
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
@@ -70,6 +70,12 @@ interface CategoriaData {
   tipoId?: string // ID del tipo en tipos_categoria_egreso
 }
 
+interface IngresoCategoria {
+  id: string
+  nombre: string
+  montoPresupuestado: number
+}
+
 export function PresupuestoForm() {
   const { perfilActual } = usePerfil()
   const todayStr = getTodayDate()
@@ -84,6 +90,8 @@ export function PresupuestoForm() {
   const [error, setError] = useState<string | null>(null)
   const [newItemName, setNewItemName] = useState("")
   const [addingToCategoria, setAddingToCategoria] = useState<string | null>(null)
+  const [ingresosCategoria, setIngresosCategoria] = useState<IngresoCategoria[]>([])
+  const [showIngresos, setShowIngresos] = useState(true)
   const router = useRouter()
   const supabase = createClient()
 
@@ -183,6 +191,34 @@ export function PresupuestoForm() {
         setPresupuesto(String(presupuestoExistente.meta_salario || ""))
       }
 
+      // 5. Cargar categorías de ingresos del usuario
+      const { data: categoriasIngresos } = await supabase
+        .from("categorias_ingresos")
+        .select("id, nombre")
+        .eq("perfil_id", perfilActual.id)
+        .order("nombre")
+
+      // 6. Cargar montos presupuestados de ingresos para el mes
+      const { data: ingresosPresupuesto } = await supabase
+        .from("presupuesto_ingresos")
+        .select("categoria_ingreso_id, monto_presupuestado")
+        .eq("perfil_id", perfilActual.id)
+        .eq("mes", primerDiaMes)
+
+      // Crear mapa de montos presupuestados
+      const ingresosMontoMap: Record<string, number> = {}
+      ingresosPresupuesto?.forEach(item => {
+        ingresosMontoMap[item.categoria_ingreso_id] = Number(item.monto_presupuestado) || 0
+      })
+
+      // Mapear categorías de ingresos con sus montos
+      const ingresosData: IngresoCategoria[] = (categoriasIngresos || []).map(cat => ({
+        id: cat.id,
+        nombre: cat.nombre,
+        montoPresupuestado: ingresosMontoMap[cat.id] || 0
+      }))
+      setIngresosCategoria(ingresosData)
+
     } catch (err) {
       console.error("Error loading user data:", err)
     } finally {
@@ -208,8 +244,17 @@ export function PresupuestoForm() {
 
   // Calcular totales
   const totalAsignado = Object.values(categoriasData).reduce((sum, cat) => sum + cat.total, 0)
-  const presupuestoNum = Number(presupuesto) || 0
+  const totalIngresos = ingresosCategoria.reduce((sum, ing) => sum + ing.montoPresupuestado, 0)
+  const presupuestoNum = totalIngresos > 0 ? totalIngresos : Number(presupuesto) || 0
   const porcentajeTotal = presupuestoNum > 0 ? (totalAsignado / presupuestoNum) * 100 : 0
+
+  // Manejar cambio de monto en ingreso
+  const handleIngresoMontoChange = (ingresoId: string, newMonto: string) => {
+    const montoNum = Number(newMonto.replace(/[^0-9]/g, "")) || 0
+    setIngresosCategoria(prev => 
+      prev.map(ing => ing.id === ingresoId ? { ...ing, montoPresupuestado: montoNum } : ing)
+    )
+  }
 
   // Manejar cambio de monto en subcategoría
   const handleMontoChange = (categoriaKey: string, itemId: string, newMonto: string) => {
@@ -373,8 +418,8 @@ export function PresupuestoForm() {
       return
     }
 
-    if (!presupuesto || presupuestoNum <= 0) {
-      setError("Ingresa un presupuesto mensual valido.")
+    if (totalIngresos <= 0 && (!presupuesto || presupuestoNum <= 0)) {
+      setError("Ingresa al menos un monto en los ingresos.")
       return
     }
 
@@ -469,6 +514,34 @@ export function PresupuestoForm() {
         }
       }
 
+      // 4. Eliminar presupuestos de ingresos anteriores para este mes
+      await supabase
+        .from("presupuesto_ingresos")
+        .delete()
+        .eq("perfil_id", perfilActual.id)
+        .eq("mes", primerDiaMes)
+
+      // 5. Insertar nuevos presupuestos de ingresos
+      const ingresosToInsert = ingresosCategoria
+        .filter(ing => ing.montoPresupuestado > 0)
+        .map(ing => ({
+          perfil_id: perfilActual.id,
+          user_id: user.id,
+          categoria_ingreso_id: ing.id,
+          monto_presupuestado: ing.montoPresupuestado,
+          mes: primerDiaMes
+        }))
+
+      if (ingresosToInsert.length > 0) {
+        const { error: insertIngresosError } = await supabase
+          .from("presupuesto_ingresos")
+          .insert(ingresosToInsert)
+
+        if (insertIngresosError) {
+          throw insertIngresosError
+        }
+      }
+
       setSuccess(true)
 
       setTimeout(() => {
@@ -518,31 +591,65 @@ export function PresupuestoForm() {
       </CardHeader>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Presupuesto y Mes */}
-          <div className="grid gap-6 md:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="presupuesto" className="flex items-center gap-2">
-                <DollarSign className="w-4 h-4" />
-                Presupuesto Mensual (Guaranies)
+          {/* Sección INGRESOS */}
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setShowIngresos(!showIngresos)}
+              className="flex items-center justify-between w-full"
+            >
+              <Label className="flex items-center gap-2 text-base sm:text-lg font-semibold cursor-pointer">
+                <TrendingUp className="w-5 h-5 text-green-500" />
+                INGRESOS
+                {totalIngresos > 0 && (
+                  <span className="text-green-500 font-bold ml-2">
+                    {formatGuaranies(totalIngresos)}
+                  </span>
+                )}
               </Label>
-              <Input
-                id="presupuesto"
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                placeholder="15000000"
-                value={presupuesto}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, "")
-                  setPresupuesto(value)
-                }}
-                required
-                className="bg-background/50"
-              />
-              {presupuesto && (
-                <p className="text-sm text-muted-foreground">{formatGuaranies(presupuestoNum)}</p>
-              )}
-            </div>
+              {showIngresos ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+            
+            {showIngresos && (
+              <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4 space-y-3">
+                {ingresosCategoria.length > 0 ? (
+                  ingresosCategoria.map((ingreso) => (
+                    <div key={ingreso.id} className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                      <span className="flex-1 text-sm font-medium">{ingreso.nombre}</span>
+                      <div className="w-32 sm:w-40">
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="0"
+                          value={ingreso.montoPresupuestado || ""}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/[^0-9]/g, "")
+                            handleIngresoMontoChange(ingreso.id, value)
+                          }}
+                          className="h-8 text-right bg-background/50 text-sm"
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    No hay categorias de ingreso. Crea una en la seccion de Ingresos.
+                  </p>
+                )}
+                {totalIngresos > 0 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-green-500/20">
+                    <span className="font-semibold text-green-600">Total Ingresos:</span>
+                    <span className="font-bold text-green-600">{formatGuaranies(totalIngresos)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Mes y Año */}
+          <div className="grid gap-6 md:grid-cols-2">
 
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
@@ -580,10 +687,10 @@ export function PresupuestoForm() {
             </div>
           </div>
 
-          {/* Distribución por Categorías */}
+          {/* Gastos por categorias */}
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 border-b pb-2">
-              <Label className="text-base sm:text-lg font-semibold">Distribucion por Categorias</Label>
+              <Label className="text-base sm:text-lg font-semibold">Gastos por categorias</Label>
               <div className={`text-sm sm:text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
                 Total: {formatGuaranies(presupuestoNum)} ({porcentajeTotal.toFixed(1)}%)
               </div>

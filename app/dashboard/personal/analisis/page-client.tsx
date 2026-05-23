@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { MonthSelector } from "@/components/personal/month-selector"
 import { AnalisisMensualComparativo } from "@/components/personal/analisis-mensual-comparativo"
@@ -15,12 +16,21 @@ interface Props {
 }
 
 export function AnalisisFinancieroClient({ perfilId }: Props) {
+  const searchParams = useSearchParams()
+  const tabFromUrl = searchParams.get("tab") || "analisis"
+  
   const today = getParaguayDate()
   const currentMonth = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}`
   
   const [selectedMonth, setSelectedMonth] = useState(currentMonth)
   const [loading, setLoading] = useState(true)
   const [analisisData, setAnalisisData] = useState<any>(null)
+  const [activeTab, setActiveTab] = useState(tabFromUrl)
+
+  // Actualizar tab activa cuando cambia la URL
+  useEffect(() => {
+    setActiveTab(tabFromUrl)
+  }, [tabFromUrl])
 
   useEffect(() => {
     loadAnalisisData()
@@ -209,7 +219,7 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
   return (
     <div className="container mx-auto px-4 py-6 max-w-7xl">
       {/* Sub-tabs de navegacion */}
-      <Tabs defaultValue="analisis" className="w-full">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full justify-start bg-transparent border-b border-border rounded-none h-auto p-0 mb-6">
           <TabsTrigger
             value="analisis"
