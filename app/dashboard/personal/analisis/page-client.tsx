@@ -223,25 +223,25 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
         <TabsList className="w-full justify-start bg-transparent border-b border-border rounded-none h-auto p-0 mb-6">
           <TabsTrigger
             value="analisis"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 font-medium px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
           >
             Analisis Financiero
           </TabsTrigger>
           <TabsTrigger
             value="presupuesto-vs-realidad"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 font-medium px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
           >
             Presupuesto vs Realidad
           </TabsTrigger>
           <TabsTrigger
             value="bola-de-nieve"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 font-medium px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
           >
             Bola de Nieve
           </TabsTrigger>
           <TabsTrigger
             value="reportes"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-blue-600 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-blue-600 font-medium px-4 py-3 text-muted-foreground hover:text-foreground transition-colors"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
           >
             Reportes
           </TabsTrigger>
