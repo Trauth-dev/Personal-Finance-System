@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { DashboardHeader } from "@/components/dashboard-header"
-import { PlanBolaNieve } from "@/components/personal/plan-bola-nieve"
+import { PlanAntiDeudasClient } from "./page-client"
 
 export const revalidate = 0
 
@@ -35,7 +35,7 @@ export default async function PlanAntiDeudasPage() {
       />
 
       <div className="p-4 md:p-6">
-        <PlanBolaNieve userId={user.id} perfilId={perfilPersonal.id} />
+        <PlanAntiDeudasClient userId={user.id} perfilId={perfilPersonal.id} />
       </div>
     </div>
   )
