@@ -292,19 +292,19 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                 
                 return (
                   <div key={deuda.id} className="grid grid-cols-[40px_150px_100px_80px_120px_repeat(12,80px)_100px_100px] gap-1 mb-1">
-                    <div className="bg-slate-100 dark:bg-slate-800 text-xs font-medium p-2 rounded text-center">
+                    <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium p-2 rounded text-center">
                       {index + 1}
                     </div>
-                    <div className="bg-slate-100 dark:bg-slate-800 text-xs font-medium p-2 rounded truncate" title={deuda.nombre}>
+                    <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs font-medium p-2 rounded truncate" title={deuda.nombre}>
                       {deuda.nombre}
                     </div>
-                    <div className="bg-slate-100 dark:bg-slate-800 text-xs p-2 rounded text-right">
+                    <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs p-2 rounded text-right">
                       {formatGuaranies(deuda.monto_cuota || 0).replace('Gs ', '')}
                     </div>
-                    <div className="bg-slate-100 dark:bg-slate-800 text-xs p-2 rounded text-center">
+                    <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs p-2 rounded text-center">
                       {cuotasRestantes}
                     </div>
-                    <div className="bg-slate-100 dark:bg-slate-800 text-xs p-2 rounded text-right font-medium">
+                    <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs p-2 rounded text-right font-medium">
                       {formatGuaranies(pendiente).replace('Gs ', '')}
                     </div>
                     {meses.map(mes => {
@@ -312,21 +312,21 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                       const tienePago = pago > 0
                       
                       return (
-                        <div key={mes.key} className={`text-xs p-1 rounded ${tienePago ? 'bg-green-100 dark:bg-green-900/30' : 'bg-slate-50 dark:bg-slate-900'}`}>
+                        <div key={mes.key} className={`text-xs p-1 rounded ${tienePago ? 'bg-green-100 dark:bg-green-900/40' : 'bg-slate-50 dark:bg-slate-800/50'}`}>
                           <Input
                             type="text"
                             value={pago > 0 ? formatGuaranies(pago).replace('Gs ', '') : ''}
                             onChange={(e) => actualizarPago(deuda.id, mes.key, e.target.value)}
-                            className={`h-6 text-xs text-right p-1 border-0 ${tienePago ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-transparent'}`}
+                            className={`h-6 text-xs text-right p-1 border-0 ${tienePago ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 font-medium' : 'bg-transparent text-slate-900 dark:text-slate-100'}`}
                             placeholder="0"
                           />
                         </div>
                       )
                     })}
-                    <div className={`text-xs p-2 rounded text-right font-bold ${saldoFinal === 0 ? 'bg-green-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                    <div className={`text-xs p-2 rounded text-right font-bold ${saldoFinal === 0 ? 'bg-green-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100'}`}>
                       {formatGuaranies(totalPagado).replace('Gs ', '')}
                     </div>
-                    <div className={`text-xs p-2 rounded text-right font-bold ${saldoFinal === 0 ? 'bg-green-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                    <div className={`text-xs p-2 rounded text-right font-bold ${saldoFinal === 0 ? 'bg-green-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100'}`}>
                       {saldoFinal === 0 ? '0' : formatGuaranies(saldoFinal).replace('Gs ', '')}
                     </div>
                   </div>
@@ -355,15 +355,15 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
               <div className="grid grid-cols-[40px_150px_100px_80px_120px_repeat(12,80px)_100px_100px] gap-1 mt-4 mb-1">
                 <div className="p-2"></div>
                 <div className="p-2"></div>
-                <div className="bg-slate-200 dark:bg-slate-700 text-xs font-bold p-2 rounded text-right">
+                <div className="bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold p-2 rounded text-right">
                   {formatGuaranies(deudas.reduce((sum, d) => sum + (d.monto_cuota || 0), 0)).replace('Gs ', '')}
                 </div>
                 <div className="p-2"></div>
-                <div className="bg-slate-200 dark:bg-slate-700 text-xs font-bold p-2 rounded text-right">
+                <div className="bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold p-2 rounded text-right">
                   {formatGuaranies(totalGeneral).replace('Gs ', '')}
                 </div>
                 {meses.map(mes => (
-                  <div key={mes.key} className="bg-green-200 dark:bg-green-900/50 text-xs font-bold p-2 rounded text-right text-green-700 dark:text-green-400">
+                  <div key={mes.key} className="bg-green-200 dark:bg-green-800/60 text-xs font-bold p-2 rounded text-right text-green-800 dark:text-green-200">
                     {formatGuaranies(totalesPorMes[mes.key] || 0).replace('Gs ', '')}
                   </div>
                 ))}
@@ -382,23 +382,23 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                   <Zap className="w-3 h-3" />
                   Acelerador
                 </div>
-                <div className="bg-cyan-100 dark:bg-cyan-900/30 p-1 rounded">
+                <div className="bg-cyan-100 dark:bg-cyan-800/50 p-1 rounded">
                   <Input
                     type="text"
                     value={acelerador > 0 ? formatGuaranies(acelerador).replace('Gs ', '') : ''}
                     onChange={(e) => setAcelerador(Number(e.target.value.replace(/\D/g, '')) || 0)}
-                    className="h-6 text-xs text-right p-1 border-0 bg-transparent text-cyan-700 dark:text-cyan-400 font-bold"
+                    className="h-6 text-xs text-right p-1 border-0 bg-transparent text-cyan-700 dark:text-cyan-200 font-bold"
                     placeholder="0"
                   />
                 </div>
                 <div className="p-2"></div>
-                <div className="bg-amber-100 dark:bg-amber-900/30 text-xs font-bold p-2 rounded text-right text-amber-700 dark:text-amber-400">
+                <div className="bg-amber-100 dark:bg-amber-800/50 text-xs font-bold p-2 rounded text-right text-amber-700 dark:text-amber-200">
                   {formatGuaranies(deudas.reduce((sum, d) => sum + (d.monto_cuota || 0), 0) + acelerador).replace('Gs ', '')}
                 </div>
                 {meses.map((mes, i) => (
-                  <div key={mes.key} className={`p-2 rounded ${i === 0 ? 'bg-amber-100 dark:bg-amber-900/30' : ''}`}>
+                  <div key={mes.key} className={`p-2 rounded ${i === 0 ? 'bg-amber-100 dark:bg-amber-800/50' : ''}`}>
                     {i === 0 && acelerador > 0 && (
-                      <span className="text-xs font-bold text-amber-600">{formatGuaranies(acelerador).replace('Gs ', '')}</span>
+                      <span className="text-xs font-bold text-amber-700 dark:text-amber-200">{formatGuaranies(acelerador).replace('Gs ', '')}</span>
                     )}
                   </div>
                 ))}
