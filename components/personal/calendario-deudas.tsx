@@ -359,7 +359,7 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </Button>
-                <span className="px-3 font-bold text-sm min-w-[60px] text-center">{añoSeleccionado}</span>
+                <span className="px-3 font-bold text-sm min-w-[60px] text-center text-slate-900 dark:text-white">{añoSeleccionado}</span>
                 <Button
                   variant="ghost"
                   size="icon"
