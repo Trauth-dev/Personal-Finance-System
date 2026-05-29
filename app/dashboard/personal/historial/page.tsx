@@ -689,15 +689,20 @@ export default function PersonalHistorialPage() {
                 ) : ingresos.length > 0 ? (
                   ingresos.map((ingreso) => (
                     <Card key={ingreso.id} className="glass-effect border-border/50 hover:glow-effect transition-all">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center">
-                              <TrendingUp className="w-6 h-6 text-primary" />
+                      <CardContent className="p-3 sm:p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="flex items-center gap-3 sm:gap-4">
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
+                              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
                             </div>
-                            <div>
-                              <h3 className="font-semibold mb-1">{ingreso.tipo_ingreso}</h3>
-                              <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-semibold text-sm sm:text-base">{ingreso.tipo_ingreso}</h3>
+                                <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-[10px] sm:text-xs">
+                                  Ingreso
+                                </Badge>
+                              </div>
+                              <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
                                 <Calendar className="w-3 h-3" />
                                 {formatDateWithoutTimezone(ingreso.fecha)}
                               </p>
@@ -723,29 +728,31 @@ export default function PersonalHistorialPage() {
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <p className="text-2xl font-bold text-primary">
+                          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 mt-2 sm:mt-0">
+                            <p className="text-lg sm:text-2xl font-bold text-primary">
                               +₲{Number(ingreso.monto).toLocaleString("es-PY")}
                             </p>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(ingreso, "ingreso")}
-                              className="text-primary hover:text-primary hover:bg-primary/10"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setDeleteId(ingreso.id)
-                                setDeleteType("ingreso")
-                              }}
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(ingreso, "ingreso")}
+                                className="text-primary hover:text-primary hover:bg-primary/10 h-8 w-8 sm:h-10 sm:w-10"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDeleteId(ingreso.id)
+                                  setDeleteType("ingreso")
+                                }}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 sm:h-10 sm:w-10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
@@ -770,25 +777,38 @@ export default function PersonalHistorialPage() {
                 ) : egresos.length > 0 ? (
                   egresos.map((egreso) => (
                     <Card key={egreso.id} className="glass-effect border-border/50 hover:glow-effect transition-all">
-                      <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-4">
+                      <CardContent className="p-3 sm:p-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                          <div className="flex items-center gap-3 sm:gap-4">
                             <div
-                              className="w-12 h-12 rounded-lg flex items-center justify-center"
+                              className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                               style={{
                                 backgroundColor: `${egreso.tipos_categoria_egreso?.color || "#ef4444"}20`,
                               }}
                             >
                               <TrendingDown
-                                className="w-6 h-6"
+                                className="w-5 h-5 sm:w-6 sm:h-6"
                                 style={{ color: egreso.tipos_categoria_egreso?.color || "#ef4444" }}
                               />
                             </div>
-                            <div>
-                              <h3 className="font-semibold mb-1">
-                                {egreso.tipos_categoria_egreso?.nombre || "Sin categoría"}
-                              </h3>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h3 className="font-semibold text-sm sm:text-base">
+                                  {egreso.tipos_categoria_egreso?.nombre || "Sin categoria"}
+                                </h3>
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-[10px] sm:text-xs"
+                                  style={{ 
+                                    backgroundColor: `${egreso.tipos_categoria_egreso?.color || "#ef4444"}20`,
+                                    color: egreso.tipos_categoria_egreso?.color || "#ef4444",
+                                    borderColor: `${egreso.tipos_categoria_egreso?.color || "#ef4444"}50`
+                                  }}
+                                >
+                                  Egreso
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-muted-foreground mt-0.5 flex-wrap">
                                 <span className="flex items-center gap-1">
                                   <Calendar className="w-3 h-3" />
                                   {formatDateWithoutTimezone(egreso.fecha)}
@@ -798,7 +818,7 @@ export default function PersonalHistorialPage() {
                                 )}
                               </div>
                               {egreso.concepto && (
-                                <p className="text-sm text-muted-foreground mt-1">{egreso.concepto}</p>
+                                <p className="text-xs sm:text-sm text-muted-foreground mt-1 truncate">{egreso.concepto}</p>
                               )}
                               {origenesInfo[egreso.id] && (
                                 <div className="flex items-center gap-1.5 mt-1.5">
@@ -816,32 +836,34 @@ export default function PersonalHistorialPage() {
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 mt-2 sm:mt-0">
                             <p
-                              className="text-2xl font-bold"
+                              className="text-lg sm:text-2xl font-bold"
                               style={{ color: egreso.tipos_categoria_egreso?.color || "#ef4444" }}
                             >
                               -₲{Number(egreso.monto).toLocaleString("es-PY")}
                             </p>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEdit(egreso, "egreso")}
-                              className="text-primary hover:text-primary hover:bg-primary/10"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setDeleteId(egreso.id)
-                                setDeleteType("egreso")
-                              }}
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleEdit(egreso, "egreso")}
+                                className="text-primary hover:text-primary hover:bg-primary/10 h-8 w-8 sm:h-10 sm:w-10"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => {
+                                  setDeleteId(egreso.id)
+                                  setDeleteType("egreso")
+                                }}
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 sm:h-10 sm:w-10"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
