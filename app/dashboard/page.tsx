@@ -12,7 +12,18 @@ export default async function DashboardPage() {
     redirect("/auth/login")
   }
 
-  // Redirigir a la pagina de carga inteligente post-login
-  // Esta pagina permite carga por voz y acceso rapido al dashboard
-  redirect("/inicio")
+  // Determinar el nivel de plan del usuario
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("plan_tier")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  // Usuarios de plan basico (y nuevos sin perfil aun) inician en Carga de Datos.
+  // Solo los usuarios con plan 'completo' inician en la Carga por Voz IA.
+  if (profile?.plan_tier === "completo") {
+    redirect("/inicio")
+  }
+
+  redirect("/dashboard/carga")
 }

@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import { useUserPlanAccess, getRequiredPlanForRoute, PLAN_LABELS, PLAN_DESCRIPTIONS, type PlanType } from "@/hooks/use-user-plan-access"
+import { usePlanTier, isRouteAllowedForBasico } from "@/hooks/use-plan-tier"
 import { Lock, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -13,15 +14,52 @@ interface PlanAccessGuardProps {
 export function PlanAccessGuard({ children }: PlanAccessGuardProps) {
   const pathname = usePathname()
   const { hasAccess, isLoading, allowedPlans } = useUserPlanAccess()
+  const { isBasico, isLoading: isLoadingTier } = usePlanTier()
   
   // Determinar que plan requiere la ruta actual
   const requiredPlan = getRequiredPlanForRoute(pathname)
   
   // Si esta cargando, mostrar loading
-  if (isLoading) {
+  if (isLoading || isLoadingTier) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
+  // Restriccion por nivel de plan (basico): bloquear rutas no permitidas
+  if (isBasico && !isRouteAllowedForBasico(pathname)) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
+        <div className="max-w-md w-full text-center space-y-6">
+          <div className="mx-auto w-20 h-20 rounded-full bg-slate-800/50 flex items-center justify-center border border-slate-700">
+            <Lock className="w-10 h-10 text-slate-400" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-bold text-white">Función Premium</h1>
+            <p className="text-slate-400">
+              Esta sección no está incluida en tu <span className="text-cyan-400 font-semibold">Plan Básico</span>
+            </p>
+          </div>
+          <div className="p-4 rounded-lg bg-slate-800/30 border border-slate-700">
+            <p className="text-sm text-slate-300">
+              Mejora tu plan para acceder a Diagnóstico Inteligente, Cajas de Ahorro, Deudas, Plan Anti-Deudas,
+              Metas, Asesoramiento y más herramientas.
+            </p>
+          </div>
+          <div className="pt-4">
+            <Link href="/dashboard/personal">
+              <Button variant="outline" className="gap-2">
+                <ArrowLeft className="w-4 h-4" />
+                Volver al Dashboard
+              </Button>
+            </Link>
+          </div>
+          <p className="text-xs text-slate-500">
+            Para mejorar tu plan, contacta al administrador.
+          </p>
+        </div>
       </div>
     )
   }

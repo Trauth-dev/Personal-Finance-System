@@ -48,6 +48,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               id: user.id,
               email: user.email,
               nombre_completo: user.user_metadata?.nombre_completo || user.email?.split("@")[0] || "Usuario",
+              telefono: user.user_metadata?.telefono || null,
+              // Usuarios nuevos arrancan con plan basico
+              plan_tier: "basico",
             })
 
             setUserName(user.user_metadata?.nombre_completo || user.email?.split("@")[0] || "Usuario")

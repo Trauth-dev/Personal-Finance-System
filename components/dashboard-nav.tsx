@@ -45,6 +45,14 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { usePerfil } from "@/lib/contexts/perfil-context"
+import { usePlanTier } from "@/hooks/use-plan-tier"
+
+// Rutas visibles para usuarios de plan basico (dentro del perfil Personal)
+const BASICO_PERSONAL_HREFS = [
+  "/dashboard/personal",
+  "/dashboard/carga",
+  "/dashboard/personal/historial",
+]
 
 const navItemsPersonal = [
   {
@@ -274,6 +282,7 @@ function NavContent({
   const pathname = usePathname()
   const router = useRouter()
   const { perfilActual } = usePerfil()
+  const { isBasico } = usePlanTier()
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -294,6 +303,14 @@ function NavContent({
       case "crm":
         return [...navItemsCRM, ...navItemsCommon]
       default:
+        // Plan basico: solo Dashboard Principal, Carga de Datos, Historial + Configuracion
+        if (isBasico) {
+          const itemsBasico = navItemsPersonal.filter((item) =>
+            BASICO_PERSONAL_HREFS.includes(item.href),
+          )
+          const configItem = navItemsCommon.filter((item) => item.href === "/dashboard/configuracion")
+          return [...itemsBasico, ...configItem]
+        }
         return [...navItemsPersonal, ...navItemsCommon]
     }
   }
