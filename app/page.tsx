@@ -12,7 +12,7 @@ export default function LandingPage() {
             <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
               <TrendingUp className="w-6 h-6 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold text-foreground">FinanzasPro</span>
+            <span className="text-2xl font-bold text-foreground">Prospera+</span>
           </div>
           <Link href="/auth/login">
             <Button variant="outline" className="glass-effect bg-transparent">

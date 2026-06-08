@@ -1,4 +1,4 @@
-# FinanzasPro - Sistema de Gestión Financiera
+# Prospera+ - Sistema de Gestión Financiera
 
 Sistema integral de gestión financiera desarrollado con tecnologías modernas, diseñado para proporcionar control total sobre finanzas personales y empresariales con análisis en tiempo real y visualizaciones interactivas.
 

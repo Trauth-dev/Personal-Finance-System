@@ -120,7 +120,7 @@ function ActualizarContrasenaContent() {
             <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center glow-effect">
               <TrendingUp className="w-7 h-7 text-primary-foreground" />
             </div>
-            <span className="text-3xl font-bold text-foreground">FinanzasPro</span>
+            <span className="text-3xl font-bold text-foreground">Prospera+</span>
           </div>
 
           <Card className="glass-effect border-border/50">
@@ -154,7 +154,7 @@ function ActualizarContrasenaContent() {
             <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center glow-effect">
               <TrendingUp className="w-7 h-7 text-primary-foreground" />
             </div>
-            <span className="text-3xl font-bold text-foreground">FinanzasPro</span>
+            <span className="text-3xl font-bold text-foreground">Prospera+</span>
           </div>
 
           <Card className="glass-effect border-border/50">
@@ -180,7 +180,7 @@ function ActualizarContrasenaContent() {
           <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center glow-effect">
             <TrendingUp className="w-7 h-7 text-primary-foreground" />
           </div>
-          <span className="text-3xl font-bold text-foreground">FinanzasPro</span>
+          <span className="text-3xl font-bold text-foreground">Prospera+</span>
         </div>
 
         <Card className="glass-effect border-border/50">

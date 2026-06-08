@@ -1000,7 +1000,7 @@ const [greeting, setGreeting] = useState("Hola")
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white">FinanzasPro</h1>
+              <h1 className="text-xl font-bold text-white">Prospera+</h1>
               <p className="text-xs text-slate-400">Carga Inteligente</p>
             </div>
           </div>

@@ -306,7 +306,7 @@ function NavContent({
           <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center glow-effect flex-shrink-0">
             <TrendingUp className="w-6 h-6 text-primary-foreground" />
           </div>
-          {(!isCollapsed || isMobile) && <span className="text-xl font-bold text-sidebar-foreground">FinanzasPro</span>}
+          {(!isCollapsed || isMobile) && <span className="text-xl font-bold text-sidebar-foreground">Prospera+</span>}
         </div>
 
         {(!isCollapsed || isMobile) && (
