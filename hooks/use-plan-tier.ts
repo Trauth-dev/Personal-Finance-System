@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { getPlanFeatures, type PlanFeatures, type PlanTier } from "@/lib/plans/plan-features"
 
-export type PlanTier = "basico" | "completo"
+export type { PlanTier } from "@/lib/plans/plan-features"
 
 interface UsePlanTierReturn {
   // Nivel de plan del usuario: 'basico' | 'completo'
@@ -12,6 +13,8 @@ interface UsePlanTierReturn {
   isLoading: boolean
   // atajo: true si el usuario es de plan basico
   isBasico: boolean
+  // capacidades del plan actual (config-driven, escalable a nuevos planes)
+  features: PlanFeatures
   // refrescar
   refresh: () => Promise<void>
 }
@@ -79,6 +82,7 @@ export function usePlanTier(): UsePlanTierReturn {
     tier,
     isLoading,
     isBasico: tier === "basico",
+    features: getPlanFeatures(tier),
     refresh: fetchTier,
   }
 }
