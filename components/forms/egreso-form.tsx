@@ -102,7 +102,7 @@ const DISPLAY_NOMBRES: Record<string, string> = {
 
 export function EgresoForm() {
   const { perfilActual } = usePerfil()
-  const { features } = usePlanTier()
+  const { features, isLoading: isLoadingPlan } = usePlanTier()
   const egresoFeatures = features.egreso
   const [tiposCategorias, setTiposCategorias] = useState<TipoCategoria[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
@@ -697,7 +697,7 @@ export function EgresoForm() {
             )}
           </div>
 
-          {egresoFeatures.seguimientoDeudas && esPagoDeudas && (
+          {!isLoadingPlan && egresoFeatures.seguimientoDeudas && esPagoDeudas && (
             <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-red-500/10 via-orange-500/5 to-transparent border border-red-500/30">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1301,7 +1301,7 @@ export function EgresoForm() {
           )}
 
           {/* Selector de Origen de Fondos */}
-          {egresoFeatures.origenFondos && selectedTipo && (
+          {!isLoadingPlan && egresoFeatures.origenFondos && selectedTipo && (
             <div className="space-y-3 p-5 rounded-xl bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/30">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-full bg-emerald-500/20">

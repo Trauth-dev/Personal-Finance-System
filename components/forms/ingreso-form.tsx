@@ -36,7 +36,7 @@ type CajaDestino = {
 
 export function IngresoForm() {
   const { perfilActual } = usePerfil()
-  const { features } = usePlanTier()
+  const { features, isLoading: isLoadingPlan } = usePlanTier()
   const ingresoFeatures = features.ingreso
   const [tipoIngreso, setTipoIngreso] = useState("")
   const [monto, setMonto] = useState("")
@@ -504,7 +504,7 @@ export function IngresoForm() {
           </div>
 
           {/* Selector de Caja Destino */}
-          {ingresoFeatures.destinoIngreso && tipoIngreso && (
+          {!isLoadingPlan && ingresoFeatures.destinoIngreso && tipoIngreso && (
             <div className="space-y-3 p-5 rounded-xl bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-transparent border border-blue-500/30">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-full bg-blue-500/20">
