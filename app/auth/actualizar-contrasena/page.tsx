@@ -7,8 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { useState, useEffect, Suspense } from "react"
-import { TrendingUp, Lock, AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react"
+import { Lock, AlertCircle, CheckCircle2, Eye, EyeOff } from "lucide-react"
 
 function ActualizarContrasenaContent() {
   const [password, setPassword] = useState("")
@@ -116,11 +117,15 @@ function ActualizarContrasenaContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/10 p-4">
         <div className="w-full max-w-md">
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center glow-effect">
-              <TrendingUp className="w-7 h-7 text-primary-foreground" />
-            </div>
-            <span className="text-3xl font-bold text-foreground">Prospera+</span>
+          <div className="flex items-center justify-center mb-8">
+            <Image
+              src="/prospera-logo.png"
+              alt="Prospera+ - Abundancia con propósito"
+              width={220}
+              height={116}
+              className="h-16 w-auto"
+              priority
+            />
           </div>
 
           <Card className="glass-effect border-border/50">
@@ -150,11 +155,15 @@ function ActualizarContrasenaContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/10 p-4">
         <div className="w-full max-w-md">
-          <div className="flex items-center justify-center gap-2 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center glow-effect">
-              <TrendingUp className="w-7 h-7 text-primary-foreground" />
-            </div>
-            <span className="text-3xl font-bold text-foreground">Prospera+</span>
+          <div className="flex items-center justify-center mb-8">
+            <Image
+              src="/prospera-logo.png"
+              alt="Prospera+ - Abundancia con propósito"
+              width={220}
+              height={116}
+              className="h-16 w-auto"
+              priority
+            />
           </div>
 
           <Card className="glass-effect border-border/50">
@@ -176,11 +185,15 @@ function ActualizarContrasenaContent() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-background to-primary/10 p-4">
       <div className="w-full max-w-md">
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-primary flex items-center justify-center glow-effect">
-            <TrendingUp className="w-7 h-7 text-primary-foreground" />
-          </div>
-          <span className="text-3xl font-bold text-foreground">Prospera+</span>
+        <div className="flex items-center justify-center mb-8">
+          <Image
+            src="/prospera-logo.png"
+            alt="Prospera+ - Abundancia con propósito"
+            width={220}
+            height={116}
+            className="h-16 w-auto"
+            priority
+          />
         </div>
 
         <Card className="glass-effect border-border/50">

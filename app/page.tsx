@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, TrendingUp, Shield, Zap } from "lucide-react"
 
@@ -9,10 +10,14 @@ export default function LandingPage() {
         {/* Header */}
         <header className="flex items-center justify-between mb-20">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center">
-              <TrendingUp className="w-6 h-6 text-primary-foreground" />
-            </div>
-            <span className="text-2xl font-bold text-foreground">Prospera+</span>
+            <Image
+              src="/prospera-logo.png"
+              alt="Prospera+ - Abundancia con propósito"
+              width={160}
+              height={84}
+              className="h-12 w-auto"
+              priority
+            />
           </div>
           <Link href="/auth/login">
             <Button variant="outline" className="glass-effect bg-transparent">

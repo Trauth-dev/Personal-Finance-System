@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -24,7 +25,6 @@ import {
   CheckCircle,
   AlertCircle,
   Loader2,
-  Sparkles,
   TrendingUp,
   TrendingDown,
   Wallet,
@@ -996,13 +996,15 @@ const [greeting, setGreeting] = useState("Hola")
       <header className="border-b border-white/10 bg-black/20 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">Prospera+</h1>
-              <p className="text-xs text-slate-400">Carga Inteligente</p>
-            </div>
+            <Image
+              src="/prospera-logo.png"
+              alt="Prospera+ - Abundancia con propósito"
+              width={180}
+              height={94}
+              className="h-11 w-auto"
+              priority
+            />
+            <p className="text-xs text-slate-400 hidden sm:block">Carga Inteligente</p>
           </div>
           
           <Button
