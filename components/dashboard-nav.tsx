@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
@@ -320,10 +321,24 @@ function NavContent({
     <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
       <div className={cn("p-4 border-b border-sidebar-border transition-all", isCollapsed && !isMobile && "p-2")}>
         <div className={cn("flex items-center gap-3 mb-4", isCollapsed && !isMobile && "justify-center mb-2")}>
-          <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center glow-effect flex-shrink-0">
-            <TrendingUp className="w-6 h-6 text-primary-foreground" />
-          </div>
-          {(!isCollapsed || isMobile) && <span className="text-xl font-bold text-sidebar-foreground">Prospera+</span>}
+          {isCollapsed && !isMobile ? (
+            <Image
+              src="/prospera-icon.png"
+              alt="Prospera+"
+              width={40}
+              height={40}
+              className="w-10 h-10 rounded-lg flex-shrink-0"
+            />
+          ) : (
+            <Image
+              src="/prospera-logo.png"
+              alt="Prospera+ - Abundancia con propósito"
+              width={180}
+              height={94}
+              className="h-11 w-auto"
+              priority
+            />
+          )}
         </div>
 
         {(!isCollapsed || isMobile) && (
