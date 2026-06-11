@@ -905,7 +905,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                 <div className="text-center py-4 text-sm text-muted-foreground">
                   <Receipt className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p>No hay pagos registrados para esta deuda</p>
-                  <p className="text-xs mt-1">Los pagos se registran desde la seccion de Carga de Datos</p>
+                  <p className="text-xs mt-1">Los pagos se registran desde la seccion de Carga de Ingreso y Egreso</p>
                 </div>
               ) : (
               <div className="space-y-2 max-h-64 overflow-y-auto pr-1">

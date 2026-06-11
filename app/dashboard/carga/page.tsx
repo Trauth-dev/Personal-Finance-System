@@ -10,7 +10,7 @@ import { TrendingUp, TrendingDown, Target } from "lucide-react"
 export default function CargaDatosPage() {
   return (
     <div>
-      <DashboardHeader title="Carga de Datos" description="Registra tus ingresos, egresos y presupuesto mensual" />
+      <DashboardHeader title="Carga de Ingreso y Egreso" description="Registra tus ingresos, egresos y presupuesto mensual" />
 
       <div className="p-4 sm:p-6">
         <Tabs defaultValue="ingreso" className="w-full">
