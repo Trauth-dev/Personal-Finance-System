@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation"
 import { CheckCircle, AlertCircle, DollarSign, Calendar, Plus, ChevronDown, ChevronUp, Building2, Wallet, Landmark, Smartphone, PiggyBank, ArrowRight, Banknote, Pencil, Trash2, X, Check } from "lucide-react"
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
+import { usePlanTier } from "@/hooks/use-plan-tier"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,6 +36,8 @@ type CajaDestino = {
 
 export function IngresoForm() {
   const { perfilActual } = usePerfil()
+  const { features, isLoading: isLoadingPlan } = usePlanTier()
+  const ingresoFeatures = features.ingreso
   const [tipoIngreso, setTipoIngreso] = useState("")
   const [monto, setMonto] = useState("")
   const [fecha, setFecha] = useState(getTodayDate())
@@ -57,12 +60,22 @@ export function IngresoForm() {
     setFecha(getTodayDate())
     if (perfilActual?.id) {
       loadCategorias()
-      loadCajasDestino()
+      if (ingresoFeatures.destinoIngreso) {
+        loadCajasDestino()
+      }
     }
-  }, [perfilActual])
+  }, [perfilActual, ingresoFeatures.categoriasPersonalizadas, ingresoFeatures.destinoIngreso])
 
   const loadCategorias = async () => {
     if (!perfilActual?.id) {
+      return
+    }
+
+    // Plan basico / usuarios nuevos: categorias fijas predeterminadas (sin personalizar).
+    if (!ingresoFeatures.categoriasPersonalizadas) {
+      setCategorias(
+        ingresoFeatures.categoriasFijas.map((nombre) => ({ id: nombre, nombre })),
+      )
       return
     }
 
@@ -395,32 +408,34 @@ export function IngresoForm() {
                             <Label htmlFor={cat.id} className="flex-1 cursor-pointer font-normal">
                               {cat.nombre}
                             </Label>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  startEditCategory(cat)
-                                }}
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  openDeleteDialog(cat)
-                                }}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </Button>
-                            </div>
+                            {ingresoFeatures.categoriasPersonalizadas && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    startEditCategory(cat)
+                                  }}
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-red-500 hover:bg-red-500/10"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openDeleteDialog(cat)
+                                  }}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
@@ -432,46 +447,48 @@ export function IngresoForm() {
                   </p>
                 )}
 
-                {!showNewCategory ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setShowNewCategory(true)}
-                    className="w-full gap-2 border-green-500/30 hover:bg-green-500/10 mt-3"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Agregar nueva categoría
-                  </Button>
-                ) : (
-                  <div className="flex gap-2 mt-3">
-                    <Input
-                      placeholder="Nombre de la nueva categoría..."
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault()
-                          handleAddQuickCategory()
-                        }
-                      }}
-                      className="bg-background/50"
-                      autoFocus
-                    />
-                    <Button type="button" onClick={handleAddQuickCategory} className="bg-green-500 hover:bg-green-600">
-                      Agregar
-                    </Button>
+                {ingresoFeatures.categoriasPersonalizadas && (
+                  !showNewCategory ? (
                     <Button
                       type="button"
                       variant="outline"
-                      onClick={() => {
-                        setShowNewCategory(false)
-                        setNewCategoryName("")
-                      }}
+                      size="sm"
+                      onClick={() => setShowNewCategory(true)}
+                      className="w-full gap-2 border-green-500/30 hover:bg-green-500/10 mt-3"
                     >
-                      Cancelar
+                      <Plus className="w-4 h-4" />
+                      Agregar nueva categoría
                     </Button>
-                  </div>
+                  ) : (
+                    <div className="flex gap-2 mt-3">
+                      <Input
+                        placeholder="Nombre de la nueva categoría..."
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            handleAddQuickCategory()
+                          }
+                        }}
+                        className="bg-background/50"
+                        autoFocus
+                      />
+                      <Button type="button" onClick={handleAddQuickCategory} className="bg-green-500 hover:bg-green-600">
+                        Agregar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setShowNewCategory(false)
+                          setNewCategoryName("")
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </div>
+                  )
                 )}
               </div>
             )}
@@ -487,7 +504,7 @@ export function IngresoForm() {
           </div>
 
           {/* Selector de Caja Destino */}
-          {tipoIngreso && (
+          {!isLoadingPlan && ingresoFeatures.destinoIngreso && tipoIngreso && (
             <div className="space-y-3 p-5 rounded-xl bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-transparent border border-blue-500/30">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-full bg-blue-500/20">
