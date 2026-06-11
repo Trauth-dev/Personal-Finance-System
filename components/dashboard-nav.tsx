@@ -73,7 +73,7 @@ const navItemsPersonal = [
     icon: BarChart3,
   },
   {
-    title: "Carga de Datos",
+    title: "Carga de Ingreso y Egreso",
     href: "/dashboard/carga",
     icon: PlusCircle,
   },
@@ -150,7 +150,7 @@ const navItemsEmpresarial = [
     icon: BarChart3,
   },
   {
-    title: "Carga de Datos",
+    title: "Carga de Ingreso y Egreso",
     href: "/dashboard/carga",
     icon: PlusCircle,
   },

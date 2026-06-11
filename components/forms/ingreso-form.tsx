@@ -13,6 +13,7 @@ import { CheckCircle, AlertCircle, DollarSign, Calendar, Plus, ChevronDown, Chev
 import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { usePlanTier } from "@/hooks/use-plan-tier"
+import { CATEGORIAS_INGRESO_BASICO } from "@/lib/plans/plan-features"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -97,7 +98,17 @@ export function IngresoForm() {
         .order("nombre")
 
       if (!fetchError && data) {
-        setCategorias(data)
+        // Ordenar respetando el orden predeterminado (Salario, Emprendimiento, Ingresos
+        // Extras) primero; el resto de categorias personalizadas van despues alfabeticamente.
+        const ordenadas = [...data].sort((a, b) => {
+          const ia = CATEGORIAS_INGRESO_BASICO.indexOf(a.nombre)
+          const ib = CATEGORIAS_INGRESO_BASICO.indexOf(b.nombre)
+          if (ia !== -1 && ib !== -1) return ia - ib
+          if (ia !== -1) return -1
+          if (ib !== -1) return 1
+          return a.nombre.localeCompare(b.nombre)
+        })
+        setCategorias(ordenadas)
       }
     } catch (error) {
       setCategorias([])
