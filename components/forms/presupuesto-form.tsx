@@ -13,7 +13,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
 import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp } from 'lucide-react'
-import { getTodayDate, formatGuaranies } from "@/lib/utils"
+import { getTodayDate, formatGuaranies, normalizarNombre as normalizarNombreUtil } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
 const MESES = [
@@ -55,6 +55,11 @@ const CATEGORIA_TO_TIPO: Record<string, string> = {
   'pct_suenos': 'Suenos',
   'pct_libertad_financiera': 'Libertad Financiera',
 }
+
+// Normaliza un nombre de categoría para comparaciones robustas:
+// ignora mayúsculas, tildes/acentos y espacios extra. Asi "Donación",
+// "donacion" y "Donacion" se consideran la misma categoría y no se duplican.
+const normalizarNombre = normalizarNombreUtil
 
 interface SubcategoriaItem {
   id: string
@@ -108,10 +113,10 @@ export function PresupuestoForm() {
         .select("id, nombre")
         .eq("perfil_id", perfilActual.id)
 
-      // Crear mapa de nombre a ID
+      // Crear mapa de nombre a ID (clave normalizada para evitar problemas de tildes/mayúsculas)
       const tiposMap: Record<string, string> = {}
       tiposData?.forEach(tipo => {
-        tiposMap[tipo.nombre] = tipo.id
+        tiposMap[normalizarNombre(tipo.nombre)] = tipo.id
       })
       setTiposCategoriaMap(tiposMap)
 
@@ -145,7 +150,7 @@ export function PresupuestoForm() {
         initialData[cat.key] = {
           subcategorias: [],
           total: 0,
-          tipoId: tiposMap[tipoNombre]
+          tipoId: tiposMap[normalizarNombre(tipoNombre)]
         }
       })
 
@@ -163,9 +168,9 @@ export function PresupuestoForm() {
         const tipoNombre = tiposData?.find(t => t.id === tipoId)?.nombre
 
         if (tipoNombre) {
-          // Encontrar a qué categoría de presupuesto pertenece
+          // Encontrar a qué categoría de presupuesto pertenece (comparación normalizada)
           const categoriaKey = Object.entries(CATEGORIA_TO_TIPO).find(
-            ([, nombre]) => nombre === tipoNombre
+            ([, nombre]) => normalizarNombre(nombre) === normalizarNombre(tipoNombre)
           )?.[0]
 
           if (categoriaKey && initialData[categoriaKey]) {
@@ -290,25 +295,40 @@ export function PresupuestoForm() {
       if (!user) return
 
       const tipoNombre = CATEGORIA_TO_TIPO[categoriaKey]
-      let tipoId = tiposCategoriaMap[tipoNombre]
+      let tipoId = tiposCategoriaMap[normalizarNombre(tipoNombre)]
 
-      // Si no existe el tipo, crearlo
+      // Si no existe el tipo, crearlo (pero antes re-verificar en la BD por
+      // cualquier variante con tildes/mayúsculas para nunca duplicar)
       if (!tipoId) {
-        const { data: newTipo, error: tipoError } = await supabase
+        const { data: tiposExistentes } = await supabase
           .from("tipos_categoria_egreso")
-          .insert({
-            user_id: user.id,
-            perfil_id: perfilActual.id,
-            nombre: tipoNombre,
-            color: CATEGORIAS_CONFIG.find(c => c.key === categoriaKey)?.color || 'text-gray-500'
-          })
-          .select("id")
-          .single()
-        
-        if (tipoError) throw tipoError
-        if (newTipo) {
-          tipoId = newTipo.id
-          setTiposCategoriaMap(prev => ({ ...prev, [tipoNombre]: tipoId }))
+          .select("id, nombre")
+          .eq("perfil_id", perfilActual.id)
+
+        const coincidencia = tiposExistentes?.find(
+          t => normalizarNombre(t.nombre) === normalizarNombre(tipoNombre)
+        )
+
+        if (coincidencia) {
+          tipoId = coincidencia.id
+          setTiposCategoriaMap(prev => ({ ...prev, [normalizarNombre(tipoNombre)]: coincidencia.id }))
+        } else {
+          const { data: newTipo, error: tipoError } = await supabase
+            .from("tipos_categoria_egreso")
+            .insert({
+              user_id: user.id,
+              perfil_id: perfilActual.id,
+              nombre: tipoNombre,
+              color: CATEGORIAS_CONFIG.find(c => c.key === categoriaKey)?.color || 'text-gray-500'
+            })
+            .select("id")
+            .single()
+
+          if (tipoError) throw tipoError
+          if (newTipo) {
+            tipoId = newTipo.id
+            setTiposCategoriaMap(prev => ({ ...prev, [normalizarNombre(tipoNombre)]: tipoId }))
+          }
         }
       }
 
