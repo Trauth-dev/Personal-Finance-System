@@ -836,7 +836,7 @@ export function PresupuestoForm() {
             </div>
           )}
 
-          <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700 text-white" disabled={isLoading || !presupuesto}>
+              <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-700 text-white" disabled={isLoading || presupuestoNum <= 0}>
             {isLoading ? "Registrando..." : "Establecer Presupuesto"}
           </Button>
 
