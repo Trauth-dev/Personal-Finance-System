@@ -17,7 +17,7 @@ interface Props {
 
 export function AnalisisFinancieroClient({ perfilId }: Props) {
   const searchParams = useSearchParams()
-  const tabFromUrl = searchParams.get("tab") || "analisis"
+  const tabFromUrl = searchParams.get("tab") || "presupuesto-vs-realidad"
   
   const today = getParaguayDate()
   const currentMonth = `${today.getFullYear()}-${(today.getMonth() + 1).toString().padStart(2, "0")}`
@@ -222,28 +222,28 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="w-full justify-start bg-transparent border-b border-border rounded-none h-auto p-0 mb-6">
           <TabsTrigger
-            value="analisis"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
-          >
-            Analisis Financiero
-          </TabsTrigger>
-          <TabsTrigger
             value="presupuesto-vs-realidad"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
           >
             Presupuesto vs Realidad
           </TabsTrigger>
           <TabsTrigger
-            value="bola-de-nieve"
+            value="analisis"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
           >
-            Bola de Nieve
+            Analisis Financiero
           </TabsTrigger>
           <TabsTrigger
             value="reportes"
             className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
           >
             Reportes
+          </TabsTrigger>
+          <TabsTrigger
+            value="bola-de-nieve"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
+          >
+            Bola de Nieve
           </TabsTrigger>
         </TabsList>
 

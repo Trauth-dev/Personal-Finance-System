@@ -53,6 +53,7 @@ const BASICO_PERSONAL_HREFS = [
   "/dashboard/personal",
   "/dashboard/carga",
   "/dashboard/personal/historial",
+  "/dashboard/personal/analisis",
 ]
 
 const navItemsPersonal = [
