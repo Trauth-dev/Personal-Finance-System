@@ -45,14 +45,14 @@ interface Egreso {
 }
 
 const CATEGORIAS_CONFIG = {
-  Donación: {
+  Donacion: {
     icon: Heart,
     color: "from-pink-500 to-rose-500",
     textColor: "text-pink-600",
     bgColor: "bg-pink-50",
     borderColor: "border-pink-300",
   },
-  "Ahorro 2025": {
+  Ahorro: {
     icon: PiggyBank,
     color: "from-green-500 to-emerald-500",
     textColor: "text-green-600",
@@ -87,14 +87,14 @@ const CATEGORIAS_CONFIG = {
     bgColor: "bg-yellow-50",
     borderColor: "border-yellow-300",
   },
-  Educación: {
+  Educacion: {
     icon: GraduationCap,
     color: "from-blue-500 to-cyan-500",
     textColor: "text-blue-600",
     bgColor: "bg-blue-50",
     borderColor: "border-blue-300",
   },
-  Sueños: {
+  Suenos: {
     icon: Star,
     color: "from-indigo-500 to-purple-500",
     textColor: "text-indigo-600",
@@ -143,14 +143,14 @@ export function PresupuestoDetalladoTerciarioClient({
   )
 
   const categoriasConDatos = [
-    { nombre: "Donación", pct: Number(presupuesto.pct_donacion || 0) },
-    { nombre: "Ahorro 2025", pct: Number(presupuesto.pct_ahorro_2025 || 0) },
+    { nombre: "Donacion", pct: Number(presupuesto.pct_donacion || 0) },
+    { nombre: "Ahorro", pct: Number(presupuesto.pct_ahorro_2025 || 0) },
     { nombre: "Gastos Varios", pct: Number(presupuesto.pct_gastos_varios || 0) },
     { nombre: "Gastos Vivienda", pct: Number(presupuesto.pct_gastos_vivienda || 0) },
     { nombre: "Pago Deudas", pct: Number(presupuesto.pct_pago_deudas || 0) },
     { nombre: "Disfrute", pct: Number(presupuesto.pct_disfrute || 0) },
-    { nombre: "Educación", pct: Number(presupuesto.pct_educacion || 0) },
-    { nombre: "Sueños", pct: Number(presupuesto.pct_suenos || 0) },
+    { nombre: "Educacion", pct: Number(presupuesto.pct_educacion || 0) },
+    { nombre: "Suenos", pct: Number(presupuesto.pct_suenos || 0) },
     { nombre: "Libertad Financiera", pct: Number(presupuesto.pct_libertad_financiera || 0) },
   ]
 

@@ -83,7 +83,9 @@ export async function ReportesExpandibles({ perfilId, fechaInicio, fechaFin, caj
   })
 
   Object.values(gastosPorCategoria).forEach((categoria) => {
-    categoria.gastos = categoria.gastos.sort((a, b) => b.monto - a.monto).slice(0, 5)
+    // Mostrar TODOS los gastos de la categoria (no solo los 5 mayores) para que el
+    // desglose visible coincida exactamente con el total de la categoria.
+    categoria.gastos = categoria.gastos.sort((a, b) => b.monto - a.monto)
   })
 
   const top5GastosGenerales =

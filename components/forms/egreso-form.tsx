@@ -84,14 +84,18 @@ interface CajaAhorro {
 }
 
 const ICONOS_CATEGORIAS: Record<string, React.ElementType> = {
+  Donacion: Heart,
   Donación: Heart,
-  "Ahorro 2025": Coins,
   Ahorro: Coins,
+  "Ahorro 2025": Coins,
   "Gastos Varios": Package,
+  "Gastos Vivienda": Home,
   "Gastos Fijos": Home,
   "Pago Deudas": CreditCard,
   Disfrute: Smile,
+  Educacion: GraduationCap,
   Educación: GraduationCap,
+  Suenos: Sparkles,
   Sueños: Sparkles,
   "Libertad Financiera": TrendingUp,
 }

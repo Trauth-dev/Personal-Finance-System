@@ -124,12 +124,17 @@ export default async function ResumenDashboardPage() {
 
   const iconosVarios: Record<string, any> = {
     "Ahorro 2025": Wallet,
+    Ahorro: Wallet,
     Disfrute: Sparkles,
     Donaciones: Gift,
+    Donacion: Gift,
     Educación: GraduationCap,
+    Educacion: GraduationCap,
     "Libertad F": TrendingUp,
+    "Libertad Financiera": TrendingUp,
     "Pago Deudas": AlertCircle,
     Sueños: Heart,
+    Suenos: Heart,
   }
 
   return (

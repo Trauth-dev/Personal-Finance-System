@@ -40,7 +40,7 @@ import {
   HelpCircle,
   ChevronRight,
 } from "lucide-react"
-import { formatGuaranies, getTodayDate } from "@/lib/utils"
+import { formatGuaranies, getTodayDate, normalizarNombre } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 
 interface TipoCategoria {
@@ -685,27 +685,42 @@ export function VoiceEntryClient({
     const supabase = createClient()
     
     if (tipoTransaccion === "egreso" && nuevaCategoriaParaTipo) {
-      // Buscar el tipo de categoria
+      // Buscar el tipo de categoria (comparación normalizada: ignora tildes/mayúsculas)
       let tipoId = tiposCategoria.find(t => 
-        t.nombre.toLowerCase() === nuevaCategoriaParaTipo.toLowerCase()
+        normalizarNombre(t.nombre) === normalizarNombre(nuevaCategoriaParaTipo)
       )?.id
       
       if (!tipoId) {
-        // Crear el tipo de categoria primero
-        const { data: nuevoTipo } = await supabase
+        // Re-verificar en la BD por cualquier variante con tildes/mayúsculas
+        // antes de crear, para nunca generar un tipo duplicado
+        const { data: tiposExistentes } = await supabase
           .from("tipos_categoria_egreso")
-          .insert({
-            user_id: userId,
-            perfil_id: perfilId,
-            nombre: nuevaCategoriaParaTipo,
-            color: "#6b7280",
-          })
-          .select()
-          .single()
-        
-        if (nuevoTipo) {
-          tipoId = nuevoTipo.id
-          setTiposCategoria([...tiposCategoria, nuevoTipo])
+          .select("id, nombre")
+          .eq("perfil_id", perfilId)
+
+        const coincidencia = tiposExistentes?.find(
+          t => normalizarNombre(t.nombre) === normalizarNombre(nuevaCategoriaParaTipo)
+        )
+
+        if (coincidencia) {
+          tipoId = coincidencia.id
+        } else {
+          // Crear el tipo de categoria primero
+          const { data: nuevoTipo } = await supabase
+            .from("tipos_categoria_egreso")
+            .insert({
+              user_id: userId,
+              perfil_id: perfilId,
+              nombre: nuevaCategoriaParaTipo,
+              color: "#6b7280",
+            })
+            .select()
+            .single()
+          
+          if (nuevoTipo) {
+            tipoId = nuevoTipo.id
+            setTiposCategoria([...tiposCategoria, nuevoTipo])
+          }
         }
       }
       

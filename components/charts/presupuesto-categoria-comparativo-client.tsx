@@ -26,6 +26,7 @@ interface Egreso {
 }
 
 const CATEGORIAS_CONFIG = {
+  "Donacion": { icon: Heart, color: "from-pink-500 to-rose-500", textColor: "text-pink-600", bgColor: "bg-pink-50" },
   "Donación": { icon: Heart, color: "from-pink-500 to-rose-500", textColor: "text-pink-600", bgColor: "bg-pink-50" },
   "Ahorro": { icon: PiggyBank, color: "from-green-500 to-emerald-500", textColor: "text-green-600", bgColor: "bg-green-50" },
   "Ahorro 2025": { icon: PiggyBank, color: "from-green-500 to-emerald-500", textColor: "text-green-600", bgColor: "bg-green-50" },
@@ -33,7 +34,9 @@ const CATEGORIAS_CONFIG = {
   "Gastos Vivienda": { icon: Home, color: "from-orange-500 to-amber-500", textColor: "text-orange-600", bgColor: "bg-orange-50" },
   "Pago Deudas": { icon: CreditCard, color: "from-red-500 to-rose-500", textColor: "text-red-600", bgColor: "bg-red-50" },
   "Disfrute": { icon: Smile, color: "from-yellow-500 to-amber-500", textColor: "text-yellow-600", bgColor: "bg-yellow-50" },
+  "Educacion": { icon: GraduationCap, color: "from-blue-500 to-cyan-500", textColor: "text-blue-600", bgColor: "bg-blue-50" },
   "Educación": { icon: GraduationCap, color: "from-blue-500 to-cyan-500", textColor: "text-blue-600", bgColor: "bg-blue-50" },
+  "Suenos": { icon: Star, color: "from-indigo-500 to-purple-500", textColor: "text-indigo-600", bgColor: "bg-indigo-50" },
   "Sueños": { icon: Star, color: "from-indigo-500 to-purple-500", textColor: "text-indigo-600", bgColor: "bg-indigo-50" },
   "Libertad Financiera": { icon: TrendingUp, color: "from-teal-500 to-cyan-500", textColor: "text-teal-600", bgColor: "bg-teal-50" },
 }
@@ -65,14 +68,14 @@ export function PresupuestoCategoriasComparativoClient({
 
   // Mapear las categorías con sus montos exactos desde presupuesto_categorias
   const categoriasConDatos = [
-    { nombre: "Donación", monto: montosPorTipo["Donación"] || montosPorTipo["Donacion"] || 0, gastado: egresosPorCategoria["Donación"] || 0 },
+    { nombre: "Donación", monto: montosPorTipo["Donación"] || montosPorTipo["Donacion"] || 0, gastado: egresosPorCategoria["Donación"] || egresosPorCategoria["Donacion"] || 0 },
     { nombre: "Ahorro", monto: montosPorTipo["Ahorro"] || montosPorTipo["Ahorro 2025"] || 0, gastado: egresosPorCategoria["Ahorro"] || egresosPorCategoria["Ahorro 2025"] || 0 },
     { nombre: "Gastos Varios", monto: montosPorTipo["Gastos Varios"] || 0, gastado: egresosPorCategoria["Gastos Varios"] || 0 },
     { nombre: "Gastos Vivienda", monto: montosPorTipo["Gastos Vivienda"] || 0, gastado: egresosPorCategoria["Gastos Vivienda"] || 0 },
     { nombre: "Pago Deudas", monto: montosPorTipo["Pago Deudas"] || 0, gastado: egresosPorCategoria["Pago Deudas"] || 0 },
     { nombre: "Disfrute", monto: montosPorTipo["Disfrute"] || 0, gastado: egresosPorCategoria["Disfrute"] || 0 },
-    { nombre: "Educación", monto: montosPorTipo["Educación"] || montosPorTipo["Educacion"] || 0, gastado: egresosPorCategoria["Educación"] || 0 },
-    { nombre: "Sueños", monto: montosPorTipo["Sueños"] || montosPorTipo["Suenos"] || 0, gastado: egresosPorCategoria["Sueños"] || 0 },
+    { nombre: "Educación", monto: montosPorTipo["Educación"] || montosPorTipo["Educacion"] || 0, gastado: egresosPorCategoria["Educación"] || egresosPorCategoria["Educacion"] || 0 },
+    { nombre: "Sueños", monto: montosPorTipo["Sueños"] || montosPorTipo["Suenos"] || 0, gastado: egresosPorCategoria["Sueños"] || egresosPorCategoria["Suenos"] || 0 },
     { nombre: "Libertad Financiera", monto: montosPorTipo["Libertad Financiera"] || 0, gastado: egresosPorCategoria["Libertad Financiera"] || 0 },
   ]
 

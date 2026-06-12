@@ -103,7 +103,7 @@ export function ReportesExpandiblesClient({
             </div>
             <div>
               <CardTitle className="text-lg font-bold text-slate-800">Análisis por Categoría</CardTitle>
-              <p className="text-sm text-slate-600">Top 5 gastos de cada tipo de categoría</p>
+              <p className="text-sm text-slate-600">Todos los gastos de cada tipo de categoría</p>
             </div>
           </div>
         </CardHeader>

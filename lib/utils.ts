@@ -85,3 +85,16 @@ export function formatDateShort(dateString: string): string {
 
   return date.toLocaleDateString("es-ES", { day: "2-digit", month: "short" })
 }
+
+/**
+ * Normaliza un nombre de categoría para comparaciones robustas: ignora
+ * mayúsculas, tildes/acentos y espacios extra. Asi "Donación", "donacion"
+ * y "Donacion" se consideran equivalentes y nunca generan duplicados.
+ */
+export function normalizarNombre(nombre: string): string {
+  return nombre
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+}
