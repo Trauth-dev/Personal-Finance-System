@@ -24,6 +24,7 @@ interface UsePlanTierReturn {
 export const BASICO_ALLOWED_PREFIXES = [
   "/dashboard/carga",
   "/dashboard/personal/historial",
+  "/dashboard/personal/analisis",
   "/dashboard/configuracion",
 ]
 
