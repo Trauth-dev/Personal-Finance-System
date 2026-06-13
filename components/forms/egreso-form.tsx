@@ -41,7 +41,7 @@ import {
   ArrowRight,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { getTodayDate, formatGuaranies, getParaguayTimestamp } from "@/lib/utils"
+import { getTodayDate, formatGuaranies, getParaguayTimestamp, hexToRgba } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
@@ -681,11 +681,11 @@ export function EgresoForm() {
                         isSelected ? "border-white scale-105 shadow-lg" : "border-border/30 hover:border-border/60"
                       }`}
                       style={{
-                        backgroundColor: isSelected ? `${tipo.color}20` : "transparent",
+                        backgroundColor: isSelected ? hexToRgba(tipo.color, 0.125) : "transparent",
                       }}
                     >
                       <div className="flex flex-col items-center gap-2 text-center">
-                        <div className="p-3 rounded-full" style={{ backgroundColor: `${tipo.color}30` }}>
+                        <div className="p-3 rounded-full" style={{ backgroundColor: hexToRgba(tipo.color, 0.19) }}>
                           <Icon className="w-5 h-5" style={{ color: tipo.color }} />
                         </div>
                         <span className="text-sm font-medium">{DISPLAY_NOMBRES[tipo.nombre] || tipo.nombre}</span>
@@ -1231,7 +1231,7 @@ export function EgresoForm() {
                           isSelected ? "border-white" : "border-border/30 hover:border-border/60"
                         }`}
                         style={{
-                          backgroundColor: isSelected ? `${selectedTipoData?.color}20` : "transparent",
+                          backgroundColor: isSelected ? hexToRgba(selectedTipoData?.color, 0.125) : "transparent",
                           color: isSelected ? selectedTipoData?.color : "inherit",
                         }}
                       >
@@ -1244,8 +1244,8 @@ export function EgresoForm() {
                 <p
                   className="text-sm text-muted-foreground p-4 text-center rounded-lg border"
                   style={{
-                    backgroundColor: `${selectedTipoData?.color}10`,
-                    borderColor: `${selectedTipoData?.color}40`,
+                    backgroundColor: hexToRgba(selectedTipoData?.color, 0.06),
+                    borderColor: hexToRgba(selectedTipoData?.color, 0.25),
                   }}
                 >
                   No hay descripciones en este tipo. Agrega una abajo.
@@ -1260,7 +1260,7 @@ export function EgresoForm() {
                   onClick={() => setShowNewCategoria(true)}
                   className="w-full gap-2"
                   style={{
-                    borderColor: `${selectedTipoData?.color}40`,
+                    borderColor: hexToRgba(selectedTipoData?.color, 0.25),
                     color: selectedTipoData?.color,
                   }}
                 >

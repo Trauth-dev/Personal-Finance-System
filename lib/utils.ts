@@ -98,3 +98,44 @@ export function normalizarNombre(nombre: string): string {
     .toLowerCase()
     .trim()
 }
+
+/**
+ * Convierte un color HEX (#RGB o #RRGGBB) a una cadena rgba() con la opacidad
+ * indicada (0-1). Usar esto en lugar de concatenar alfa al hex
+ * (ej. `${color}30`) porque el formato hex de 8 dígitos (#RRGGBBAA) NO es
+ * compatible con algunos navegadores Android/Samsung Internet antiguos, lo que
+ * hace que los fondos de color desaparezcan en esos dispositivos.
+ *
+ * @param hex Color en formato #RGB o #RRGGBB
+ * @param alpha Opacidad entre 0 y 1
+ * @returns Cadena rgba() compatible con todos los navegadores
+ */
+export function hexToRgba(hex: string | null | undefined, alpha = 1): string {
+  if (!hex) return `rgba(0, 0, 0, ${alpha})`
+
+  let normalized = hex.trim().replace("#", "")
+
+  // Expandir formato corto (#RGB -> #RRGGBB)
+  if (normalized.length === 3) {
+    normalized = normalized
+      .split("")
+      .map((c) => c + c)
+      .join("")
+  }
+
+  // Si ya viene con alfa de 8 dígitos, descartar el alfa hex
+  if (normalized.length === 8) {
+    normalized = normalized.slice(0, 6)
+  }
+
+  // Si no es un hex válido de 6 dígitos, devolver el valor original tal cual
+  if (normalized.length !== 6 || !/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return hex
+  }
+
+  const r = Number.parseInt(normalized.slice(0, 2), 16)
+  const g = Number.parseInt(normalized.slice(2, 4), 16)
+  const b = Number.parseInt(normalized.slice(4, 6), 16)
+
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}

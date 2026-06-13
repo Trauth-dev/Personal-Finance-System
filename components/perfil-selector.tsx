@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { ChevronDown, User, Building2, Settings, Lock, Users } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { hexToRgba } from "@/lib/utils"
 
 export function PerfilSelector() {
   const { perfilActual, perfiles, cambiarPerfil, isLoading, sistemaActivo } = usePerfil()
@@ -54,7 +55,7 @@ export function PerfilSelector() {
             className="flex items-center gap-1.5 sm:gap-2 min-w-0 sm:min-w-[160px] justify-between bg-transparent px-2 sm:px-3"
             style={{
               borderColor: perfilActual.color,
-              backgroundColor: `${perfilActual.color}10`,
+              backgroundColor: hexToRgba(perfilActual.color, 0.06),
             }}
           >
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">

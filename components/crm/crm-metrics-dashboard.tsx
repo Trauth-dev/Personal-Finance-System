@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { hexToRgba } from "@/lib/utils"
 import {
   Users,
   TrendingUp,
@@ -636,7 +637,7 @@ export function CRMMetricsDashboard({ perfilId }: CRMMetricsDashboardProps) {
                       <div key={canal.canal} className="flex items-center gap-4">
                         <div 
                           className="p-2 rounded-lg"
-                          style={{ backgroundColor: `${canal.color}20` }}
+                          style={{ backgroundColor: hexToRgba(canal.color, 0.125) }}
                         >
                           <IconCanal className="h-4 w-4" style={{ color: canal.color }} />
                         </div>
