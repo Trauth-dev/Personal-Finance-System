@@ -1268,7 +1268,7 @@ export function EgresoForm() {
                   Agregar descripción a {selectedTipoData?.nombre}
                 </Button>
               ) : (
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-3">
                   <Input
                     placeholder="Nombre de la descripción..."
                     value={newCategoriaNombre}
@@ -1279,26 +1279,31 @@ export function EgresoForm() {
                         handleAddCategoria()
                       }
                     }}
-                    className="bg-background/50"
+                    className="bg-background/50 w-full h-12 text-base"
                     autoFocus
                   />
-                  <Button
-                    type="button"
-                    onClick={handleAddCategoria}
-                    style={{ backgroundColor: selectedTipoData?.color }}
-                  >
-                    Agregar
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setShowNewCategoria(false)
-                      setNewCategoriaNombre("")
-                    }}
-                  >
-                    Cancelar
-                  </Button>
+                  <div className="flex gap-3">
+                    <Button
+                      type="button"
+                      onClick={handleAddCategoria}
+                      className="flex-1 h-11 font-semibold gap-2"
+                      style={{ backgroundColor: selectedTipoData?.color }}
+                    >
+                      <Plus className="w-4 h-4" />
+                      Agregar
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1 h-11"
+                      onClick={() => {
+                        setShowNewCategoria(false)
+                        setNewCategoriaNombre("")
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
