@@ -10,6 +10,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Plus, Trash2, User, Briefcase, Edit2, Check, X, Users } from "lucide-react"
 import { toast } from "sonner"
 import { usePerfil } from "@/lib/contexts/perfil-context"
+import { hexToRgba } from "@/lib/utils"
 
 interface Perfil {
   id: string
@@ -176,7 +177,7 @@ export function PerfilesManager({ perfilesIniciales }: { perfilesIniciales: Perf
                 <div className="flex items-center gap-3">
                   <div
                     className="w-12 h-12 rounded-full flex items-center justify-center text-2xl"
-                    style={{ backgroundColor: `${perfil.color}20` }}
+                    style={{ backgroundColor: hexToRgba(perfil.color, 0.125) }}
                   >
                     {perfil.icono}
                   </div>
