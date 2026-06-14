@@ -9,6 +9,7 @@ import { DashboardNav } from "@/components/dashboard-nav"
 import { PlanAccessGuard } from "@/components/plan-access-guard"
 import { cn } from "@/lib/utils"
 import { PerfilProvider } from "@/lib/contexts/perfil-context"
+import { HelpButton } from "@/components/help-button"
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -155,6 +156,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </PlanAccessGuard>
           </div>
         </main>
+
+        {/* Boton de ayuda flotante: guia rapida de uso (Ingreso, Egreso, Presupuesto) */}
+        <HelpButton />
       </div>
     </PerfilProvider>
   )

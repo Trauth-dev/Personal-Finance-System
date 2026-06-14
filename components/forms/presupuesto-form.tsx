@@ -741,12 +741,12 @@ export function PresupuestoForm() {
                   return (
                     <Card key={categoria.key} className={`${categoria.bgColor} ${categoria.borderColor} border`}>
                       <CardHeader className="pb-2 pt-3 px-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Icon className={`w-4 h-4 ${categoria.color}`} />
-                            <span className={`font-semibold ${categoria.color}`}>{categoria.label}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <Icon className={`w-4 h-4 flex-shrink-0 ${categoria.color}`} />
+                            <span className={`font-semibold truncate ${categoria.color}`}>{categoria.label}</span>
                           </div>
-                          <span className="text-sm font-medium text-foreground">
+                          <span className="text-xs sm:text-sm font-medium text-foreground whitespace-nowrap flex-shrink-0">
                             {formatGuaranies(catData.total)} ({porcentajeCategoria.toFixed(1)}%)
                           </span>
                         </div>
