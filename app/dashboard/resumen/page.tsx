@@ -16,6 +16,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
+  Car,
+  Stethoscope,
+  User,
 } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
@@ -145,8 +148,11 @@ export default async function ResumenDashboardPage() {
     "Libertad F": TrendingUp,
     "Libertad Financiera": TrendingUp,
     "Pago Deudas": AlertCircle,
-    Sueños: Heart,
-    Suenos: Heart,
+    "Gastos Vivienda": Home,
+    "Gastos Personales": User,
+    Supermercado: ShoppingCart,
+    Salud: Stethoscope,
+    Transportes: Car,
   }
 
   return (
