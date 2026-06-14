@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatGuaranies } from "@/lib/utils"
+import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
 import { Calendar, TrendingUp, TrendingDown, Target, BarChart3 } from 'lucide-react'
 import { Progress } from "@/components/ui/progress"
 
@@ -20,6 +21,10 @@ interface Presupuesto {
   pct_educacion: number
   pct_suenos: number
   pct_libertad_financiera: number
+  pct_gastos_personales?: number
+  pct_supermercado?: number
+  pct_salud?: number
+  pct_transportes?: number
 }
 
 interface Egreso {
@@ -80,14 +85,17 @@ export function HistoricoPresupuestosClient({
 
   // Calcular cumplimiento por categoría
   const categoriasConDatos = [
+    { nombre: "Gastos Vivienda", pct: Number(presupuestoMes.pct_gastos_vivienda || 0) },
+    { nombre: "Gastos Personales", pct: Number(presupuestoMes.pct_gastos_personales || 0) },
+    { nombre: "Supermercado", pct: Number(presupuestoMes.pct_supermercado || 0) },
+    { nombre: "Pago Deudas", pct: Number(presupuestoMes.pct_pago_deudas || 0) },
+    { nombre: "Salud", pct: Number(presupuestoMes.pct_salud || 0) },
+    { nombre: "Disfrute", pct: Number(presupuestoMes.pct_disfrute || 0) },
+    { nombre: "Transportes", pct: Number(presupuestoMes.pct_transportes || 0) },
+    { nombre: "Educacion", pct: Number(presupuestoMes.pct_educacion || 0) },
     { nombre: "Donacion", pct: Number(presupuestoMes.pct_donacion || 0) },
     { nombre: "Ahorro", pct: Number(presupuestoMes.pct_ahorro_2025 || 0) },
     { nombre: "Gastos Varios", pct: Number(presupuestoMes.pct_gastos_varios || 0) },
-    { nombre: "Gastos Vivienda", pct: Number(presupuestoMes.pct_gastos_vivienda || 0) },
-    { nombre: "Pago Deudas", pct: Number(presupuestoMes.pct_pago_deudas || 0) },
-    { nombre: "Disfrute", pct: Number(presupuestoMes.pct_disfrute || 0) },
-    { nombre: "Educacion", pct: Number(presupuestoMes.pct_educacion || 0) },
-    { nombre: "Suenos", pct: Number(presupuestoMes.pct_suenos || 0) },
     { nombre: "Libertad Financiera", pct: Number(presupuestoMes.pct_libertad_financiera || 0) },
   ].filter(cat => cat.pct > 0)
 
@@ -161,7 +169,7 @@ export function HistoricoPresupuestosClient({
               return (
                 <div key={categoria.nombre} className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-semibold text-slate-700">{categoria.nombre}</span>
+                    <span className="text-xs font-semibold text-slate-700">{getNombreCategoriaDisplay(categoria.nombre)}</span>
                     <span className={`text-xs font-bold ${porcentaje <= 100 ? "text-green-600" : "text-red-600"}`}>
                       {porcentaje.toFixed(0)}%
                     </span>

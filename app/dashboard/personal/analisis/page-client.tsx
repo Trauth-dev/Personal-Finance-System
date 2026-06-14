@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import { MonthSelector } from "@/components/personal/month-selector"
 import { AnalisisMensualComparativo } from "@/components/personal/analisis-mensual-comparativo"
 import { getParaguayDate } from "@/lib/utils"
+import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
 import { TrendingUp, BarChart3, Info, Scale, Snowflake, FileText } from "lucide-react"
 import { PresupuestoVsRealidad } from "@/components/personal/presupuesto-vs-realidad"
 import { Card, CardContent } from "@/components/ui/card"
@@ -146,6 +147,7 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
     const categorias = Array.from(categoriasMap.values())
       .map((cat) => ({
         ...cat,
+        nombre: getNombreCategoriaDisplay(cat.nombre),
         cambio: cat.mesAnterior > 0 ? ((cat.mesActual - cat.mesAnterior) / cat.mesAnterior) * 100 : 0,
       }))
       .sort((a, b) => b.mesActual - a.mesActual)

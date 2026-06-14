@@ -91,6 +91,46 @@ export async function PresupuestoCategoriasRings({ perfilId, fechaInicio, fechaF
   // Mapear categorías con sus montos exactos desde presupuesto_categorias
   const categorias = [
     {
+      nombre: 'Gastos Vivienda',
+      monto: montosPorTipo['Gastos Vivienda'] || 0,
+      gastado: gastosPorCategoria['Gastos Vivienda'] || 0,
+    },
+    {
+      nombre: 'Gastos Personales',
+      monto: montosPorTipo['Gastos Personales'] || 0,
+      gastado: gastosPorCategoria['Gastos Personales'] || 0,
+    },
+    {
+      nombre: 'Supermercado',
+      monto: montosPorTipo['Supermercado'] || 0,
+      gastado: gastosPorCategoria['Supermercado'] || 0,
+    },
+    {
+      nombre: 'Pago Deudas',
+      monto: montosPorTipo['Pago Deudas'] || 0,
+      gastado: gastosPorCategoria['Pago Deudas'] || 0,
+    },
+    {
+      nombre: 'Salud',
+      monto: montosPorTipo['Salud'] || 0,
+      gastado: gastosPorCategoria['Salud'] || 0,
+    },
+    {
+      nombre: 'Disfrute',
+      monto: montosPorTipo['Disfrute'] || 0,
+      gastado: gastosPorCategoria['Disfrute'] || 0,
+    },
+    {
+      nombre: 'Transportes',
+      monto: montosPorTipo['Transportes'] || 0,
+      gastado: gastosPorCategoria['Transportes'] || 0,
+    },
+    {
+      nombre: 'Educacion',
+      monto: montosPorTipo['Educacion'] || montosPorTipo['Educación'] || 0,
+      gastado: gastosPorCategoria['Educacion'] || gastosPorCategoria['Educación'] || 0,
+    },
+    {
       nombre: 'Donacion',
       monto: montosPorTipo['Donacion'] || 0,
       gastado: gastosPorCategoria['Donacion'] || gastosPorCategoria['Donación'] || 0,
@@ -104,31 +144,6 @@ export async function PresupuestoCategoriasRings({ perfilId, fechaInicio, fechaF
       nombre: 'Gastos Varios',
       monto: montosPorTipo['Gastos Varios'] || 0,
       gastado: gastosPorCategoria['Gastos Varios'] || 0,
-    },
-    {
-      nombre: 'Gastos Vivienda',
-      monto: montosPorTipo['Gastos Vivienda'] || 0,
-      gastado: gastosPorCategoria['Gastos Vivienda'] || 0,
-    },
-    {
-      nombre: 'Pago Deudas',
-      monto: montosPorTipo['Pago Deudas'] || 0,
-      gastado: gastosPorCategoria['Pago Deudas'] || 0,
-    },
-    {
-      nombre: 'Disfrute',
-      monto: montosPorTipo['Disfrute'] || 0,
-      gastado: gastosPorCategoria['Disfrute'] || 0,
-    },
-    {
-      nombre: 'Educacion',
-      monto: montosPorTipo['Educacion'] || montosPorTipo['Educación'] || 0,
-      gastado: gastosPorCategoria['Educacion'] || gastosPorCategoria['Educación'] || 0,
-    },
-    {
-      nombre: 'Suenos',
-      monto: montosPorTipo['Suenos'] || montosPorTipo['Sueños'] || 0,
-      gastado: gastosPorCategoria['Suenos'] || gastosPorCategoria['Sueños'] || 0,
     },
     {
       nombre: 'Libertad Financiera',
