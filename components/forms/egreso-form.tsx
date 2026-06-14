@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -159,6 +159,41 @@ export function EgresoForm() {
 
   const router = useRouter()
 
+  // Refs para el autoscroll fluido del flujo de carga de Egreso
+  const tipoCategoriaRef = useRef<HTMLDivElement>(null)
+  const descripcionRef = useRef<HTMLDivElement>(null)
+  const montoRef = useRef<HTMLDivElement>(null)
+  const montoInputRef = useRef<HTMLInputElement>(null)
+  const initialScrollDone = useRef(false)
+
+  // Hace scroll suave a una sección dejando margen para el header sticky
+  const scrollToSection = (ref: React.RefObject<HTMLElement | null>, delay = 150) => {
+    if (typeof window === "undefined") return
+    window.setTimeout(() => {
+      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, delay)
+  }
+
+  // Al seleccionar el Tipo de Categoría -> scroll a la Descripción
+  const handleSelectTipo = (tipoId: string) => {
+    setSelectedTipo(tipoId)
+    // La sección de Descripción se renderiza al actualizar el estado;
+    // esperamos un instante para que exista antes de hacer scroll.
+    scrollToSection(descripcionRef, 250)
+  }
+
+  // Al seleccionar una Descripción -> scroll al Monto y enfocar el campo
+  // (en móvil esto despliega el teclado numérico automáticamente)
+  const handleSelectCategoria = (categoriaId: string) => {
+    setSelectedCategoria(categoriaId)
+    if (typeof window === "undefined") return
+    window.setTimeout(() => {
+      montoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      // preventScroll evita un salto brusco que pelee con el scroll suave
+      montoInputRef.current?.focus({ preventScroll: true })
+    }, 200)
+  }
+
   useEffect(() => {
     setFecha(getTodayDate())
     if (perfilActual?.id) {
@@ -166,6 +201,15 @@ export function EgresoForm() {
       loadOrigenFondos()
     }
   }, [perfilActual])
+
+  // Al ingresar a Egreso, autoscroll para mostrar claramente "Tipo de Categoría"
+  useEffect(() => {
+    if (initialScrollDone.current) return
+    if (isLoadingPlan) return
+    if (tiposCategorias.length === 0) return
+    initialScrollDone.current = true
+    scrollToSection(tipoCategoriaRef, 350)
+  }, [isLoadingPlan, tiposCategorias])
 
   useEffect(() => {
     if (selectedTipo) {
@@ -670,7 +714,7 @@ export function EgresoForm() {
       </CardHeader>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-3">
+          <div className="space-y-3 scroll-mt-20 sm:scroll-mt-24" ref={tipoCategoriaRef}>
             <Label>Tipo de Categoría</Label>
 
             {tiposCategorias.length > 0 ? (
@@ -683,7 +727,7 @@ export function EgresoForm() {
                     <button
                       key={tipo.id}
                       type="button"
-                      onClick={() => setSelectedTipo(tipo.id)}
+                      onClick={() => handleSelectTipo(tipo.id)}
                       className={`p-4 rounded-lg border-2 transition-all text-left ${
                         isSelected ? "border-white scale-105 shadow-lg" : "border-border/30 hover:border-border/60"
                       }`}
@@ -1221,7 +1265,7 @@ export function EgresoForm() {
           )}
 
           {selectedTipo && !esPagoDeudas && (
-            <div className="space-y-3">
+            <div className="space-y-3 scroll-mt-20 sm:scroll-mt-24" ref={descripcionRef}>
               <Label>Descripción</Label>
 
               {categorias.length > 0 ? (
@@ -1233,7 +1277,7 @@ export function EgresoForm() {
                       <button
                         key={cat.id}
                         type="button"
-                        onClick={() => setSelectedCategoria(cat.id)}
+                        onClick={() => handleSelectCategoria(cat.id)}
                         className={`p-3 rounded-lg border-2 transition-all text-sm ${
                           isSelected ? "border-white" : "border-border/30 hover:border-border/60"
                         }`}
@@ -1487,12 +1531,13 @@ export function EgresoForm() {
             </div>
           )}
 
-          <div className="space-y-2">
+          <div className="space-y-2 scroll-mt-20 sm:scroll-mt-24" ref={montoRef}>
             <Label htmlFor="monto" className="flex items-center gap-2">
               <DollarSign className="w-4 h-4" />
               Monto (Guaranies)
             </Label>
             <Input
+              ref={montoInputRef}
               id="monto"
               type="text"
               inputMode="numeric"
