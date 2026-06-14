@@ -283,8 +283,13 @@ function NavContent({
 }: DashboardNavProps & { isMobile?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { perfilActual } = usePerfil()
-  const { isBasico } = usePlanTier()
+  const { perfilActual, isLoading: isLoadingPerfil } = usePerfil()
+  const { isBasico, isLoading: isLoadingPlan } = usePlanTier()
+
+  // Mientras se resuelve el perfil y el plan, evitamos renderizar los items
+  // para que el usuario no vea "todas" las secciones por un instante y luego
+  // se oculten las que no corresponden a su plan/perfil.
+  const isNavLoading = isLoadingPerfil || isLoadingPlan
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -369,8 +374,9 @@ function NavContent({
         )}
       </div>
 
-      {/* Boton destacado para Carga por Voz - Solo visible en perfil Personal */}
-      {perfilActual?.tipo === "personal" && (
+      {/* Boton destacado para Carga por Voz / Registro con IA - Oculto temporalmente
+          (se habilitara mas adelante). Antes solo visible en perfil Personal. */}
+      {/* {perfilActual?.tipo === "personal" && (
         <div className={cn("px-2 pt-2", isCollapsed && !isMobile && "px-1")}>
           <Link href="/inicio" onClick={handleNavClick}>
             <div
@@ -402,10 +408,26 @@ function NavContent({
             </div>
           </Link>
         </div>
-      )}
+      )} */}
 
       <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-        {navItems.map((item) => {
+        {isNavLoading
+          ? // Esqueleto de carga: evita el parpadeo de mostrar todas las secciones
+            Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-3 rounded-lg",
+                  isCollapsed && !isMobile && "justify-center px-2",
+                )}
+              >
+                <div className="w-5 h-5 rounded bg-sidebar-accent animate-pulse flex-shrink-0" />
+                {(!isCollapsed || isMobile) && (
+                  <div className="h-4 flex-1 rounded bg-sidebar-accent animate-pulse" />
+                )}
+              </div>
+            ))
+          : navItems.map((item) => {
           const isActive = pathname === item.href
           const Icon = item.icon
 
