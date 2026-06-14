@@ -187,11 +187,15 @@ export function EgresoForm() {
   const handleSelectCategoria = (categoriaId: string) => {
     setSelectedCategoria(categoriaId)
     if (typeof window === "undefined") return
+    // 1) Enfocamos primero el input (despliega el teclado numérico en móvil)
+    window.setTimeout(() => {
+      montoInputRef.current?.focus({ preventScroll: true })
+    }, 150)
+    // 2) Cuando el layout se estabiliza, subimos el bloque Monto lo más arriba
+    //    posible para dejar a la vista Monto, Fecha, Concepto y "Registrar Egreso".
     window.setTimeout(() => {
       montoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-      // preventScroll evita un salto brusco que pelee con el scroll suave
-      montoInputRef.current?.focus({ preventScroll: true })
-    }, 200)
+    }, 350)
   }
 
   useEffect(() => {
@@ -1531,7 +1535,7 @@ export function EgresoForm() {
             </div>
           )}
 
-          <div className="space-y-2 scroll-mt-20 sm:scroll-mt-24" ref={montoRef}>
+          <div className="space-y-2 scroll-mt-16 sm:scroll-mt-20" ref={montoRef}>
             <Label htmlFor="monto" className="flex items-center gap-2">
               <DollarSign className="w-4 h-4" />
               Monto (Guaranies)
