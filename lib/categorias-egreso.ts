@@ -52,6 +52,32 @@ export const NOMBRES_DISPLAY_CATEGORIA: Record<string, string> = {
   Donación: "Generosidad",
 }
 
+// Nombre interno (BD) -> color HEX canónico. Debe coincidir con los colores
+// sembrados en la base de datos (trigger y migración). Se guarda SIEMPRE en
+// formato hex porque las clases Tailwind no se renderizan en estilos inline.
+export const COLORES_CATEGORIA: Record<string, string> = {
+  "Gastos Vivienda": "#ef4444",
+  "Gastos Personales": "#8b5cf6",
+  Supermercado: "#84cc16",
+  "Pago Deudas": "#f97316",
+  Salud: "#f43f5e",
+  Disfrute: "#ec4899",
+  Transportes: "#0ea5e9",
+  Educacion: "#06b6d4",
+  Donacion: "#10b981",
+  Ahorro: "#3b82f6",
+  "Gastos Varios": "#a855f7",
+  "Libertad Financiera": "#10b981",
+}
+
+/**
+ * Devuelve el color hex canónico de una categoría por su nombre interno.
+ */
+export function getColorCategoria(nombreInterno: string | null | undefined): string {
+  if (!nombreInterno) return "#6b7280"
+  return COLORES_CATEGORIA[nombreInterno] ?? "#6b7280"
+}
+
 /**
  * Devuelve el nombre visible de una categoría a partir de su nombre interno.
  * Si no hay mapeo, devuelve el mismo nombre (categorías creadas por el usuario).

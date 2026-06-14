@@ -2,8 +2,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
-import { Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp } from 'lucide-react'
+import { Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, ShoppingCart, Car, Stethoscope, User } from 'lucide-react'
 import { formatGuaranies } from "@/lib/utils"
+import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
 
 interface Categoria {
   nombre: string
@@ -24,29 +25,33 @@ const ICONOS_MAP: Record<string, any> = {
   'Ahorro 2025': PiggyBank,
   'Gastos Varios': ShoppingBag,
   'Gastos Vivienda': Home,
+  'Gastos Personales': User,
+  'Supermercado': ShoppingCart,
+  'Salud': Stethoscope,
+  'Transportes': Car,
   'Pago Deudas': CreditCard,
   'Disfrute': Smile,
   'Educacion': GraduationCap,
   'Educación': GraduationCap,
-  'Suenos': Star,
-  'Sueños': Star,
   'Libertad Financiera': TrendingUp,
 }
 
 const COLORES_BASE: Record<string, string> = {
-  'Donacion': '#ec4899',
-  'Donación': '#ec4899',
-  'Ahorro': '#10b981',
-  'Ahorro 2025': '#10b981',
-  'Gastos Varios': '#3b82f6',
-  'Gastos Vivienda': '#f97316',
-  'Pago Deudas': '#ef4444',
-  'Disfrute': '#eab308',
-  'Educacion': '#6366f1',
-  'Educación': '#6366f1',
-  'Suenos': '#a855f7',
-  'Sueños': '#a855f7',
-  'Libertad Financiera': '#06b6d4',
+  'Donacion': '#10b981',
+  'Donación': '#10b981',
+  'Ahorro': '#3b82f6',
+  'Ahorro 2025': '#3b82f6',
+  'Gastos Varios': '#a855f7',
+  'Gastos Vivienda': '#ef4444',
+  'Gastos Personales': '#8b5cf6',
+  'Supermercado': '#84cc16',
+  'Salud': '#f43f5e',
+  'Transportes': '#0ea5e9',
+  'Pago Deudas': '#f97316',
+  'Disfrute': '#ec4899',
+  'Educacion': '#06b6d4',
+  'Educación': '#06b6d4',
+  'Libertad Financiera': '#10b981',
 }
 
 export function PresupuestoCategoriasRingsClient({
@@ -79,8 +84,8 @@ export function PresupuestoCategoriasRingsClient({
               colorEstado = '#10b981' // Verde - bien
             }
 
-            const Icon = ICONOS_MAP[categoria.nombre]
-            const colorBase = COLORES_BASE[categoria.nombre]
+            const Icon = ICONOS_MAP[categoria.nombre] || ShoppingBag
+            const colorBase = COLORES_BASE[categoria.nombre] || '#6b7280'
 
             // Datos para el gráfico donut
             const chartData = [
@@ -118,7 +123,7 @@ export function PresupuestoCategoriasRingsClient({
                   </div>
                 </div>
                 <div className="text-center">
-                  <p className="text-xs font-semibold text-slate-800">{categoria.nombre}</p>
+                  <p className="text-xs font-semibold text-slate-800">{getNombreCategoriaDisplay(categoria.nombre)}</p>
                   <p className="text-xs text-slate-600">{formatGuaranies(categoria.gastado)}</p>
                   <p className="text-xs text-slate-500">de {formatGuaranies(presupuestoAsignado)}</p>
                 </div>

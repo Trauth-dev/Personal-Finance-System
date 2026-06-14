@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { formatGuaranies } from "@/lib/utils"
+import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
 import {
   Heart,
   PiggyBank,
@@ -11,11 +12,14 @@ import {
   CreditCard,
   Smile,
   GraduationCap,
-  Star,
   TrendingUp,
   AlertTriangle,
   CheckCircle2,
   AlertCircle,
+  ShoppingCart,
+  Car,
+  Stethoscope,
+  User,
 } from "lucide-react"
 
 interface Presupuesto {
@@ -29,6 +33,10 @@ interface Presupuesto {
   pct_educacion: number
   pct_suenos: number
   pct_libertad_financiera: number
+  pct_gastos_personales?: number
+  pct_supermercado?: number
+  pct_salud?: number
+  pct_transportes?: number
 }
 
 interface Egreso {
@@ -94,12 +102,33 @@ const CATEGORIAS_CONFIG = {
     bgColor: "bg-blue-50",
     borderColor: "border-blue-300",
   },
-  Suenos: {
-    icon: Star,
-    color: "from-indigo-500 to-purple-500",
-    textColor: "text-indigo-600",
-    bgColor: "bg-indigo-50",
-    borderColor: "border-indigo-300",
+  "Gastos Personales": {
+    icon: User,
+    color: "from-violet-500 to-purple-500",
+    textColor: "text-violet-600",
+    bgColor: "bg-violet-50",
+    borderColor: "border-violet-300",
+  },
+  Supermercado: {
+    icon: ShoppingCart,
+    color: "from-lime-500 to-green-500",
+    textColor: "text-lime-600",
+    bgColor: "bg-lime-50",
+    borderColor: "border-lime-300",
+  },
+  Salud: {
+    icon: Stethoscope,
+    color: "from-rose-500 to-pink-500",
+    textColor: "text-rose-600",
+    bgColor: "bg-rose-50",
+    borderColor: "border-rose-300",
+  },
+  Transportes: {
+    icon: Car,
+    color: "from-sky-500 to-blue-500",
+    textColor: "text-sky-600",
+    bgColor: "bg-sky-50",
+    borderColor: "border-sky-300",
   },
   "Libertad Financiera": {
     icon: TrendingUp,
@@ -143,14 +172,17 @@ export function PresupuestoDetalladoTerciarioClient({
   )
 
   const categoriasConDatos = [
+    { nombre: "Gastos Vivienda", pct: Number(presupuesto.pct_gastos_vivienda || 0) },
+    { nombre: "Gastos Personales", pct: Number(presupuesto.pct_gastos_personales || 0) },
+    { nombre: "Supermercado", pct: Number(presupuesto.pct_supermercado || 0) },
+    { nombre: "Pago Deudas", pct: Number(presupuesto.pct_pago_deudas || 0) },
+    { nombre: "Salud", pct: Number(presupuesto.pct_salud || 0) },
+    { nombre: "Disfrute", pct: Number(presupuesto.pct_disfrute || 0) },
+    { nombre: "Transportes", pct: Number(presupuesto.pct_transportes || 0) },
+    { nombre: "Educacion", pct: Number(presupuesto.pct_educacion || 0) },
     { nombre: "Donacion", pct: Number(presupuesto.pct_donacion || 0) },
     { nombre: "Ahorro", pct: Number(presupuesto.pct_ahorro_2025 || 0) },
     { nombre: "Gastos Varios", pct: Number(presupuesto.pct_gastos_varios || 0) },
-    { nombre: "Gastos Vivienda", pct: Number(presupuesto.pct_gastos_vivienda || 0) },
-    { nombre: "Pago Deudas", pct: Number(presupuesto.pct_pago_deudas || 0) },
-    { nombre: "Disfrute", pct: Number(presupuesto.pct_disfrute || 0) },
-    { nombre: "Educacion", pct: Number(presupuesto.pct_educacion || 0) },
-    { nombre: "Suenos", pct: Number(presupuesto.pct_suenos || 0) },
     { nombre: "Libertad Financiera", pct: Number(presupuesto.pct_libertad_financiera || 0) },
   ]
 
@@ -174,7 +206,9 @@ export function PresupuestoDetalladoTerciarioClient({
           {categoriasConGastos.length > 0 ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {categoriasConGastos.map((categoria) => {
-                const config = CATEGORIAS_CONFIG[categoria.nombre as keyof typeof CATEGORIAS_CONFIG]
+                const config =
+                  CATEGORIAS_CONFIG[categoria.nombre as keyof typeof CATEGORIAS_CONFIG] ||
+                  CATEGORIAS_CONFIG["Gastos Varios"]
                 const Icon = config.icon
                 const presupuestoCategoria = totalPresupuesto * categoria.pct
                 const egresosCategoria = egresosPorCategoria[categoria.nombre] || []
@@ -217,7 +251,7 @@ export function PresupuestoDetalladoTerciarioClient({
                           <Icon className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex-1">
-                          <CardTitle className="text-base font-bold text-white">{categoria.nombre}</CardTitle>
+                          <CardTitle className="text-base font-bold text-white">{getNombreCategoriaDisplay(categoria.nombre)}</CardTitle>
                           <p className="text-xs text-white/90">{(categoria.pct * 100).toFixed(0)}% del presupuesto</p>
                         </div>
                       </div>

@@ -12,8 +12,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp, ShoppingCart, Car, Stethoscope, User } from 'lucide-react'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp, ShoppingCart, Car, Stethoscope, User } from 'lucide-react'
 import { getTodayDate, formatGuaranies, normalizarNombre as normalizarNombreUtil } from "@/lib/utils"
+import { getColorCategoria } from "@/lib/categorias-egreso"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
 const MESES = [
@@ -329,7 +330,7 @@ export function PresupuestoForm() {
               user_id: user.id,
               perfil_id: perfilActual.id,
               nombre: tipoNombre,
-              color: CATEGORIAS_CONFIG.find(c => c.key === categoriaKey)?.color || 'text-gray-500'
+              color: getColorCategoria(tipoNombre)
             })
             .select("id")
             .single()

@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { formatGuaranies, formatDateWithoutTimezone } from "@/lib/utils"
+import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
 import { TrendingDown, Medal, AlertCircle } from 'lucide-react'
 
 interface GastosPorCategoria {
@@ -122,7 +123,7 @@ export function ReportesExpandiblesClient({
                         className="w-3 h-3 rounded-full"
                         style={{ backgroundColor: categoria.color }}
                       />
-                      <span className="font-semibold text-slate-800">{categoria.nombre}</span>
+                      <span className="font-semibold text-slate-800">{getNombreCategoriaDisplay(categoria.nombre)}</span>
                     </div>
                     <span className="text-lg font-bold text-red-600">{formatGuaranies(categoria.total)}</span>
                   </div>
@@ -167,7 +168,7 @@ export function ReportesExpandiblesClient({
                 <p className="text-sm text-slate-700">
                   Tu mayor gasto este mes fue en{" "}
                   <span className="font-bold" style={{ color: categoriasOrdenadas[0].color }}>
-                    {categoriasOrdenadas[0].nombre}
+                    {getNombreCategoriaDisplay(categoriasOrdenadas[0].nombre)}
                   </span>{" "}
                   con un total de{" "}
                   <span className="font-bold text-red-600">{formatGuaranies(categoriasOrdenadas[0].total)}</span>.

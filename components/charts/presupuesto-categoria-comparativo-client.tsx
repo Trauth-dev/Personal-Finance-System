@@ -2,7 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatGuaranies } from "@/lib/utils"
-import { Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp } from 'lucide-react'
+import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
+import { Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, ShoppingCart, Car, Stethoscope, User } from 'lucide-react'
 
 interface Presupuesto {
   meta_salario: number
@@ -26,18 +27,20 @@ interface Egreso {
 }
 
 const CATEGORIAS_CONFIG = {
-  "Donacion": { icon: Heart, color: "from-pink-500 to-rose-500", textColor: "text-pink-600", bgColor: "bg-pink-50" },
-  "Donación": { icon: Heart, color: "from-pink-500 to-rose-500", textColor: "text-pink-600", bgColor: "bg-pink-50" },
-  "Ahorro": { icon: PiggyBank, color: "from-green-500 to-emerald-500", textColor: "text-green-600", bgColor: "bg-green-50" },
-  "Ahorro 2025": { icon: PiggyBank, color: "from-green-500 to-emerald-500", textColor: "text-green-600", bgColor: "bg-green-50" },
+  "Donacion": { icon: Heart, color: "from-emerald-500 to-green-500", textColor: "text-emerald-600", bgColor: "bg-emerald-50" },
+  "Donación": { icon: Heart, color: "from-emerald-500 to-green-500", textColor: "text-emerald-600", bgColor: "bg-emerald-50" },
+  "Ahorro": { icon: PiggyBank, color: "from-blue-500 to-cyan-500", textColor: "text-blue-600", bgColor: "bg-blue-50" },
+  "Ahorro 2025": { icon: PiggyBank, color: "from-blue-500 to-cyan-500", textColor: "text-blue-600", bgColor: "bg-blue-50" },
   "Gastos Varios": { icon: ShoppingBag, color: "from-purple-500 to-violet-500", textColor: "text-purple-600", bgColor: "bg-purple-50" },
   "Gastos Vivienda": { icon: Home, color: "from-orange-500 to-amber-500", textColor: "text-orange-600", bgColor: "bg-orange-50" },
+  "Gastos Personales": { icon: User, color: "from-violet-500 to-purple-500", textColor: "text-violet-600", bgColor: "bg-violet-50" },
+  "Supermercado": { icon: ShoppingCart, color: "from-lime-500 to-green-500", textColor: "text-lime-600", bgColor: "bg-lime-50" },
+  "Salud": { icon: Stethoscope, color: "from-rose-500 to-pink-500", textColor: "text-rose-600", bgColor: "bg-rose-50" },
+  "Transportes": { icon: Car, color: "from-sky-500 to-blue-500", textColor: "text-sky-600", bgColor: "bg-sky-50" },
   "Pago Deudas": { icon: CreditCard, color: "from-red-500 to-rose-500", textColor: "text-red-600", bgColor: "bg-red-50" },
   "Disfrute": { icon: Smile, color: "from-yellow-500 to-amber-500", textColor: "text-yellow-600", bgColor: "bg-yellow-50" },
-  "Educacion": { icon: GraduationCap, color: "from-blue-500 to-cyan-500", textColor: "text-blue-600", bgColor: "bg-blue-50" },
-  "Educación": { icon: GraduationCap, color: "from-blue-500 to-cyan-500", textColor: "text-blue-600", bgColor: "bg-blue-50" },
-  "Suenos": { icon: Star, color: "from-indigo-500 to-purple-500", textColor: "text-indigo-600", bgColor: "bg-indigo-50" },
-  "Sueños": { icon: Star, color: "from-indigo-500 to-purple-500", textColor: "text-indigo-600", bgColor: "bg-indigo-50" },
+  "Educacion": { icon: GraduationCap, color: "from-indigo-500 to-cyan-500", textColor: "text-indigo-600", bgColor: "bg-indigo-50" },
+  "Educación": { icon: GraduationCap, color: "from-indigo-500 to-cyan-500", textColor: "text-indigo-600", bgColor: "bg-indigo-50" },
   "Libertad Financiera": { icon: TrendingUp, color: "from-teal-500 to-cyan-500", textColor: "text-teal-600", bgColor: "bg-teal-50" },
 }
 
@@ -68,14 +71,17 @@ export function PresupuestoCategoriasComparativoClient({
 
   // Mapear las categorías con sus montos exactos desde presupuesto_categorias
   const categoriasConDatos = [
-    { nombre: "Donación", monto: montosPorTipo["Donación"] || montosPorTipo["Donacion"] || 0, gastado: egresosPorCategoria["Donación"] || egresosPorCategoria["Donacion"] || 0 },
+    { nombre: "Gastos Vivienda", monto: montosPorTipo["Gastos Vivienda"] || 0, gastado: egresosPorCategoria["Gastos Vivienda"] || 0 },
+    { nombre: "Gastos Personales", monto: montosPorTipo["Gastos Personales"] || 0, gastado: egresosPorCategoria["Gastos Personales"] || 0 },
+    { nombre: "Supermercado", monto: montosPorTipo["Supermercado"] || 0, gastado: egresosPorCategoria["Supermercado"] || 0 },
+    { nombre: "Pago Deudas", monto: montosPorTipo["Pago Deudas"] || 0, gastado: egresosPorCategoria["Pago Deudas"] || 0 },
+    { nombre: "Salud", monto: montosPorTipo["Salud"] || 0, gastado: egresosPorCategoria["Salud"] || 0 },
+    { nombre: "Disfrute", monto: montosPorTipo["Disfrute"] || 0, gastado: egresosPorCategoria["Disfrute"] || 0 },
+    { nombre: "Transportes", monto: montosPorTipo["Transportes"] || 0, gastado: egresosPorCategoria["Transportes"] || 0 },
+    { nombre: "Educacion", monto: montosPorTipo["Educación"] || montosPorTipo["Educacion"] || 0, gastado: egresosPorCategoria["Educación"] || egresosPorCategoria["Educacion"] || 0 },
+    { nombre: "Donacion", monto: montosPorTipo["Donación"] || montosPorTipo["Donacion"] || 0, gastado: egresosPorCategoria["Donación"] || egresosPorCategoria["Donacion"] || 0 },
     { nombre: "Ahorro", monto: montosPorTipo["Ahorro"] || montosPorTipo["Ahorro 2025"] || 0, gastado: egresosPorCategoria["Ahorro"] || egresosPorCategoria["Ahorro 2025"] || 0 },
     { nombre: "Gastos Varios", monto: montosPorTipo["Gastos Varios"] || 0, gastado: egresosPorCategoria["Gastos Varios"] || 0 },
-    { nombre: "Gastos Vivienda", monto: montosPorTipo["Gastos Vivienda"] || 0, gastado: egresosPorCategoria["Gastos Vivienda"] || 0 },
-    { nombre: "Pago Deudas", monto: montosPorTipo["Pago Deudas"] || 0, gastado: egresosPorCategoria["Pago Deudas"] || 0 },
-    { nombre: "Disfrute", monto: montosPorTipo["Disfrute"] || 0, gastado: egresosPorCategoria["Disfrute"] || 0 },
-    { nombre: "Educación", monto: montosPorTipo["Educación"] || montosPorTipo["Educacion"] || 0, gastado: egresosPorCategoria["Educación"] || egresosPorCategoria["Educacion"] || 0 },
-    { nombre: "Sueños", monto: montosPorTipo["Sueños"] || montosPorTipo["Suenos"] || 0, gastado: egresosPorCategoria["Sueños"] || egresosPorCategoria["Suenos"] || 0 },
     { nombre: "Libertad Financiera", monto: montosPorTipo["Libertad Financiera"] || 0, gastado: egresosPorCategoria["Libertad Financiera"] || 0 },
   ]
 
@@ -97,7 +103,7 @@ export function PresupuestoCategoriasComparativoClient({
       <CardContent>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
           {categoriasActivas.map((categoria) => {
-            const config = CATEGORIAS_CONFIG[categoria.nombre as keyof typeof CATEGORIAS_CONFIG] || CATEGORIAS_CONFIG["Ahorro 2025"]
+            const config = CATEGORIAS_CONFIG[categoria.nombre as keyof typeof CATEGORIAS_CONFIG] || CATEGORIAS_CONFIG["Gastos Varios"]
             const Icon = config?.icon || PiggyBank
             // Usar monto exacto directamente desde presupuesto_categorias
             const presupuestoCategoria = categoria.monto
@@ -124,7 +130,7 @@ export function PresupuestoCategoriasComparativoClient({
                     <Icon className="w-6 h-6 text-white" />
                   </div>
                   <div className="w-full">
-                    <p className="text-xs font-semibold text-slate-700 truncate">{categoria.nombre}</p>
+                    <p className="text-xs font-semibold text-slate-700 truncate">{getNombreCategoriaDisplay(categoria.nombre)}</p>
                     <p className={`text-2xl font-bold ${estadoColor} mt-1`}>
                       {porcentajeUsado.toFixed(0)}%
                     </p>
