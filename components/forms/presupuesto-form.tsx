@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp } from 'lucide-react'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, Star, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp, ShoppingCart, Car, Stethoscope, User } from 'lucide-react'
 import { getTodayDate, formatGuaranies, normalizarNombre as normalizarNombreUtil } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 
@@ -31,28 +31,38 @@ const MESES = [
   { value: "12", label: "Diciembre" },
 ]
 
+// Configuración de categorías del presupuesto.
+// El "label" es el nombre VISIBLE (puede cambiar); CATEGORIA_TO_TIPO mantiene
+// el vínculo con el nombre INTERNO en la base de datos (no cambia).
+// El orden coincide con la grilla de la sección de Egreso (3 columnas x 4 filas).
 const CATEGORIAS_CONFIG = [
-  { key: 'pct_donacion', label: 'Donacion', icon: Heart, color: 'text-pink-500', bgColor: 'bg-pink-500/10', borderColor: 'border-pink-500/30' },
-  { key: 'pct_ahorro_2025', label: 'Ahorro', icon: PiggyBank, color: 'text-green-500', bgColor: 'bg-green-500/10', borderColor: 'border-green-500/30' },
-  { key: 'pct_gastos_varios', label: 'Gastos Varios', icon: ShoppingBag, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30' },
-  { key: 'pct_gastos_vivienda', label: 'Gastos Vivienda', icon: Home, color: 'text-orange-500', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30' },
-  { key: 'pct_pago_deudas', label: 'Pago Deudas', icon: CreditCard, color: 'text-red-500', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30' },
+  { key: 'pct_gastos_vivienda', label: 'Vivienda', icon: Home, color: 'text-orange-500', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/30' },
+  { key: 'pct_gastos_personales', label: 'Gastos Personales', icon: User, color: 'text-violet-500', bgColor: 'bg-violet-500/10', borderColor: 'border-violet-500/30' },
+  { key: 'pct_supermercado', label: 'Supermercado', icon: ShoppingCart, color: 'text-lime-500', bgColor: 'bg-lime-500/10', borderColor: 'border-lime-500/30' },
+  { key: 'pct_pago_deudas', label: 'Deudas', icon: CreditCard, color: 'text-red-500', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/30' },
+  { key: 'pct_salud', label: 'Salud', icon: Stethoscope, color: 'text-rose-500', bgColor: 'bg-rose-500/10', borderColor: 'border-rose-500/30' },
   { key: 'pct_disfrute', label: 'Disfrute', icon: Smile, color: 'text-yellow-500', bgColor: 'bg-yellow-500/10', borderColor: 'border-yellow-500/30' },
-  { key: 'pct_educacion', label: 'Educacion', icon: GraduationCap, color: 'text-indigo-500', bgColor: 'bg-indigo-500/10', borderColor: 'border-indigo-500/30' },
-  { key: 'pct_suenos', label: 'Suenos', icon: Star, color: 'text-purple-500', bgColor: 'bg-purple-500/10', borderColor: 'border-purple-500/30' },
-  { key: 'pct_libertad_financiera', label: 'Libertad Financiera', icon: TrendingUp, color: 'text-cyan-500', bgColor: 'bg-cyan-500/10', borderColor: 'border-cyan-500/30' },
+  { key: 'pct_transportes', label: 'Transportes', icon: Car, color: 'text-sky-500', bgColor: 'bg-sky-500/10', borderColor: 'border-sky-500/30' },
+  { key: 'pct_educacion', label: 'Educación', icon: GraduationCap, color: 'text-indigo-500', bgColor: 'bg-indigo-500/10', borderColor: 'border-indigo-500/30' },
+  { key: 'pct_donacion', label: 'Generosidad', icon: Heart, color: 'text-emerald-500', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/30' },
+  { key: 'pct_ahorro_2025', label: 'Ahorro / Sueños', icon: PiggyBank, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30' },
+  { key: 'pct_gastos_varios', label: 'Imprevistos', icon: ShoppingBag, color: 'text-purple-500', bgColor: 'bg-purple-500/10', borderColor: 'border-purple-500/30' },
+  { key: 'pct_libertad_financiera', label: 'Inversión', icon: TrendingUp, color: 'text-cyan-500', bgColor: 'bg-cyan-500/10', borderColor: 'border-cyan-500/30' },
 ]
 
-// Mapeo de categoría a tipo_categoria nombre
+// Mapeo de clave de presupuesto -> nombre INTERNO de tipo_categoria (no cambia)
 const CATEGORIA_TO_TIPO: Record<string, string> = {
+  'pct_gastos_vivienda': 'Gastos Vivienda',
+  'pct_gastos_personales': 'Gastos Personales',
+  'pct_supermercado': 'Supermercado',
+  'pct_pago_deudas': 'Pago Deudas',
+  'pct_salud': 'Salud',
+  'pct_disfrute': 'Disfrute',
+  'pct_transportes': 'Transportes',
+  'pct_educacion': 'Educacion',
   'pct_donacion': 'Donacion',
   'pct_ahorro_2025': 'Ahorro',
   'pct_gastos_varios': 'Gastos Varios',
-  'pct_gastos_vivienda': 'Gastos Vivienda',
-  'pct_pago_deudas': 'Pago Deudas',
-  'pct_disfrute': 'Disfrute',
-  'pct_educacion': 'Educacion',
-  'pct_suenos': 'Suenos',
   'pct_libertad_financiera': 'Libertad Financiera',
 }
 

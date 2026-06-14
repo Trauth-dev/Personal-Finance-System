@@ -39,9 +39,14 @@ import {
   Building2,
   Banknote,
   ArrowRight,
+  ShoppingCart,
+  Car,
+  Stethoscope,
+  User,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getTodayDate, formatGuaranies, getParaguayTimestamp, hexToRgba } from "@/lib/utils"
+import { getNombreCategoriaDisplay, ordenarCategoriasEgreso } from "@/lib/categorias-egreso"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
@@ -98,10 +103,11 @@ const ICONOS_CATEGORIAS: Record<string, React.ElementType> = {
   Suenos: Sparkles,
   Sueños: Sparkles,
   "Libertad Financiera": TrendingUp,
-}
-
-const DISPLAY_NOMBRES: Record<string, string> = {
-  "Ahorro 2025": "Ahorro",
+  // Categorías nuevas
+  "Gastos Personales": User,
+  Supermercado: ShoppingCart,
+  Salud: Stethoscope,
+  Transportes: Car,
 }
 
 export function EgresoForm() {
@@ -203,7 +209,8 @@ export function EgresoForm() {
         .order("nombre")
 
       if (!fetchError && data) {
-        setTiposCategorias(data)
+        // Ordenar según la grilla oficial (3 columnas x 4 filas)
+        setTiposCategorias(ordenarCategoriasEgreso(data))
       }
     } catch (error) {
       setTiposCategorias([])
@@ -554,7 +561,7 @@ export function EgresoForm() {
               user_id: user.id,
               tipo: "retiro",
               monto: montoNumerico,
-              descripcion: `Egreso: ${concepto || selectedTipoData?.nombre || "Gasto"}`,
+              descripcion: `Egreso: ${concepto || getNombreCategoriaDisplay(selectedTipoData?.nombre) || "Gasto"}`,
               fecha: fecha,
             })
           }
@@ -688,7 +695,7 @@ export function EgresoForm() {
                         <div className="p-3 rounded-full" style={{ backgroundColor: hexToRgba(tipo.color, 0.19) }}>
                           <Icon className="w-5 h-5" style={{ color: tipo.color }} />
                         </div>
-                        <span className="text-sm font-medium">{DISPLAY_NOMBRES[tipo.nombre] || tipo.nombre}</span>
+                        <span className="text-sm font-medium">{getNombreCategoriaDisplay(tipo.nombre)}</span>
                       </div>
                     </button>
                   )
@@ -1265,7 +1272,7 @@ export function EgresoForm() {
                   }}
                 >
                   <Plus className="w-4 h-4" />
-                  Agregar descripción a {selectedTipoData?.nombre}
+                  Agregar descripción a {getNombreCategoriaDisplay(selectedTipoData?.nombre)}
                 </Button>
               ) : (
                 <div className="flex flex-col gap-3">
