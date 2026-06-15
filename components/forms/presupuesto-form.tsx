@@ -755,15 +755,15 @@ export function PresupuestoForm() {
                         {/* Lista de subcategorías */}
                         {catData.subcategorias.map((sub) => (
                           <div key={sub.id} className="flex items-center justify-between gap-2 py-1">
-                            <span className="text-sm text-foreground truncate flex-1">{sub.nombre}</span>
-                            <div className="flex items-center gap-1">
+                            <span className="text-sm text-foreground truncate flex-1 min-w-0">{sub.nombre}</span>
+                            <div className="flex items-center gap-1 flex-shrink-0">
                               <Input
                                 type="text"
                                 inputMode="numeric"
                                 value={sub.monto > 0 ? sub.monto.toLocaleString('es-PY') : ""}
                                 onChange={(e) => handleMontoChange(categoria.key, sub.id, e.target.value)}
                                 placeholder="0"
-                                className="w-28 h-7 text-right text-sm bg-background/50"
+                                className="w-24 sm:w-28 h-7 text-right text-sm bg-background/50"
                               />
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
