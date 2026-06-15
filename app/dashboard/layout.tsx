@@ -149,7 +149,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 min-w-0 overflow-x-hidden overflow-y-auto">
           <div className="container mx-auto p-4 sm:p-6 lg:p-8 max-w-7xl">
             <PlanAccessGuard>
               {children}
