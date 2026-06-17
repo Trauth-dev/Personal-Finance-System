@@ -29,10 +29,11 @@ export default function LoginPage() {
       return
     }
 
-    if (!email.includes("@")) {
-      setError("Por favor, ingresa un correo electrónico válido")
-      return
-    }
+    // Permitir iniciar sesión con correo electrónico o con número de cédula.
+    // Si el valor ingresado no contiene "@", se trata como cédula y se
+    // convierte al correo sintético usado internamente (ej. 2922619 -> 2922619@cedula.local)
+    const trimmed = email.trim()
+    const loginEmail = trimmed.includes("@") ? trimmed : `${trimmed}@cedula.local`
 
     const supabase = createClient()
     setIsLoading(true)
@@ -40,7 +41,7 @@ export default function LoginPage() {
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: loginEmail,
         password,
         options: {
           // Si "recordar sesión" está activado, la sesión persiste indefinidamente
@@ -98,18 +99,18 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <Label htmlFor="email" className="flex items-center gap-2">
                   <Mail className="w-4 h-4" />
-                  Correo Electrónico
+                  Correo o Cédula
                 </Label>
                 <Input
                   id="email"
-                  type="email"
-                  placeholder="tu@email.com"
+                  type="text"
+                  placeholder="tu@email.com o tu número de cédula"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-background/50"
                   disabled={isLoading}
-                  autoComplete="email"
+                  autoComplete="username"
                 />
               </div>
 
