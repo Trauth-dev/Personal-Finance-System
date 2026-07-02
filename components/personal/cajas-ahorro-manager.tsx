@@ -498,82 +498,87 @@ export function CajasAhorroManager() {
                     />
                   </div>
 
-                  <div>
-                    <Label htmlFor="meta_monto">Meta de Ahorro (opcional)</Label>
-                    <Input
-                      id="meta_monto"
-                      type="text"
-                      inputMode="numeric"
-                      value={formatMiles(formData.meta_monto)}
-                      onChange={(e) => setFormData({ ...formData, meta_monto: parseMiles(e.target.value) })}
-                      placeholder="Ej: 5.000.000"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
+                  {/* Campos ocultos visualmente (Meta de Ahorro, Icono, Color, Prioridad).
+                      Se conservan en el estado con sus valores por defecto para que la
+                      creacion siga siendo 100% funcional. */}
+                  <div className="hidden">
                     <div>
-                      <Label htmlFor="icono">Icono</Label>
-                      <Select
-                        value={formData.icono}
-                        onValueChange={(value) => setFormData({ ...formData, icono: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {iconosDisponibles.map((icono) => {
-                            const Icon = icono.icon
-                            return (
-                              <SelectItem key={icono.value} value={icono.value}>
+                      <Label htmlFor="meta_monto">Meta de Ahorro (opcional)</Label>
+                      <Input
+                        id="meta_monto"
+                        type="text"
+                        inputMode="numeric"
+                        value={formatMiles(formData.meta_monto)}
+                        onChange={(e) => setFormData({ ...formData, meta_monto: parseMiles(e.target.value) })}
+                        placeholder="Ej: 5.000.000"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="icono">Icono</Label>
+                        <Select
+                          value={formData.icono}
+                          onValueChange={(value) => setFormData({ ...formData, icono: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {iconosDisponibles.map((icono) => {
+                              const Icon = icono.icon
+                              return (
+                                <SelectItem key={icono.value} value={icono.value}>
+                                  <div className="flex items-center gap-2">
+                                    <Icon className="w-4 h-4" />
+                                    {icono.label}
+                                  </div>
+                                </SelectItem>
+                              )
+                            })}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="color">Color</Label>
+                        <Select
+                          value={formData.color}
+                          onValueChange={(value) => setFormData({ ...formData, color: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {coloresDisponibles.map((color) => (
+                              <SelectItem key={color.value} value={color.value}>
                                 <div className="flex items-center gap-2">
-                                  <Icon className="w-4 h-4" />
-                                  {icono.label}
+                                  <div className={`w-4 h-4 rounded ${color.class}`} />
+                                  {color.label}
                                 </div>
                               </SelectItem>
-                            )
-                          })}
-                        </SelectContent>
-                      </Select>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <div>
-                      <Label htmlFor="color">Color</Label>
+                      <Label htmlFor="prioridad">Prioridad</Label>
                       <Select
-                        value={formData.color}
-                        onValueChange={(value) => setFormData({ ...formData, color: value })}
+                        value={formData.prioridad}
+                        onValueChange={(value) => setFormData({ ...formData, prioridad: value })}
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {coloresDisponibles.map((color) => (
-                            <SelectItem key={color.value} value={color.value}>
-                              <div className="flex items-center gap-2">
-                                <div className={`w-4 h-4 rounded ${color.class}`} />
-                                {color.label}
-                              </div>
-                            </SelectItem>
-                          ))}
+                          <SelectItem value="1">Alta</SelectItem>
+                          <SelectItem value="2">Media</SelectItem>
+                          <SelectItem value="3">Baja</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="prioridad">Prioridad</Label>
-                    <Select
-                      value={formData.prioridad}
-                      onValueChange={(value) => setFormData({ ...formData, prioridad: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">Alta</SelectItem>
-                        <SelectItem value="2">Media</SelectItem>
-                        <SelectItem value="3">Baja</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
 
                   <DialogFooter>
