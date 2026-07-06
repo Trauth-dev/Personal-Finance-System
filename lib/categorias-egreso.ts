@@ -30,6 +30,7 @@ export const ORDEN_CATEGORIAS_EGRESO: string[] = [
   "Ahorro",
   "Gastos Varios",
   "Libertad Financiera",
+  "Gastos del Negocio",
 ]
 
 // Nombre interno (BD) -> Nombre visible (UI).
@@ -46,6 +47,7 @@ export const NOMBRES_DISPLAY_CATEGORIA: Record<string, string> = {
   Ahorro: "Ahorro / Sueños",
   "Gastos Varios": "Imprevistos",
   "Libertad Financiera": "Inversión",
+  "Gastos del Negocio": "Gastos del Negocio",
   // Variantes/legados para que nunca quede sin etiqueta correcta
   "Ahorro 2025": "Ahorro / Sueños",
   Educación: "Educación",
@@ -68,6 +70,7 @@ export const COLORES_CATEGORIA: Record<string, string> = {
   Ahorro: "#3b82f6",
   "Gastos Varios": "#a855f7",
   "Libertad Financiera": "#10b981",
+  "Gastos del Negocio": "#3b82f6",
 }
 
 /**

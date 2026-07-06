@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { formatGuaranies } from "@/lib/utils"
 import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
-import { Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, ShoppingCart, Car, Stethoscope, User } from 'lucide-react'
+import { Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, ShoppingCart, Car, Stethoscope, User, Briefcase } from 'lucide-react'
 
 interface Presupuesto {
   meta_salario: number
@@ -42,6 +42,7 @@ const CATEGORIAS_CONFIG = {
   "Educacion": { icon: GraduationCap, color: "from-indigo-500 to-cyan-500", textColor: "text-indigo-600", bgColor: "bg-indigo-50" },
   "Educación": { icon: GraduationCap, color: "from-indigo-500 to-cyan-500", textColor: "text-indigo-600", bgColor: "bg-indigo-50" },
   "Libertad Financiera": { icon: TrendingUp, color: "from-teal-500 to-cyan-500", textColor: "text-teal-600", bgColor: "bg-teal-50" },
+  "Gastos del Negocio": { icon: Briefcase, color: "from-blue-500 to-cyan-500", textColor: "text-blue-600", bgColor: "bg-blue-50" },
 }
 
 export function PresupuestoCategoriasComparativoClient({
@@ -83,6 +84,7 @@ export function PresupuestoCategoriasComparativoClient({
     { nombre: "Ahorro", monto: montosPorTipo["Ahorro"] || montosPorTipo["Ahorro 2025"] || 0, gastado: egresosPorCategoria["Ahorro"] || egresosPorCategoria["Ahorro 2025"] || 0 },
     { nombre: "Gastos Varios", monto: montosPorTipo["Gastos Varios"] || 0, gastado: egresosPorCategoria["Gastos Varios"] || 0 },
     { nombre: "Libertad Financiera", monto: montosPorTipo["Libertad Financiera"] || 0, gastado: egresosPorCategoria["Libertad Financiera"] || 0 },
+    { nombre: "Gastos del Negocio", monto: montosPorTipo["Gastos del Negocio"] || 0, gastado: egresosPorCategoria["Gastos del Negocio"] || 0 },
   ]
 
   // Filtrar solo las categorías que tienen presupuesto asignado (monto > 0)
