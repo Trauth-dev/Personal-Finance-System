@@ -43,6 +43,7 @@ import {
   Car,
   Stethoscope,
   User,
+  Briefcase,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { getTodayDate, formatGuaranies, getParaguayTimestamp, hexToRgba } from "@/lib/utils"
@@ -110,6 +111,12 @@ const ICONOS_CATEGORIAS: Record<string, React.ElementType> = {
   Transportes: Car,
 }
 
+// Nombre reservado para la categoría especial "Gastos del Negocio".
+// Se crea de forma real en la base de datos para integrarse a reportes e historial,
+// pero se oculta de la grilla de "Tipo de Categoría" porque vive junto al título.
+const NOMBRE_CATEGORIA_NEGOCIO = "Gastos del Negocio"
+const COLOR_CATEGORIA_NEGOCIO = "#3b82f6"
+
 export function EgresoForm() {
   const { perfilActual } = usePerfil()
   const { features, isLoading: isLoadingPlan } = usePlanTier()
@@ -124,6 +131,9 @@ export function EgresoForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Modo especial "Gastos del Negocio": egreso rápido con solo Fecha, Monto y Concepto
+  const [modoNegocio, setModoNegocio] = useState(false)
 
   const [esPagoDeudas, setEsPagoDeudas] = useState(false)
   const [deudas, setDeudas] = useState<Deuda[]>([])
@@ -257,8 +267,11 @@ export function EgresoForm() {
         .order("nombre")
 
       if (!fetchError && data) {
+        // Ocultar la categoría especial "Gastos del Negocio" de la grilla:
+        // se muestra únicamente en el botón junto al título.
+        const dataSinNegocio = data.filter((t) => t.nombre !== NOMBRE_CATEGORIA_NEGOCIO)
         // Ordenar según la grilla oficial (3 columnas x 4 filas)
-        setTiposCategorias(ordenarCategoriasEgreso(data))
+        setTiposCategorias(ordenarCategoriasEgreso(dataSinNegocio))
       }
     } catch (error) {
       setTiposCategorias([])
@@ -332,6 +345,105 @@ export function EgresoForm() {
       }
     } catch (error) {
       console.error("Error auto-selecting categoria:", error)
+    }
+  }
+
+  // Get-or-create de la categoría especial "Gastos del Negocio".
+  // Devuelve los ids reales de tipo y descripción para guardar el egreso
+  // e integrarlo correctamente en reportes, presupuesto e historial.
+  const getOrCreateNegocioCategoria = async (
+    userId: string,
+  ): Promise<{ tipoId: string; categoriaId: string } | null> => {
+    if (!perfilActual?.id) return null
+
+    try {
+      const supabase = createClient()
+
+      // 1) Tipo de categoría "Gastos del Negocio"
+      let tipoId: string | null = null
+      const { data: tipos } = await supabase
+        .from("tipos_categoria_egreso")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("perfil_id", perfilActual.id)
+        .eq("nombre", NOMBRE_CATEGORIA_NEGOCIO)
+        .limit(1)
+
+      if (tipos && tipos.length > 0) {
+        tipoId = tipos[0].id
+      } else {
+        const { data: newTipo, error: tipoError } = await supabase
+          .from("tipos_categoria_egreso")
+          .insert({
+            user_id: userId,
+            perfil_id: perfilActual.id,
+            nombre: NOMBRE_CATEGORIA_NEGOCIO,
+            color: COLOR_CATEGORIA_NEGOCIO,
+          })
+          .select("id")
+        if (tipoError || !newTipo || !newTipo[0]) return null
+        tipoId = newTipo[0].id
+      }
+
+      // 2) Descripción por defecto asociada al tipo
+      let categoriaId: string | null = null
+      const { data: cats } = await supabase
+        .from("categorias_egreso")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("perfil_id", perfilActual.id)
+        .eq("tipo_categoria_id", tipoId)
+        .limit(1)
+
+      if (cats && cats.length > 0) {
+        categoriaId = cats[0].id
+      } else {
+        const { data: newCat, error: catError } = await supabase
+          .from("categorias_egreso")
+          .insert({
+            user_id: userId,
+            perfil_id: perfilActual.id,
+            tipo_categoria_id: tipoId,
+            nombre: NOMBRE_CATEGORIA_NEGOCIO,
+          })
+          .select("id")
+        if (catError || !newCat || !newCat[0]) return null
+        categoriaId = newCat[0].id
+      }
+
+      return { tipoId, categoriaId }
+    } catch (error) {
+      console.error("Error get-or-create Gastos del Negocio:", error)
+      return null
+    }
+  }
+
+  // Activa/desactiva el modo "Gastos del Negocio".
+  // Al activarlo limpiamos la selección normal y hacemos el mismo autoscroll
+  // que al elegir una descripción, para dejar a la vista Monto, Fecha y Concepto.
+  const handleToggleNegocio = () => {
+    const next = !modoNegocio
+    setModoNegocio(next)
+
+    if (next) {
+      setSelectedTipo("")
+      setSelectedCategoria("")
+      setEsPagoDeudas(false)
+      setSelectedDeuda("")
+      setNumeroCuota("")
+      setOrigenTipo("")
+      setOrigenId("")
+      setShowNewCategoria(false)
+
+      if (typeof window === "undefined") return
+      // 1) Enfocamos el monto (despliega el teclado numérico en móvil)
+      window.setTimeout(() => {
+        montoInputRef.current?.focus({ preventScroll: true })
+      }, 150)
+      // 2) Subimos el bloque Monto para ver Monto, Fecha, Concepto y el botón
+      window.setTimeout(() => {
+        montoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      }, 350)
     }
   }
 
@@ -539,12 +651,25 @@ export function EgresoForm() {
         throw new Error("Usuario no autenticado")
       }
 
-      if (!selectedTipo || !selectedCategoria) {
+      if (!modoNegocio && (!selectedTipo || !selectedCategoria)) {
         throw new Error("Debes seleccionar un tipo de categoría y una descripción")
       }
 
       if (egresoFeatures.seguimientoDeudas && esPagoDeudas && !selectedDeuda) {
         throw new Error("Debes seleccionar una deuda para registrar el pago")
+      }
+
+      // Resolver el tipo/descripción reales del egreso.
+      // En modo "Gastos del Negocio" se crean/obtienen automáticamente.
+      let tipoCategoriaId = selectedTipo
+      let categoriaId = selectedCategoria
+      if (modoNegocio) {
+        const negocio = await getOrCreateNegocioCategoria(user.id)
+        if (!negocio) {
+          throw new Error("No se pudo registrar el gasto del negocio. Inténtalo de nuevo.")
+        }
+        tipoCategoriaId = negocio.tipoId
+        categoriaId = negocio.categoriaId
       }
 
       const montoNumerico = Number.parseFloat(monto)
@@ -567,8 +692,8 @@ export function EgresoForm() {
       const egresoData: any = {
         user_id: user.id,
         perfil_id: perfilActual.id,
-        tipo_categoria_id: selectedTipo,
-        categoria_id: selectedCategoria,
+        tipo_categoria_id: tipoCategoriaId,
+        categoria_id: categoriaId,
         monto: montoNumerico,
         fecha: fecha,
         concepto: concepto || null,
@@ -674,6 +799,7 @@ export function EgresoForm() {
       setEsPagoDeudas(false)
       setOrigenTipo("")
       setOrigenId("")
+      setModoNegocio(false)
 
       // Recargar saldos de cajas y tarjetas para reflejar el descuento inmediatamente
       await loadOrigenFondos()
@@ -709,15 +835,32 @@ export function EgresoForm() {
   return (
     <Card className="max-w-2xl mx-auto glass-effect border-border/50">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <CardTitle className="text-2xl">Registrar Egreso</CardTitle>
             <CardDescription>Completa los datos de tu egreso para {perfilActual.nombre}</CardDescription>
           </div>
+
+          <button
+            type="button"
+            onClick={handleToggleNegocio}
+            aria-pressed={modoNegocio}
+            className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 transition-all w-full justify-center sm:w-auto sm:justify-start ${
+              modoNegocio
+                ? "border-blue-400 bg-blue-500/15 shadow-lg shadow-blue-500/10"
+                : "border-border/40 bg-background/40 hover:border-blue-400/50"
+            }`}
+          >
+            <div className="p-2 rounded-full bg-blue-500/20">
+              <Briefcase className="w-5 h-5 text-blue-400" />
+            </div>
+            <span className="text-sm font-medium">Gastos del Negocio</span>
+          </button>
         </div>
       </CardHeader>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {!modoNegocio && (
           <div className="space-y-3 scroll-mt-20 sm:scroll-mt-24" ref={tipoCategoriaRef}>
             <Label>Tipo de Categoría</Label>
 
@@ -755,6 +898,21 @@ export function EgresoForm() {
               </p>
             )}
           </div>
+          )}
+
+          {modoNegocio && (
+            <div className="flex items-center gap-3 p-4 rounded-xl border border-blue-500/30 bg-blue-500/10">
+              <div className="p-2 rounded-full bg-blue-500/20">
+                <Briefcase className="w-5 h-5 text-blue-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-blue-400">Gastos del Negocio</p>
+                <p className="text-xs text-muted-foreground">
+                  Registra el egreso completando solo Monto, Fecha y un Concepto opcional.
+                </p>
+              </div>
+            </div>
+          )}
 
           {!isLoadingPlan && egresoFeatures.seguimientoDeudas && esPagoDeudas && (
             <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-red-500/10 via-orange-500/5 to-transparent border border-red-500/30">
@@ -1602,9 +1760,9 @@ export function EgresoForm() {
           <Button
             type="submit"
             className="w-full"
-            disabled={Boolean(isLoading || !selectedTipo || !selectedCategoria || !monto || (egresoFeatures.seguimientoDeudas && esPagoDeudas && !selectedDeuda) || (origenTipo && !origenId))}
+            disabled={Boolean(isLoading || (!modoNegocio && (!selectedTipo || !selectedCategoria)) || !monto || (egresoFeatures.seguimientoDeudas && esPagoDeudas && !selectedDeuda) || (origenTipo && !origenId))}
             style={{
-              backgroundColor: selectedTipoData?.color || undefined,
+              backgroundColor: modoNegocio ? COLOR_CATEGORIA_NEGOCIO : selectedTipoData?.color || undefined,
             }}
           >
             {isLoading ? "Registrando..." : "Registrar Egreso"}

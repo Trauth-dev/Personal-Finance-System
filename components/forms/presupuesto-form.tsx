@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp, ShoppingCart, Car, Stethoscope, User } from 'lucide-react'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp, ShoppingCart, Car, Stethoscope, User, Briefcase } from 'lucide-react'
 import { getTodayDate, formatGuaranies, normalizarNombre as normalizarNombreUtil } from "@/lib/utils"
 import { getColorCategoria } from "@/lib/categorias-egreso"
 import { usePerfil } from "@/lib/contexts/perfil-context"
@@ -49,6 +49,7 @@ const CATEGORIAS_CONFIG = [
   { key: 'pct_ahorro_2025', label: 'Ahorro / Sueños', icon: PiggyBank, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30' },
   { key: 'pct_gastos_varios', label: 'Imprevistos', icon: ShoppingBag, color: 'text-purple-500', bgColor: 'bg-purple-500/10', borderColor: 'border-purple-500/30' },
   { key: 'pct_libertad_financiera', label: 'Inversión', icon: TrendingUp, color: 'text-cyan-500', bgColor: 'bg-cyan-500/10', borderColor: 'border-cyan-500/30' },
+  { key: 'pct_gastos_negocio', label: 'Gastos del Negocio', icon: Briefcase, color: 'text-blue-500', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/30' },
 ]
 
 // Mapeo de clave de presupuesto -> nombre INTERNO de tipo_categoria (no cambia)
@@ -65,6 +66,7 @@ const CATEGORIA_TO_TIPO: Record<string, string> = {
   'pct_ahorro_2025': 'Ahorro',
   'pct_gastos_varios': 'Gastos Varios',
   'pct_libertad_financiera': 'Libertad Financiera',
+  'pct_gastos_negocio': 'Gastos del Negocio',
 }
 
 // Normaliza un nombre de categoría para comparaciones robustas:
