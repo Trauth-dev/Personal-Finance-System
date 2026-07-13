@@ -506,55 +506,73 @@ export function PresupuestoForm() {
         if (insertError) throw insertError
       }
 
-      // 2. Eliminar items de presupuesto anteriores para este mes
-      await supabase
-        .from("presupuesto_categorias")
-        .delete()
-        .eq("perfil_id", perfilActual.id)
-        .eq("mes", primerDiaMes)
-
-      // 3. Insertar nuevos items de presupuesto detallado
-      // Solo insertar items que tengan nombre
-      const itemsToInsert: Array<{
-        perfil_id: string
-        tipo_categoria: string
-        categoria: string
-        monto_presupuestado: number
-        mes: string
-      }> = []
+      // 2. Preparar items de presupuesto detallado.
+      // Se agrupan por nombre de categoria para NO violar la restriccion UNIQUE
+      // (perfil_id, categoria, tipo_categoria, mes): si el usuario repite un nombre
+      // (en la misma o en distinta categoria), sumamos los montos en una sola fila.
+      const itemsMap = new Map<
+        string,
+        {
+          perfil_id: string
+          tipo_categoria: string
+          categoria: string
+          monto_presupuestado: number
+          mes: string
+        }
+      >()
 
       for (const [, data] of Object.entries(categoriasData)) {
         for (const sub of data.subcategorias) {
-          if (sub.nombre.trim()) {
-            itemsToInsert.push({
+          const nombre = sub.nombre.trim()
+          if (!nombre) continue
+          const key = nombre.toLowerCase()
+          const existente = itemsMap.get(key)
+          if (existente) {
+            existente.monto_presupuestado += sub.monto
+          } else {
+            itemsMap.set(key, {
               perfil_id: perfilActual.id,
               tipo_categoria: 'egreso', // La tabla solo acepta 'ingreso' o 'egreso'
-              categoria: sub.nombre,
+              categoria: nombre,
               monto_presupuestado: sub.monto,
-              mes: primerDiaMes
+              mes: primerDiaMes,
             })
           }
         }
       }
 
-      if (itemsToInsert.length > 0) {
-        const { error: insertItemsError } = await supabase
-          .from("presupuesto_categorias")
-          .insert(itemsToInsert)
+      const itemsToInsert = Array.from(itemsMap.values())
 
-        if (insertItemsError) {
-          throw insertItemsError
+      // 3. Guardar de forma NO destructiva: primero upsert (nunca borra antes de
+      // asegurar los datos nuevos), asi un fallo no deja el mes vacio.
+      if (itemsToInsert.length > 0) {
+        const { error: upsertItemsError } = await supabase
+          .from("presupuesto_categorias")
+          .upsert(itemsToInsert, { onConflict: 'perfil_id,categoria,tipo_categoria,mes' })
+
+        if (upsertItemsError) {
+          throw upsertItemsError
         }
       }
 
-      // 4. Eliminar presupuestos de ingresos anteriores para este mes
-      await supabase
-        .from("presupuesto_ingresos")
-        .delete()
+      // 4. Eliminar solo las categorias que el usuario quito (las que ya no estan
+      // en la lista actual), buscandolas por id para evitar cualquier borrado masivo.
+      const { data: itemsExistentes } = await supabase
+        .from("presupuesto_categorias")
+        .select("id, categoria")
         .eq("perfil_id", perfilActual.id)
         .eq("mes", primerDiaMes)
 
-      // 5. Insertar nuevos presupuestos de ingresos
+      const nombresActuales = new Set(itemsToInsert.map((i) => i.categoria.toLowerCase()))
+      const idsItemsAEliminar = (itemsExistentes || [])
+        .filter((row) => !nombresActuales.has((row.categoria || "").toLowerCase()))
+        .map((row) => row.id)
+
+      if (idsItemsAEliminar.length > 0) {
+        await supabase.from("presupuesto_categorias").delete().in("id", idsItemsAEliminar)
+      }
+
+      // 5. Presupuestos de ingresos (mismo enfoque no destructivo)
       const ingresosToInsert = ingresosCategoria
         .filter(ing => ing.montoPresupuestado > 0)
         .map(ing => ({
@@ -566,13 +584,29 @@ export function PresupuestoForm() {
         }))
 
       if (ingresosToInsert.length > 0) {
-        const { error: insertIngresosError } = await supabase
+        const { error: upsertIngresosError } = await supabase
           .from("presupuesto_ingresos")
-          .insert(ingresosToInsert)
+          .upsert(ingresosToInsert, { onConflict: 'perfil_id,categoria_ingreso_id,mes' })
 
-        if (insertIngresosError) {
-          throw insertIngresosError
+        if (upsertIngresosError) {
+          throw upsertIngresosError
         }
+      }
+
+      // Eliminar ingresos que el usuario dejo en 0 o quito
+      const idsIngresosActuales = new Set(ingresosToInsert.map((i) => i.categoria_ingreso_id))
+      const { data: ingresosExistentes } = await supabase
+        .from("presupuesto_ingresos")
+        .select("id, categoria_ingreso_id")
+        .eq("perfil_id", perfilActual.id)
+        .eq("mes", primerDiaMes)
+
+      const idsIngresosAEliminar = (ingresosExistentes || [])
+        .filter((row) => !idsIngresosActuales.has(row.categoria_ingreso_id))
+        .map((row) => row.id)
+
+      if (idsIngresosAEliminar.length > 0) {
+        await supabase.from("presupuesto_ingresos").delete().in("id", idsIngresosAEliminar)
       }
 
       setSuccess(true)
