@@ -51,7 +51,7 @@ const CATEGORIAS_PASIVOS = [
 ]
 
 export function PatrimonioManager() {
-  const { perfilActivo } = usePerfil()
+  const { perfilActual: perfilActivo } = usePerfil()
   const [items, setItems] = useState<PatrimonioItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
