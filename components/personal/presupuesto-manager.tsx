@@ -26,7 +26,7 @@ interface PresupuestoCategoria {
 }
 
 export function PresupuestoManager() {
-  const { perfilActivo } = usePerfil()
+  const { perfilActual: perfilActivo } = usePerfil()
   const [presupuestos, setPresupuestos] = useState<PresupuestoCategoria[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -178,9 +178,25 @@ export function PresupuestoManager() {
     }
 
     if (editingId) {
-      await supabase.from("presupuesto_categorias").update(dataToSave).eq("id", editingId)
+      const { error: updateError } = await supabase
+        .from("presupuesto_categorias")
+        .update(dataToSave)
+        .eq("id", editingId)
+      if (updateError) {
+        alert("No se pudo actualizar la categoria. Intentalo de nuevo.")
+        return
+      }
     } else {
-      await supabase.from("presupuesto_categorias").insert(dataToSave)
+      // Upsert en vez de insert: si ya existe una categoria con el mismo nombre
+      // para este perfil/mes/tipo, se actualiza el monto en lugar de fallar por la
+      // restriccion UNIQUE (perfil_id, categoria, tipo_categoria, mes).
+      const { error: upsertError } = await supabase
+        .from("presupuesto_categorias")
+        .upsert(dataToSave, { onConflict: "perfil_id,categoria,tipo_categoria,mes" })
+      if (upsertError) {
+        alert("No se pudo guardar la categoria. Intentalo de nuevo.")
+        return
+      }
     }
 
     setFormData({ categoria: "", tipo_categoria: "egreso", monto_presupuestado: "" })
@@ -279,18 +295,36 @@ export function PresupuestoManager() {
     const [year, month] = mesSeleccionado.split('-').map(Number)
     const primerDia = new Date(year, month - 1, 1).toISOString().split("T")[0]
 
+    // Deduplicar por categoria+tipo para no chocar con la restriccion UNIQUE
+    // y hacer upsert (idempotente): copiar de nuevo no genera errores ni duplicados.
+    const filasMap = new Map<string, {
+      perfil_id: string
+      categoria: string
+      tipo_categoria: string
+      monto_presupuestado: number
+      mes: string
+    }>()
     for (const p of presupuestosMesAnterior) {
-      const yaExiste = presupuestos.find(
-        (ex) => ex.categoria === p.categoria && ex.tipo_categoria === p.tipo_categoria
-      )
-      if (!yaExiste) {
-        await supabase.from("presupuesto_categorias").insert({
+      const key = `${p.tipo_categoria}::${p.categoria.trim().toLowerCase()}`
+      if (!filasMap.has(key)) {
+        filasMap.set(key, {
           perfil_id: perfilActivo.id,
           categoria: p.categoria,
           tipo_categoria: p.tipo_categoria,
           monto_presupuestado: p.monto_presupuestado,
           mes: primerDia,
         })
+      }
+    }
+
+    const filas = Array.from(filasMap.values())
+    if (filas.length > 0) {
+      const { error: copiarError } = await supabase
+        .from("presupuesto_categorias")
+        .upsert(filas, { onConflict: "perfil_id,categoria,tipo_categoria,mes" })
+      if (copiarError) {
+        alert("No se pudo copiar el presupuesto del mes anterior. Intentalo de nuevo.")
+        return
       }
     }
     fetchPresupuestos()
