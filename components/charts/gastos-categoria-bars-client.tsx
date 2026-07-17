@@ -29,9 +29,9 @@ export function GastosCategoriaBarsClient({ categorias, mayorGasto, total }: Gas
         {/* Mayor Gasto Card - Compacto */}
         <div className="bg-gradient-to-br from-emerald-50 to-green-50 border-2 border-emerald-200 rounded-xl p-4">
           <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-1">Mayor Gasto</p>
-          <div className="flex items-baseline justify-between">
-            <p className="text-xl font-bold text-emerald-900">{mayorGasto.nombre}</p>
-            <p className="text-xl font-bold text-emerald-900">{formatGuaranies(mayorGasto.monto)}</p>
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
+            <p className="text-lg sm:text-xl font-bold text-emerald-900 break-words">{mayorGasto.nombre}</p>
+            <p className="text-xl font-bold text-emerald-900 whitespace-nowrap">{formatGuaranies(mayorGasto.monto)}</p>
           </div>
           <p className="text-xs text-emerald-600 mt-1">{mayorGasto.porcentaje.toFixed(1)}% del total</p>
         </div>
@@ -47,15 +47,15 @@ export function GastosCategoriaBarsClient({ categorias, mayorGasto, total }: Gas
               return (
                 <div
                   key={cat.nombre}
-                  className="flex items-center justify-between p-3 rounded-lg hover:shadow-md transition-all border border-slate-200"
+                  className="flex items-center justify-between gap-3 p-3 rounded-lg hover:shadow-md transition-all border border-slate-200"
                   style={{ backgroundColor: bgColor }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: dotColor }} />
-                    <span className="text-sm font-medium text-slate-700">{cat.nombre}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: dotColor }} />
+                    <span className="text-sm font-medium text-slate-700 truncate">{cat.nombre}</span>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-slate-900">{formatGuaranies(cat.monto)}</p>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-bold text-slate-900 whitespace-nowrap">{formatGuaranies(cat.monto)}</p>
                     <p className="text-xs text-slate-500">{cat.porcentaje.toFixed(1)}%</p>
                   </div>
                 </div>
@@ -64,9 +64,9 @@ export function GastosCategoriaBarsClient({ categorias, mayorGasto, total }: Gas
             
             {/* Total Compacto */}
             <div className="pt-3 mt-2 border-t-2 border-slate-300">
-              <div className="flex items-center justify-between px-2">
+              <div className="flex items-center justify-between gap-2 px-2">
                 <span className="text-sm font-bold text-slate-700">Total Egresos</span>
-                <span className="text-lg font-bold text-slate-900">{formatGuaranies(total)}</span>
+                <span className="text-base sm:text-lg font-bold text-slate-900 whitespace-nowrap shrink-0">{formatGuaranies(total)}</span>
               </div>
             </div>
           </div>
