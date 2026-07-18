@@ -117,8 +117,8 @@ export function ReportesExpandiblesClient({
                 className="border-2 border-slate-200 rounded-xl bg-white overflow-hidden"
               >
                 <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 hover:no-underline">
-                  <div className="flex items-center justify-between gap-2 w-full pr-2">
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center justify-between gap-2 flex-1 min-w-0 pr-1">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div
                         className="w-3 h-3 rounded-full shrink-0"
                         style={{ backgroundColor: categoria.color }}

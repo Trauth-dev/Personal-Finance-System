@@ -490,7 +490,7 @@ export default function PersonalHistorialPage() {
   if (!perfilActual) {
     return (
       <div>
-        <DashboardHeader title="Historial Personal" description="Registro de movimientos personales" />
+        <DashboardHeader title="Editar y Eliminar Cargas" description="Edita o elimina tus movimientos personales" />
         <div className="p-6">
           <Card className="glass-effect border-border/50">
             <CardContent className="py-12 text-center text-muted-foreground">Cargando perfil personal...</CardContent>
@@ -502,7 +502,7 @@ export default function PersonalHistorialPage() {
 
   return (
     <div>
-      <DashboardHeader title="Historial Personal" description="Registro completo de tus movimientos personales" />
+      <DashboardHeader title="Editar y Eliminar Cargas" description="Edita o elimina tus movimientos personales" />
 
       <div className="p-4 md:p-6">
         <div className="flex justify-end mb-4">
