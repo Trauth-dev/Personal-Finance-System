@@ -106,7 +106,7 @@ const navItemsPersonal = [
     icon: Snowflake,
   },
   {
-    title: "Historial",
+    title: "Editar y Eliminar Cargas",
     href: "/dashboard/personal/historial",
     icon: History,
   },
