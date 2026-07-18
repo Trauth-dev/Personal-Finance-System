@@ -132,18 +132,18 @@ export function PresupuestoCategoriasComparativoClient({
                     <Icon className="w-6 h-6 text-white" />
                   </div>
                   <div className="w-full">
-                    <p className="text-xs font-semibold text-slate-700 truncate">{getNombreCategoriaDisplay(categoria.nombre)}</p>
+                    <p className="text-xs font-semibold text-slate-700 leading-tight line-clamp-2 min-h-8">{getNombreCategoriaDisplay(categoria.nombre)}</p>
                     <p className={`text-2xl font-bold ${estadoColor} mt-1`}>
                       {porcentajeUsado.toFixed(0)}%
                     </p>
-                    <div className="mt-2 space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Presup.:</span>
-                        <span className="font-medium text-slate-700">{formatGuaranies(presupuestoCategoria)}</span>
+                    <div className="mt-2 space-y-1.5">
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-xs text-slate-500">Presup.</span>
+                        <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">{formatGuaranies(presupuestoCategoria)}</span>
                       </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">Gastado:</span>
-                        <span className={`font-medium ${estadoColor}`}>{formatGuaranies(categoria.gastado)}</span>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-xs text-slate-500">Gastado</span>
+                        <span className={`text-xs font-semibold whitespace-nowrap ${estadoColor}`}>{formatGuaranies(categoria.gastado)}</span>
                       </div>
                     </div>
                   </div>

@@ -55,39 +55,39 @@ export function ReportesExpandiblesClient({
             {top5GastosGenerales.map((gasto, index) => (
               <div
                 key={index}
-                className="flex items-center justify-between p-4 bg-white rounded-xl border-2 border-slate-200 hover:border-purple-300 transition-colors"
+                className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-white rounded-xl border-2 border-slate-200 hover:border-purple-300 transition-colors"
               >
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold text-sm">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="flex items-center justify-center w-8 h-8 shrink-0 rounded-full bg-purple-100 text-purple-700 font-bold text-sm">
                     {index + 1}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <span
                         className="px-2 py-0.5 rounded-full text-xs font-medium text-white"
                         style={{ backgroundColor: gasto.color }}
                       >
                         {gasto.categoria}
                       </span>
-                      <span className="font-semibold text-slate-800">{gasto.descripcion}</span>
+                      <span className="font-semibold text-slate-800 break-words">{gasto.descripcion}</span>
                       <span className="text-xs text-slate-400">• {formatDateWithoutTimezone(gasto.fecha)}</span>
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-lg font-bold text-red-600">{formatGuaranies(gasto.monto)}</p>
+                <div className="text-right shrink-0">
+                  <p className="text-base sm:text-lg font-bold text-red-600 whitespace-nowrap">{formatGuaranies(gasto.monto)}</p>
                 </div>
               </div>
             ))}
             
             {top5GastosGenerales.length > 0 && (
-              <div className="flex items-center justify-between p-4 bg-purple-100 rounded-xl border-2 border-purple-300 mt-4">
-                <div className="flex items-center gap-3">
-                  <Medal className="w-5 h-5 text-purple-700" />
+              <div className="flex items-center justify-between gap-3 p-3 sm:p-4 bg-purple-100 rounded-xl border-2 border-purple-300 mt-4">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Medal className="w-5 h-5 text-purple-700 shrink-0" />
                   <span className="font-bold text-purple-900">Total 5 Gastos del Mes</span>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-purple-900">{formatGuaranies(totalTop5)}</p>
+                <div className="text-right shrink-0">
+                  <p className="text-lg sm:text-xl font-bold text-purple-900 whitespace-nowrap">{formatGuaranies(totalTop5)}</p>
                 </div>
               </div>
             )}
@@ -117,15 +117,15 @@ export function ReportesExpandiblesClient({
                 className="border-2 border-slate-200 rounded-xl bg-white overflow-hidden"
               >
                 <AccordionTrigger className="px-4 py-3 hover:bg-slate-50 hover:no-underline">
-                  <div className="flex items-center justify-between w-full pr-4">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between gap-2 w-full pr-2">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div
-                        className="w-3 h-3 rounded-full"
+                        className="w-3 h-3 rounded-full shrink-0"
                         style={{ backgroundColor: categoria.color }}
                       />
-                      <span className="font-semibold text-slate-800">{getNombreCategoriaDisplay(categoria.nombre)}</span>
+                      <span className="font-semibold text-slate-800 truncate">{getNombreCategoriaDisplay(categoria.nombre)}</span>
                     </div>
-                    <span className="text-lg font-bold text-red-600">{formatGuaranies(categoria.total)}</span>
+                    <span className="text-base sm:text-lg font-bold text-red-600 whitespace-nowrap shrink-0">{formatGuaranies(categoria.total)}</span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="px-4 pb-4">
@@ -133,17 +133,17 @@ export function ReportesExpandiblesClient({
                     {categoria.gastos.map((gasto, gastoIndex) => (
                       <div
                         key={gastoIndex}
-                        className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                        className="flex items-center justify-between gap-3 p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
                       >
-                        <div className="flex-1">
-                          <p className="font-medium text-slate-700">{gasto.concepto}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs text-slate-500">{gasto.descripcion}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-slate-700 break-words">{gasto.concepto}</p>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1">
+                            <span className="text-xs text-slate-500 break-words">{gasto.descripcion}</span>
                             <span className="text-xs text-slate-400">• {formatDateWithoutTimezone(gasto.fecha)}</span>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-bold text-slate-800">{formatGuaranies(gasto.monto)}</p>
+                        <div className="text-right shrink-0">
+                          <p className="font-bold text-slate-800 whitespace-nowrap">{formatGuaranies(gasto.monto)}</p>
                         </div>
                       </div>
                     ))}
