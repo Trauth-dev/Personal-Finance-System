@@ -40,6 +40,7 @@ import {
   XCircle,
   Kanban,
   Snowflake,
+  Sparkles,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -268,6 +269,14 @@ const navItemsCommon = [
   },
 ]
 
+// Seccion "Mejorar Plan": visible para el perfil Personal en AMBOS planes
+// (basico y completo). Se ubica al final, justo por encima de "Configuracion".
+const mejorarPlanItem = {
+  title: "Mejorar Plan",
+  href: "/dashboard/personal/mejorar-plan",
+  icon: Sparkles,
+}
+
 interface DashboardNavProps {
   userName?: string
   isCollapsed?: boolean
@@ -310,15 +319,18 @@ function NavContent({
       case "crm":
         return [...navItemsCRM, ...navItemsCommon]
       default:
-        // Plan basico: solo Dashboard Principal, Carga de Datos, Historial + Configuracion
+        // "Mejorar Plan" siempre va al final, por encima de "Configuracion".
+        const configItem = navItemsCommon.filter((item) => item.href === "/dashboard/configuracion")
+        // Plan basico: solo Dashboard Principal, Carga de Datos, Historial + Mejorar Plan + Configuracion
         if (isBasico) {
           const itemsBasico = navItemsPersonal.filter((item) =>
             BASICO_PERSONAL_HREFS.includes(item.href),
           )
-          const configItem = navItemsCommon.filter((item) => item.href === "/dashboard/configuracion")
-          return [...itemsBasico, ...configItem]
+          return [...itemsBasico, mejorarPlanItem, ...configItem]
         }
-        return [...navItemsPersonal, ...navItemsCommon]
+        // Plan completo: todas las secciones + Perfiles + Mejorar Plan + Configuracion
+        const perfilesItem = navItemsCommon.filter((item) => item.href === "/dashboard/perfiles")
+        return [...navItemsPersonal, ...perfilesItem, mejorarPlanItem, ...configItem]
     }
   }
   const navItems = getNavItems()
