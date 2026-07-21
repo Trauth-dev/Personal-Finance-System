@@ -25,6 +25,7 @@ export const BASICO_ALLOWED_PREFIXES = [
   "/dashboard/carga",
   "/dashboard/personal/historial",
   "/dashboard/personal/analisis",
+  "/dashboard/personal/asesoramiento",
   // Seccion de mejora de plan: accesible para TODOS los planes (basico y completo)
   "/dashboard/personal/mejorar-plan",
   "/dashboard/configuracion",

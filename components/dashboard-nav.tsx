@@ -55,6 +55,7 @@ const BASICO_PERSONAL_HREFS = [
   "/dashboard/carga",
   "/dashboard/personal/historial",
   "/dashboard/personal/analisis",
+  "/dashboard/personal/asesoramiento",
 ]
 
 const navItemsPersonal = [
@@ -115,6 +116,11 @@ const navItemsPersonal = [
     title: "Presupuesto vs Realidad",
     href: "/dashboard/personal/analisis",
     icon: BarChart3,
+  },
+  {
+    title: "Asesoramiento",
+    href: "/dashboard/personal/asesoramiento",
+    icon: Handshake,
   },
   // Flujo de Caja - Oculto temporalmente
   // {
