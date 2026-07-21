@@ -7,7 +7,7 @@ import { MonthSelector } from "@/components/personal/month-selector"
 import { AnalisisMensualComparativo } from "@/components/personal/analisis-mensual-comparativo"
 import { getParaguayDate } from "@/lib/utils"
 import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
-import { TrendingUp, BarChart3, Info, Scale, Snowflake, FileText } from "lucide-react"
+import { TrendingUp, BarChart3, Info } from "lucide-react"
 import { PresupuestoVsRealidad } from "@/components/personal/presupuesto-vs-realidad"
 import { Card, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -235,18 +235,6 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
           >
             Analisis Financiero
           </TabsTrigger>
-          <TabsTrigger
-            value="reportes"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
-          >
-            Reportes
-          </TabsTrigger>
-          <TabsTrigger
-            value="bola-de-nieve"
-            className="rounded-none border-b-2 border-transparent data-[state=active]:border-cyan-500 data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:text-cyan-500 font-medium px-4 py-3 text-muted-foreground hover:text-cyan-400 hover:bg-cyan-500/10 transition-all duration-200"
-          >
-            Bola de Nieve
-          </TabsTrigger>
         </TabsList>
 
         {/* Tab: Analisis Financiero */}
@@ -311,32 +299,6 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
         {/* Tab: Presupuesto vs Realidad */}
         <TabsContent value="presupuesto-vs-realidad" className="mt-0">
           <PresupuestoVsRealidad perfilId={perfilId} />
-        </TabsContent>
-
-        {/* Tab: Bola de Nieve */}
-        <TabsContent value="bola-de-nieve" className="mt-0">
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="p-4 bg-cyan-100/20 rounded-xl mb-4">
-              <Snowflake className="w-12 h-12 text-cyan-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Bola de Nieve</h2>
-            <p className="text-muted-foreground max-w-md">
-              Estrategia de pago de deudas con el metodo bola de nieve. Proximamente disponible.
-            </p>
-          </div>
-        </TabsContent>
-
-        {/* Tab: Reportes */}
-        <TabsContent value="reportes" className="mt-0">
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="p-4 bg-green-100/20 rounded-xl mb-4">
-              <FileText className="w-12 h-12 text-green-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-foreground mb-2">Reportes</h2>
-            <p className="text-muted-foreground max-w-md">
-              Genera reportes detallados de tus finanzas personales. Proximamente disponible.
-            </p>
-          </div>
         </TabsContent>
       </Tabs>
     </div>
