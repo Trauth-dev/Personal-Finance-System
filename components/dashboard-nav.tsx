@@ -112,7 +112,7 @@ const navItemsPersonal = [
     icon: History,
   },
   {
-    title: "Asesoramiento + Herramientas",
+    title: "Presupuesto vs Realidad",
     href: "/dashboard/personal/analisis",
     icon: BarChart3,
   },
