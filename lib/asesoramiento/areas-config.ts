@@ -1,5 +1,9 @@
-import type { LucideIcon } from "lucide-react"
-import { Wallet, Brain, Briefcase, HeartHandshake } from "lucide-react"
+import type { ComponentType, SVGProps } from "react"
+import { Wallet, Briefcase, HeartHandshake } from "lucide-react"
+import { HeadBrainIcon } from "@/components/asesoramiento/icons"
+
+// Tanto los iconos de lucide como los iconos a medida (SVG) cumplen esta firma.
+type AreaIcon = ComponentType<SVGProps<SVGSVGElement>>
 
 /**
  * Configuracion del modulo "Asesoramiento".
@@ -64,7 +68,7 @@ export interface AreaConfig {
   id: AreaId
   nombre: string
   descripcionCorta: string
-  icon: LucideIcon
+  icon: AreaIcon
   activa: boolean
   theme: AreaTheme
   temas: Tema[]
@@ -157,7 +161,7 @@ export const AREAS: AreaConfig[] = [
     id: "psicologia",
     nombre: "Psicología",
     descripcionCorta: "Bienestar emocional y mental",
-    icon: Brain,
+    icon: HeadBrainIcon,
     activa: true,
     theme: themePsicologia,
     temas: [

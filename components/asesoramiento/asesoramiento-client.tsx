@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { AreaSelector } from "./area-selector"
@@ -16,7 +16,6 @@ import { AREAS_ACTIVAS, getArea, type AreaConfig, type Profesional } from "@/lib
 const VISIBLES_INICIALES = 3
 
 export function AsesoramientoClient() {
-  const router = useRouter()
   const searchParams = useSearchParams()
 
   const initialAreaId = searchParams.get("area")
@@ -37,13 +36,20 @@ export function AsesoramientoClient() {
   const [confirmacion, setConfirmacion] = useState<AgendamientoSeleccion | null>(null)
   const [confirmacionAbierta, setConfirmacionAbierta] = useState(false)
 
-  // Sincroniza el estado clave con la URL (permite volver atras / compartir)
+  // Sincroniza el estado clave con la URL (permite volver atras / compartir).
+  // Usamos window.history.replaceState en lugar de router.replace para NO
+  // disparar una navegacion/refetch del server component (eso causaba un loop
+  // infinito de recargas). Solo actualizamos si la query realmente cambio.
   useEffect(() => {
     const params = new URLSearchParams()
     params.set("area", area.id)
     if (selectedTemas.length) params.set("temas", selectedTemas.join(","))
-    router.replace(`?${params.toString()}`, { scroll: false })
-  }, [area.id, selectedTemas, router])
+    const next = params.toString()
+    const current = searchParams.toString()
+    if (next !== current) {
+      window.history.replaceState(null, "", `${window.location.pathname}?${next}`)
+    }
+  }, [area.id, selectedTemas, searchParams])
 
   const handleSelectArea = useCallback((next: AreaConfig) => {
     setArea(next)
