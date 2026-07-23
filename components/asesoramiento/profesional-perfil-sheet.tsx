@@ -33,7 +33,12 @@ export function ProfesionalPerfilSheet({
       <SheetContent className="w-full sm:max-w-md overflow-y-auto">
         <SheetHeader className="text-left">
           <div className="flex items-center gap-4">
-            <ProfesionalAvatar nombre={profesional.nombre} bgClass={area.theme.bg} className="w-16 h-16" />
+            <ProfesionalAvatar
+              nombre={profesional.nombre}
+              bgClass={area.theme.bg}
+              fotoUrl={profesional.fotoUrl}
+              className="w-16 h-16"
+            />
             <div className="min-w-0">
               <SheetTitle className="text-lg leading-tight">{profesional.nombre}</SheetTitle>
               <SheetDescription className={cn("font-medium", area.theme.text)}>
@@ -50,10 +55,63 @@ export function ProfesionalPerfilSheet({
             </div>
           )}
 
+          {typeof profesional.experienciaAnios === "number" && (
+            <div className={cn("rounded-lg px-4 py-3", area.theme.bgSoft)}>
+              <p className={cn("text-2xl font-bold leading-none", area.theme.text)}>
+                +{profesional.experienciaAnios} años
+              </p>
+              <p className="mt-1 text-xs text-slate-600">de experiencia enseñando finanzas</p>
+            </div>
+          )}
+
           <section>
             <h4 className="text-sm font-semibold text-slate-800 mb-2">Sobre el profesional</h4>
             <p className="text-sm text-slate-600 leading-relaxed">{profesional.descripcion}</p>
           </section>
+
+          {profesional.especialidades && profesional.especialidades.length > 0 && (
+            <section>
+              <h4 className="text-sm font-semibold text-slate-800 mb-2">Áreas de especialidad</h4>
+              <div className="flex flex-wrap gap-1.5">
+                {profesional.especialidades.map((esp) => (
+                  <span
+                    key={esp}
+                    className={cn("rounded-full px-2.5 py-1 text-xs font-medium", area.theme.bgSoft, area.theme.text)}
+                  >
+                    {esp}
+                  </span>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {profesional.formacion && profesional.formacion.length > 0 && (
+            <section>
+              <h4 className="text-sm font-semibold text-slate-800 mb-2">Formación</h4>
+              <ul className="space-y-1.5">
+                {profesional.formacion.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm text-slate-600 leading-relaxed">
+                    <span className={cn("mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full", area.theme.accentBg)} aria-hidden="true" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {profesional.logros && profesional.logros.length > 0 && (
+            <section>
+              <h4 className="text-sm font-semibold text-slate-800 mb-2">Logros destacados</h4>
+              <ul className="space-y-1.5">
+                {profesional.logros.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm text-slate-600 leading-relaxed">
+                    <Check className={cn("mt-0.5 h-4 w-4 shrink-0", area.theme.text)} aria-hidden="true" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
 
           <section>
             <h4 className="text-sm font-semibold text-slate-800 mb-2">Temas que trabaja</h4>

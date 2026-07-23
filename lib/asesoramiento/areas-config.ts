@@ -62,6 +62,17 @@ export interface Profesional {
   esEjemplo: boolean
   // Disponibilidad para agendar (aun no activo en esta etapa)
   disponible: boolean
+  // --- Campos opcionales para profesionales reales ---
+  // Foto de perfil (ruta local en /public). Si no existe, se usa el avatar neutro.
+  fotoUrl?: string
+  // Anios de experiencia (se muestra como credencial destacada)
+  experienciaAnios?: number
+  // Areas de especialidad detalladas
+  especialidades?: string[]
+  // Formacion academica destacada
+  formacion?: string[]
+  // Logros / hitos profesionales
+  logros?: string[]
 }
 
 export interface AreaConfig {
@@ -120,40 +131,39 @@ export const AREAS: AreaConfig[] = [
     ],
     profesionales: [
       {
-        id: "fin-1",
-        nombre: "Asesor/a Financiero",
-        titulo: "Asesoría financiera",
+        id: "fin-luciana-blanco",
+        nombre: "Luciana Blanco",
+        titulo: "Especialista en educación y asesoría financiera",
         descripcion:
-          "Te ayuda a ordenar tus finanzas, salir de deudas y crear un plan para alcanzar tus metas.",
-        temas: ["deudas", "presupuesto"],
+          "Máster en Dirección de Empresas con más de 14 años de experiencia enseñando finanzas en entornos empresariales. Coordinadora General de Finanzas y Directora Académica, acompaña a personas y emprendedores a ordenar sus finanzas, gestionar su flujo de caja, salir de deudas y dar sus primeros pasos en inversiones con un método claro y aplicado.",
+        temas: ["deudas", "presupuesto", "ahorro", "inversiones", "emprendimiento"],
         modalidades: ["online", "presencial"],
         precioPorSesion: 250000,
-        esEjemplo: true,
+        esEjemplo: false,
         disponible: false,
-      },
-      {
-        id: "fin-2",
-        nombre: "Coach de Deudas",
-        titulo: "Especialista en deudas",
-        descripcion:
-          "Especialista en eliminar deudas y recuperar tu tranquilidad financiera con un método claro.",
-        temas: ["deudas", "presupuesto"],
-        modalidades: ["online"],
-        precioPorSesion: 220000,
-        esEjemplo: true,
-        disponible: false,
-      },
-      {
-        id: "fin-3",
-        nombre: "Especialista en Presupuesto",
-        titulo: "Presupuesto y hábitos",
-        descripcion:
-          "Diseña presupuestos realistas y hábitos que te acercan a tu libertad financiera.",
-        temas: ["presupuesto", "ahorro"],
-        modalidades: ["online", "presencial"],
-        precioPorSesion: 200000,
-        esEjemplo: true,
-        disponible: false,
+        fotoUrl: "/asesoramiento/luciana-blanco.png",
+        experienciaAnios: 14,
+        especialidades: [
+          "Administración financiera",
+          "Gestión de flujo de caja",
+          "Educación financiera",
+          "Finanzas para emprendedores",
+          "Evaluación y formulación de proyectos",
+          "Introducción a las inversiones",
+          "Análisis financiero",
+          "Planificación financiera",
+        ],
+        formacion: [
+          "Máster en Dirección de Empresas — EDAN, Escuela de Administración de Negocios",
+          "Diplomado en Fintech — Universidad Nacional de Asunción (2023)",
+          "Diplomado en Finanzas — Instituto Técnico Superior Principios de Vida (2023)",
+          "Especialista en Didáctica Universitaria — UNIDA",
+        ],
+        logros: [
+          "Diseño e implementación de la malla curricular del Instituto Técnico Superior Principios de Vida.",
+          "Capacitación a más de 2.000 estudiantes desde 2014 en finanzas personales, flujo de caja e inversiones.",
+          "Programas de educación financiera implementados en más de 30 empresas.",
+        ],
       },
     ],
   },

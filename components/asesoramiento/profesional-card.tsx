@@ -28,7 +28,12 @@ export function ProfesionalCard({ area, profesional, isSelected, onSelect, onVer
     >
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <ProfesionalAvatar nombre={profesional.nombre} bgClass={area.theme.bg} className="w-12 h-12" />
+          <ProfesionalAvatar
+            nombre={profesional.nombre}
+            bgClass={area.theme.bg}
+            fotoUrl={profesional.fotoUrl}
+            className="w-12 h-12"
+          />
           <div className="min-w-0">
             <h3 className="font-semibold text-slate-800 text-sm leading-tight truncate">{profesional.nombre}</h3>
             <p className={cn("text-xs font-medium", area.theme.text)}>{profesional.titulo}</p>
