@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CambiarContrasenaForm } from "@/components/cambiar-contrasena-form"
 
+// Oculta la gestión de "Tipos de Ingreso", "Categorías Vivienda" y
+// "Categorías Varios" en el perfil Personal (ambos planes). Cambiar a true
+// para volver a mostrar estas tarjetas.
+const MOSTRAR_GESTION_CATEGORIAS = false
+
 export default async function ConfiguracionPage() {
   const supabase = await createClient()
 
@@ -64,6 +69,7 @@ export default async function ConfiguracionPage() {
           </CardContent>
         </Card>
 
+        {MOSTRAR_GESTION_CATEGORIAS && (
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Categorías de Ingresos */}
           <Card className="bg-slate-900/50 border-green-500/30 backdrop-blur-sm">
@@ -290,6 +296,7 @@ export default async function ConfiguracionPage() {
             </CardContent>
           </Card>
         </div>
+        )}
       </div>
     </div>
   )
