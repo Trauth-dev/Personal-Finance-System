@@ -155,6 +155,29 @@ export function PresupuestoForm() {
         .eq("perfil_id", perfilActual.id)
         .eq("mes", primerDiaMes)
 
+      // Si el mes seleccionado aún no tiene presupuesto detallado cargado,
+      // usar como valores predeterminados los del mes anterior más reciente
+      // con datos. Se mantienen editables y se guardan recién al confirmar.
+      let itemsParaMontos = itemsPresupuesto
+      if (!itemsPresupuesto || itemsPresupuesto.length === 0) {
+        const { data: mesesPrevios } = await supabase
+          .from("presupuesto_categorias")
+          .select("mes")
+          .eq("perfil_id", perfilActual.id)
+          .lt("mes", primerDiaMes)
+          .order("mes", { ascending: false })
+          .limit(1)
+        const mesPrevio = mesesPrevios?.[0]?.mes
+        if (mesPrevio) {
+          const { data: itemsPrevios } = await supabase
+            .from("presupuesto_categorias")
+            .select("*")
+            .eq("perfil_id", perfilActual.id)
+            .eq("mes", mesPrevio)
+          itemsParaMontos = itemsPrevios
+        }
+      }
+
       // Inicializar estructura de datos por categoría
       const initialData: Record<string, CategoriaData> = {}
       
@@ -169,7 +192,7 @@ export function PresupuestoForm() {
 
       // Crear mapa de montos guardados por nombre de categoría
       const montosGuardados: Record<string, number> = {}
-      itemsPresupuesto?.forEach(item => {
+      itemsParaMontos?.forEach(item => {
         montosGuardados[item.categoria] = Number(item.monto_presupuestado) || 0
       })
 
@@ -204,9 +227,19 @@ export function PresupuestoForm() {
 
       setCategoriasData(initialData)
 
-      // Cargar presupuesto total si existe
+      // Cargar presupuesto total si existe; si no, tomar el del mes anterior
       if (presupuestoExistente) {
         setPresupuesto(String(presupuestoExistente.meta_salario || ""))
+      } else {
+        const { data: metasPrevias } = await supabase
+          .from("presupuesto_mensual")
+          .select("meta_salario")
+          .eq("perfil_id", perfilActual.id)
+          .lt("fecha", primerDiaMes)
+          .order("fecha", { ascending: false })
+          .limit(1)
+        const metaPrevia = metasPrevias?.[0]?.meta_salario
+        setPresupuesto(metaPrevia ? String(metaPrevia) : "")
       }
 
       // 5. Cargar categorías de ingresos del usuario
@@ -223,9 +256,31 @@ export function PresupuestoForm() {
         .eq("perfil_id", perfilActual.id)
         .eq("mes", primerDiaMes)
 
+      // Si el mes no tiene ingresos cargados, precargar los del mes anterior
+      // más reciente como valores predeterminados (editables y guardables).
+      let ingresosParaMontos = ingresosPresupuesto
+      if (!ingresosPresupuesto || ingresosPresupuesto.length === 0) {
+        const { data: mesesPreviosIng } = await supabase
+          .from("presupuesto_ingresos")
+          .select("mes")
+          .eq("perfil_id", perfilActual.id)
+          .lt("mes", primerDiaMes)
+          .order("mes", { ascending: false })
+          .limit(1)
+        const mesPrevioIng = mesesPreviosIng?.[0]?.mes
+        if (mesPrevioIng) {
+          const { data: ingresosPrevios } = await supabase
+            .from("presupuesto_ingresos")
+            .select("categoria_ingreso_id, monto_presupuestado")
+            .eq("perfil_id", perfilActual.id)
+            .eq("mes", mesPrevioIng)
+          ingresosParaMontos = ingresosPrevios
+        }
+      }
+
       // Crear mapa de montos presupuestados
       const ingresosMontoMap: Record<string, number> = {}
-      ingresosPresupuesto?.forEach(item => {
+      ingresosParaMontos?.forEach(item => {
         ingresosMontoMap[item.categoria_ingreso_id] = Number(item.monto_presupuestado) || 0
       })
 
