@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { MonthSelector } from "@/components/personal/month-selector"
 import { Card, CardContent } from "@/components/ui/card"
@@ -19,6 +19,9 @@ import {
   LayoutGrid,
   ChevronDown,
   ChevronRight,
+  CalendarDays,
+  TrendingUp,
+  PieChart as PieChartIcon,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -38,6 +41,12 @@ interface TransaccionDetalle {
   tipoCategoria: string
 }
 
+interface SubcategoriaDetalle {
+  nombre: string
+  presupuestado: number
+  gastado: number
+}
+
 interface CategoriaComparativa {
   nombre: string
   presupuestado: number
@@ -45,6 +54,7 @@ interface CategoriaComparativa {
   diferencia: number
   porcentaje: number
   transacciones?: TransaccionDetalle[]
+  subcategorias?: SubcategoriaDetalle[]
 }
 
 interface Props {
@@ -64,6 +74,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
   const [showAll, setShowAll] = useState(true)
   const [vistaDetallada, setVistaDetallada] = useState(false)
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set())
+  const [txExpandidas, setTxExpandidas] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadData()
@@ -156,6 +167,38 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
       transaccionesPorCategoria.get(tipoCategoria)!.push(transaccion)
     })
 
+    // Desglose por subcategoria (usa las MISMAS fuentes ya consultadas)
+    // tipo -> (subcategoria -> presupuestado)
+    const subcatBudget = new Map<string, Map<string, number>>()
+    presupuestoCategorias?.forEach((pc: any) => {
+      const tipo = subcategoriaToTipo[pc.categoria]
+      if (!tipo) return
+      if (!subcatBudget.has(tipo)) subcatBudget.set(tipo, new Map())
+      const m = subcatBudget.get(tipo)!
+      m.set(pc.categoria, (m.get(pc.categoria) || 0) + Number(pc.monto_presupuestado || 0))
+    })
+    // tipo -> (subcategoria -> gastado)
+    const subcatSpent = new Map<string, Map<string, number>>()
+    egresos?.forEach((e: any) => {
+      const tipo = e.tipo_categoria?.nombre || "Sin categoria"
+      const subcat = e.categoria_egreso?.nombre || "General"
+      if (!subcatSpent.has(tipo)) subcatSpent.set(tipo, new Map())
+      const m = subcatSpent.get(tipo)!
+      m.set(subcat, (m.get(subcat) || 0) + Number(e.monto))
+    })
+    const buildSubcats = (tipo: string): SubcategoriaDetalle[] => {
+      const budgetM = subcatBudget.get(tipo) || new Map<string, number>()
+      const spentM = subcatSpent.get(tipo) || new Map<string, number>()
+      const names = new Set<string>([...budgetM.keys(), ...spentM.keys()])
+      return Array.from(names)
+        .map((nombre) => ({
+          nombre,
+          presupuestado: budgetM.get(nombre) || 0,
+          gastado: spentM.get(nombre) || 0,
+        }))
+        .sort((a, b) => b.gastado - a.gastado || b.presupuestado - a.presupuestado)
+    }
+
     const categoriasResult: CategoriaComparativa[] = []
     let sumPresupuestado = 0
     let sumGastado = 0
@@ -176,6 +219,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
           diferencia,
           porcentaje,
           transacciones: transaccionesPorCategoria.get(tipo.nombre) || [],
+          subcategorias: buildSubcats(tipo.nombre),
         })
 
         sumPresupuestado += montoPresupuestado
@@ -193,6 +237,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
           diferencia: -monto,
           porcentaje: 100,
           transacciones: transaccionesPorCategoria.get(nombre) || [],
+          subcategorias: buildSubcats(nombre),
         })
         sumGastado += monto
       }
@@ -251,6 +296,33 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
   const formatFecha = (fecha: string) => {
     const date = new Date(fecha + "T00:00:00")
     return date.toLocaleDateString("es-PY", { day: "2-digit", month: "short" })
+  }
+
+  // Etiqueta del mes seleccionado, ej: "Julio 2026"
+  const mesLabel = (() => {
+    const [y, m] = selectedMonth.split("-").map(Number)
+    const nombre = new Date(y, m - 1, 1).toLocaleDateString("es-PY", { month: "long" })
+    return `${nombre.charAt(0).toUpperCase()}${nombre.slice(1)} ${y}`
+  })()
+
+  // Color del badge de % de uso segun nivel de consumo
+  const badgePctClass = (pct: number) => {
+    if (pct <= 0) return "bg-slate-100 text-slate-400"
+    if (pct < 80) return "bg-amber-50 text-amber-600"
+    if (pct < 100) return "bg-rose-100 text-rose-600"
+    return "bg-red-100 text-red-700"
+  }
+
+  // Descripcion visible de una transaccion (evita mostrar "Sin descripción")
+  const tituloTransaccion = (t: TransaccionDetalle) =>
+    !t.concepto || t.concepto === "Sin descripción" ? t.subcategoria : t.concepto
+
+  const toggleVerTodas = (nombre: string) => {
+    setTxExpandidas((prev) => {
+      const s = new Set(prev)
+      s.has(nombre) ? s.delete(nombre) : s.add(nombre)
+      return s
+    })
   }
 
   return (
@@ -614,121 +686,212 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
             </div>
           )}
 
-          {/* Summary Table with Expandable Rows */}
-          <Card className="border bg-white dark:bg-slate-50 border-slate-200">
-            <CardContent className="pt-5 pb-3">
-              <h3 className="text-sm font-bold text-slate-900 mb-3">Resumen por Categoria</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200">
-                      <th className="text-left py-2 px-2 font-semibold text-slate-500 w-8"></th>
-                      <th className="text-left py-2 px-2 font-semibold text-slate-500">Categoria</th>
-                      <th className="text-right py-2 px-2 font-semibold text-slate-500">Presupuestado</th>
-                      <th className="text-right py-2 px-2 font-semibold text-slate-500">Gastado</th>
-                      <th className="text-right py-2 px-2 font-semibold text-slate-500">Diferencia</th>
-                      <th className="text-right py-2 px-2 font-semibold text-slate-500">% Uso</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+          {/* Resumen por categoria */}
+          <Card className="border border-slate-200 bg-white dark:bg-slate-50 shadow-sm">
+            <CardContent className="p-5 sm:p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between gap-3 mb-5">
+                <h3 className="text-lg font-bold text-slate-900">Resumen por categoría</h3>
+                <div className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-600 flex-shrink-0">
+                  <CalendarDays className="w-4 h-4 text-slate-400" />
+                  {mesLabel}
+                </div>
+              </div>
+
+              {/* 3 tarjetas resumen */}
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-3 mb-5">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-slate-500">Total presupuestado</span>
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <Wallet className="w-4 h-4 text-emerald-600" />
+                    </div>
+                  </div>
+                  <p className="text-xl font-bold text-slate-900">{formatGuaranies(presupuestoDisplay)}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{presupuestoDisplay > 0 ? "100% del plan mensual" : "Sin plan definido"}</p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-slate-500">Total gastado</span>
+                    <div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center flex-shrink-0">
+                      <TrendingUp className="w-4 h-4 text-rose-600" />
+                    </div>
+                  </div>
+                  <p className="text-xl font-bold text-slate-900">{formatGuaranies(totalGastado)}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{porcentajeGeneral.toFixed(1)}% del plan mensual</p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-medium text-slate-500">{isExceeded ? "Excedido del mes" : "Disponible del mes"}</span>
+                    <div className="w-8 h-8 rounded-lg bg-teal-100 flex items-center justify-center flex-shrink-0">
+                      <PieChartIcon className="w-4 h-4 text-teal-600" />
+                    </div>
+                  </div>
+                  <p className={`text-xl font-bold ${isExceeded ? "text-red-600" : "text-slate-900"}`}>{formatGuaranies(Math.abs(diferencia))}</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">{Math.max(0, 100 - porcentajeGeneral).toFixed(1)}% del plan mensual</p>
+                </div>
+              </div>
+
+              {/* Categorias del presupuesto */}
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200">
+                  <h4 className="text-sm font-bold text-slate-900">Categorías del presupuesto</h4>
+                </div>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[720px]">
+                    {/* Header de columnas */}
+                    <div className="flex items-center gap-3 px-4 py-2 bg-slate-50/80 text-[11px] font-semibold text-slate-400 uppercase tracking-wide">
+                      <span className="w-4 flex-shrink-0" />
+                      <span className="w-40 flex-shrink-0">Categoria</span>
+                      <span className="flex-1">Gastado de presupuestado</span>
+                      <span className="w-32 text-right flex-shrink-0">Disponible</span>
+                      <span className="w-16 text-right flex-shrink-0">% de uso</span>
+                    </div>
+
                     {filteredCategorias.map((cat) => {
                       const status = getStatusInfo(cat.porcentaje)
                       const isExpanded = categoriasExpandidas.has(`resumen_${cat.nombre}`)
-                      const hasTransactions = cat.transacciones && cat.transacciones.length > 0
-                      
+                      const hasDetalle =
+                        (cat.transacciones && cat.transacciones.length > 0) ||
+                        (cat.subcategorias && cat.subcategorias.length > 0)
+                      const barPct = Math.min(cat.porcentaje, 100)
+                      const barColor = cat.porcentaje > 100 ? "#ef4444" : "#f59e0b"
+                      const verTodas = txExpandidas.has(cat.nombre)
+                      const txList = cat.transacciones || []
+                      const txVisible = verTodas ? txList : txList.slice(0, 4)
+
                       return (
-                        <React.Fragment key={cat.nombre}>
-                          <tr 
-                            className={`border-b border-slate-100 last:border-0 ${hasTransactions ? "cursor-pointer hover:bg-slate-50" : ""}`}
-                            onClick={() => hasTransactions && toggleCategoriaExpandida(`resumen_${cat.nombre}`)}
+                        <div key={cat.nombre} className="border-t border-slate-100">
+                          {/* Fila principal */}
+                          <div
+                            className={`flex items-center gap-3 px-4 py-2.5 ${hasDetalle ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                            onClick={() => hasDetalle && toggleCategoriaExpandida(`resumen_${cat.nombre}`)}
                           >
-                            <td className="py-2.5 px-2">
-                              {hasTransactions && (
-                                isExpanded 
-                                  ? <ChevronDown className="w-4 h-4 text-slate-400" />
-                                  : <ChevronRight className="w-4 h-4 text-slate-400" />
-                              )}
-                            </td>
-                            <td className="py-2.5 px-2">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: status.ring }} />
-                                <span className="font-medium text-slate-800">{getNombreCategoriaDisplay(cat.nombre)}</span>
-                                {hasTransactions && (
-                                  <span className="text-[10px] text-slate-400">({cat.transacciones!.length})</span>
-                                )}
+                            <span className="w-4 flex-shrink-0">
+                              {hasDetalle &&
+                                (isExpanded ? (
+                                  <ChevronDown className="w-4 h-4 text-slate-400" />
+                                ) : (
+                                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                                ))}
+                            </span>
+                            <div className="w-40 flex-shrink-0 flex items-center gap-2 min-w-0">
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: status.ring }} />
+                              <span className="text-sm font-medium text-slate-800 truncate">{getNombreCategoriaDisplay(cat.nombre)}</span>
+                            </div>
+                            <div className="flex-1 flex items-center gap-3 min-w-0">
+                              <span className="text-xs whitespace-nowrap text-slate-700 font-semibold w-44 text-right flex-shrink-0">
+                                {formatGuaranies(cat.gastado)} <span className="text-slate-400 font-normal">de {formatGuaranies(cat.presupuestado)}</span>
+                              </span>
+                              <div className="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
+                                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${barPct}%`, backgroundColor: barColor }} />
                               </div>
-                            </td>
-                            <td className="text-right py-2.5 px-2 text-slate-700 font-medium">{formatGuaranies(cat.presupuestado)}</td>
-                            <td className="text-right py-2.5 px-2 text-slate-700 font-medium">{formatGuaranies(cat.gastado)}</td>
-                            <td className={`text-right py-2.5 px-2 font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
-                              {cat.diferencia >= 0 ? "+" : ""}{formatGuaranies(cat.diferencia)}
-                            </td>
-                            <td className={`text-right py-2.5 px-2 font-bold ${cat.porcentaje > 100 ? "text-red-600" : "text-teal-600"}`}>
-                              {cat.porcentaje.toFixed(1)}%
-                            </td>
-                          </tr>
-                          {/* Expanded Transactions */}
-                          {isExpanded && hasTransactions && (
-                            <>
-                              <tr className="bg-slate-50/80">
-                                <td></td>
-                                <td colSpan={5} className="py-1 px-2">
-                                  <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-500 uppercase pl-4">
-                                    <div className="col-span-8">Subcategoría</div>
-                                    <div className="col-span-4 text-right">Monto</div>
+                            </div>
+                            <span className={`w-32 text-right flex-shrink-0 text-xs font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
+                              {cat.diferencia >= 0 ? "" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
+                            </span>
+                            <span className="w-16 text-right flex-shrink-0">
+                              <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full ${badgePctClass(cat.porcentaje)}`}>
+                                {cat.porcentaje.toFixed(1)}%
+                              </span>
+                            </span>
+                          </div>
+
+                          {/* Panel expandido */}
+                          {isExpanded && hasDetalle && (
+                            <div className="px-4 pb-4 pt-1 bg-slate-50/40">
+                              <div className="grid gap-3 grid-cols-1 lg:grid-cols-2">
+                                {/* Subcategorias */}
+                                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                  <h5 className="text-xs font-bold text-slate-700 mb-2">Subcategorias</h5>
+                                  <div className="space-y-1.5">
+                                    {(cat.subcategorias || []).map((sc) => {
+                                      const scPct = sc.presupuestado > 0 ? (sc.gastado / sc.presupuestado) * 100 : sc.gastado > 0 ? 100 : 0
+                                      return (
+                                        <div key={sc.nombre} className="flex items-center gap-2 text-xs">
+                                          <span className="text-slate-400">•</span>
+                                          <span className="flex-1 truncate text-slate-700">{sc.nombre}</span>
+                                          <span className="whitespace-nowrap text-slate-600">
+                                            {formatGuaranies(sc.gastado)} <span className="text-slate-400">de {formatGuaranies(sc.presupuestado)}</span>
+                                          </span>
+                                          <span className={`inline-block text-[10px] font-bold px-1.5 py-0.5 rounded-full ${badgePctClass(scPct)}`}>{scPct.toFixed(0)}%</span>
+                                        </div>
+                                      )
+                                    })}
+                                    {(cat.subcategorias || []).length === 0 && (
+                                      <p className="text-xs text-slate-400">Sin subcategorias registradas</p>
+                                    )}
                                   </div>
-                                </td>
-                              </tr>
-                              {cat.transacciones!.map((trans) => (
-                                <tr key={trans.id} className="bg-slate-50/50 border-b border-slate-100">
-                                  <td></td>
-                                  <td colSpan={5} className="py-1.5 px-2">
-                                    <div className="grid grid-cols-12 gap-2 text-xs pl-4 items-center">
-                                      <div className="col-span-8 min-w-0">
-                                        <span className="block truncate font-medium text-slate-700">{trans.subcategoria}</span>
-                                        <span className="text-[10px] text-slate-400">{formatFecha(trans.fecha)}</span>
-                                      </div>
-                                      <div className="col-span-4 text-right font-medium text-slate-800">
-                                        {formatGuaranies(trans.monto)}
-                                      </div>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ))}
-                              {/* Sobrante del presupuesto de la categoria */}
-                              <tr className="bg-slate-100/80 border-b border-slate-200">
-                                <td></td>
-                                <td colSpan={5} className="py-2 px-2">
-                                  <div className="grid grid-cols-12 gap-2 text-xs pl-4">
-                                    <div className="col-span-8 font-bold text-slate-700">
-                                      {cat.diferencia >= 0 ? "Sobrante del presupuesto" : "Excedido del presupuesto"}
-                                    </div>
-                                    <div className={`col-span-4 text-right font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
-                                      {cat.diferencia >= 0 ? "+" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
-                                    </div>
+                                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-xs">
+                                    <span className="font-semibold text-slate-600">{cat.diferencia >= 0 ? "Sobrante del presupuesto" : "Excedido del presupuesto"}</span>
+                                    <span className={`font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
+                                      {cat.diferencia >= 0 ? "" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
+                                    </span>
                                   </div>
-                                </td>
-                              </tr>
-                            </>
+                                </div>
+
+                                {/* Transacciones recientes */}
+                                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <h5 className="text-xs font-bold text-slate-700">Transacciones recientes</h5>
+                                    {txList.length > 4 && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          toggleVerTodas(cat.nombre)
+                                        }}
+                                        className="text-[11px] font-medium text-teal-600 hover:text-teal-700"
+                                      >
+                                        {verTodas ? "Ver menos" : "Ver todas"}
+                                      </button>
+                                    )}
+                                  </div>
+                                  {txVisible.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {txVisible.map((t) => (
+                                        <div key={t.id} className="flex items-center gap-2 text-xs">
+                                          <span className="text-slate-400 whitespace-nowrap w-12 flex-shrink-0">{formatFecha(t.fecha)}</span>
+                                          <span className="flex-1 truncate text-slate-700">{tituloTransaccion(t)}</span>
+                                          <span className="whitespace-nowrap font-medium text-slate-800">{formatGuaranies(t.monto)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-xs text-slate-400">No hay transacciones en esta categoría</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
                           )}
-                        </React.Fragment>
+                        </div>
                       )
                     })}
-                    {/* Totals row */}
-                    <tr className="border-t-2 border-slate-300 bg-slate-50">
-                      <td></td>
-                      <td className="py-2.5 px-2 font-bold text-slate-900">TOTAL</td>
-                      <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(presupuestoDisplay)}</td>
-                      <td className="text-right py-2.5 px-2 font-bold text-slate-900">{formatGuaranies(totalGastado)}</td>
-                      <td className={`text-right py-2.5 px-2 font-bold ${diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
-                        {diferencia >= 0 ? "+" : ""}{formatGuaranies(diferencia)}
-                      </td>
-                      <td className={`text-right py-2.5 px-2 font-bold ${porcentajeGeneral > 100 ? "text-red-600" : "text-teal-600"}`}>
-                        {porcentajeGeneral.toFixed(1)}%
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+
+                    {/* TOTAL */}
+                    <div className="flex items-center gap-3 px-4 py-3 border-t-2 border-slate-200 bg-slate-50">
+                      <span className="w-4 flex-shrink-0" />
+                      <span className="w-40 flex-shrink-0 text-sm font-bold text-slate-900">TOTAL</span>
+                      <div className="flex-1 flex items-center gap-3 min-w-0">
+                        <span className="text-xs whitespace-nowrap text-slate-900 font-bold w-44 text-right flex-shrink-0">
+                          {formatGuaranies(totalGastado)} <span className="text-slate-400 font-normal">de {formatGuaranies(presupuestoDisplay)}</span>
+                        </span>
+                        <div className="flex-1 h-2 rounded-full bg-slate-200 overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(porcentajeGeneral, 100)}%`, backgroundColor: porcentajeGeneral > 100 ? "#ef4444" : "#f59e0b" }} />
+                        </div>
+                      </div>
+                      <span className={`w-32 text-right flex-shrink-0 text-xs font-bold ${diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
+                        {diferencia >= 0 ? "" : "-"}{formatGuaranies(Math.abs(diferencia))}
+                      </span>
+                      <span className="w-16 text-right flex-shrink-0">
+                        <span className="inline-block text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                          {porcentajeGeneral.toFixed(1)}%
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
