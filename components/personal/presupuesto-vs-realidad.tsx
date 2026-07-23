@@ -356,21 +356,31 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
             </div>
             
             {/* Toggle Resumido / Detallado */}
-            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-slate-200/70 dark:bg-slate-800 rounded-lg p-1">
               <Button
-                variant={!vistaDetallada ? "default" : "ghost"}
+                variant="ghost"
                 size="sm"
                 onClick={() => setVistaDetallada(false)}
-                className={`h-8 px-3 ${!vistaDetallada ? "bg-white dark:bg-slate-700 shadow-sm" : "hover:bg-white/50"}`}
+                aria-pressed={!vistaDetallada}
+                className={`h-8 px-3 font-semibold transition-colors ${
+                  !vistaDetallada
+                    ? "bg-teal-600 text-white shadow-sm hover:bg-teal-600 hover:text-white"
+                    : "bg-transparent text-slate-600 hover:bg-white hover:text-slate-900"
+                }`}
               >
                 <LayoutGrid className="w-4 h-4 mr-1.5" />
                 Resumido
               </Button>
               <Button
-                variant={vistaDetallada ? "default" : "ghost"}
+                variant="ghost"
                 size="sm"
                 onClick={() => setVistaDetallada(true)}
-                className={`h-8 px-3 ${vistaDetallada ? "bg-white dark:bg-slate-700 shadow-sm" : "hover:bg-white/50"}`}
+                aria-pressed={vistaDetallada}
+                className={`h-8 px-3 font-semibold transition-colors ${
+                  vistaDetallada
+                    ? "bg-indigo-600 text-white shadow-sm hover:bg-indigo-600 hover:text-white"
+                    : "bg-transparent text-slate-600 hover:bg-white hover:text-slate-900"
+                }`}
               >
                 <List className="w-4 h-4 mr-1.5" />
                 Detallado
@@ -554,31 +564,38 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                           <div className="border-t border-slate-200">
                             <div className="px-6 py-2 bg-slate-50/80">
                               <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-500 uppercase">
-                                <div className="col-span-2">Fecha</div>
-                                <div className="col-span-4">Concepto</div>
-                                <div className="col-span-3">Subcategoría</div>
-                                <div className="col-span-3 text-right">Monto</div>
+                                <div className="col-span-8">Subcategoría</div>
+                                <div className="col-span-4 text-right">Monto</div>
                               </div>
                             </div>
                             <div className="divide-y divide-slate-100">
                               {cat.transacciones!.map((trans) => (
                                 <div key={trans.id} className="px-6 py-2.5 hover:bg-slate-50/50 transition-colors">
-                                  <div className="grid grid-cols-12 gap-2 text-xs">
-                                    <div className="col-span-2 text-slate-600">{formatFecha(trans.fecha)}</div>
-                                    <div className="col-span-4 text-slate-800 font-medium truncate">{trans.concepto}</div>
-                                    <div className="col-span-3 text-slate-500 truncate">{trans.subcategoria}</div>
-                                    <div className="col-span-3 text-right font-semibold text-slate-800">
+                                  <div className="grid grid-cols-12 gap-2 text-xs items-center">
+                                    <div className="col-span-8 min-w-0">
+                                      <span className="block truncate font-medium text-slate-800">{trans.subcategoria}</span>
+                                      <span className="text-[10px] text-slate-400">{formatFecha(trans.fecha)}</span>
+                                    </div>
+                                    <div className="col-span-4 text-right font-semibold text-slate-800">
                                       {formatGuaranies(trans.monto)}
                                     </div>
                                   </div>
                                 </div>
                               ))}
                             </div>
-                            <div className="px-6 py-2 bg-slate-100/80 border-t border-slate-200">
+                            <div className="px-6 py-2.5 bg-slate-100/80 border-t border-slate-200 space-y-1.5">
                               <div className="grid grid-cols-12 gap-2 text-xs">
-                                <div className="col-span-9 font-bold text-slate-700">Total {getNombreCategoriaDisplay(cat.nombre)}</div>
-                                <div className="col-span-3 text-right font-bold text-slate-900">
+                                <div className="col-span-8 font-bold text-slate-700">Total gastado</div>
+                                <div className="col-span-4 text-right font-bold text-slate-900">
                                   {formatGuaranies(cat.gastado)}
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-12 gap-2 text-xs">
+                                <div className="col-span-8 font-bold text-slate-700">
+                                  {cat.diferencia >= 0 ? "Sobrante del presupuesto" : "Excedido del presupuesto"}
+                                </div>
+                                <div className={`col-span-4 text-right font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
+                                  {cat.diferencia >= 0 ? "+" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
                                 </div>
                               </div>
                             </div>
@@ -657,10 +674,8 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                                 <td></td>
                                 <td colSpan={5} className="py-1 px-2">
                                   <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-500 uppercase pl-4">
-                                    <div className="col-span-2">Fecha</div>
-                                    <div className="col-span-4">Concepto</div>
-                                    <div className="col-span-3">Subcategoría</div>
-                                    <div className="col-span-3 text-right">Monto</div>
+                                    <div className="col-span-8">Subcategoría</div>
+                                    <div className="col-span-4 text-right">Monto</div>
                                   </div>
                                 </td>
                               </tr>
@@ -668,17 +683,32 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
                                 <tr key={trans.id} className="bg-slate-50/50 border-b border-slate-100">
                                   <td></td>
                                   <td colSpan={5} className="py-1.5 px-2">
-                                    <div className="grid grid-cols-12 gap-2 text-xs pl-4">
-                                      <div className="col-span-2 text-slate-500">{formatFecha(trans.fecha)}</div>
-                                      <div className="col-span-4 text-slate-700 truncate">{trans.concepto}</div>
-                                      <div className="col-span-3 text-slate-500 truncate">{trans.subcategoria}</div>
-                                      <div className="col-span-3 text-right font-medium text-slate-800">
+                                    <div className="grid grid-cols-12 gap-2 text-xs pl-4 items-center">
+                                      <div className="col-span-8 min-w-0">
+                                        <span className="block truncate font-medium text-slate-700">{trans.subcategoria}</span>
+                                        <span className="text-[10px] text-slate-400">{formatFecha(trans.fecha)}</span>
+                                      </div>
+                                      <div className="col-span-4 text-right font-medium text-slate-800">
                                         {formatGuaranies(trans.monto)}
                                       </div>
                                     </div>
                                   </td>
                                 </tr>
                               ))}
+                              {/* Sobrante del presupuesto de la categoria */}
+                              <tr className="bg-slate-100/80 border-b border-slate-200">
+                                <td></td>
+                                <td colSpan={5} className="py-2 px-2">
+                                  <div className="grid grid-cols-12 gap-2 text-xs pl-4">
+                                    <div className="col-span-8 font-bold text-slate-700">
+                                      {cat.diferencia >= 0 ? "Sobrante del presupuesto" : "Excedido del presupuesto"}
+                                    </div>
+                                    <div className={`col-span-4 text-right font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
+                                      {cat.diferencia >= 0 ? "+" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
                             </>
                           )}
                         </React.Fragment>
