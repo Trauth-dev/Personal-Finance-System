@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CambiarContrasenaForm } from "@/components/cambiar-contrasena-form"
+import { PerfilAcciones } from "@/components/configuracion/perfil-acciones"
 
 // Oculta la gestión de "Tipos de Ingreso", "Categorías Vivienda" y
 // "Categorías Varios" en el perfil Personal (ambos planes). Cambiar a true
@@ -68,6 +69,9 @@ export default async function ConfiguracionPage() {
             <CambiarContrasenaForm />
           </CardContent>
         </Card>
+
+        {/* Copia de seguridad y reinicio del perfil activo */}
+        <PerfilAcciones />
 
         {MOSTRAR_GESTION_CATEGORIAS && (
         <div className="grid gap-6 lg:grid-cols-3">
