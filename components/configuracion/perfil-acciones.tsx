@@ -15,16 +15,34 @@ import {
 } from "@/components/ui/alert-dialog"
 import { RotateCcw, DatabaseBackup, AlertTriangle, Loader2, CheckCircle2, ShieldAlert } from "lucide-react"
 
+// ============================================================================
+// TABLAS PROTEGIDAS — NUNCA BORRAR
+// ----------------------------------------------------------------------------
+// Estas tablas contienen la ESTRUCTURA/predeterminados que el sistema siembra
+// automáticamente al crear un perfil (mediante triggers AFTER INSERT ON
+// perfiles). NO se regeneran en un reinicio, así que borrarlas dejaría el
+// perfil roto (sin categorías donde cargar). El reinicio JAMÁS debe tocarlas.
+//
+// Actúan como allowlist de seguridad: el borrado se valida contra esta lista
+// en tiempo de ejecución, de modo que aunque alguien agregue una de estas
+// tablas a TABLAS_A_REINICIAR por error, el guard la excluirá igual.
+const TABLAS_NUNCA_BORRAR = [
+  "tipos_categoria_egreso", // categorías de egreso predeterminadas
+  "categorias_egreso", // subcategorías de egreso predeterminadas
+  "categorias_ingresos", // Salario / Emprendimiento / Ingresos Extras
+  "categorias_egresos_vivienda", // estructura de gastos de vivienda
+  "categorias_egresos_varios", // estructura de gastos varios
+  "configuracion_usuario", // preferencias/configuración del usuario
+] as const
+
 // Tablas de DATOS/cargas que se vacían al reiniciar un perfil.
 // Se filtran por perfil_id (UUID único del perfil), por lo que el reinicio
 // afecta EXCLUSIVAMENTE al perfil activo (Personal, Empresarial o CRM) y
 // nunca a los otros perfiles del mismo usuario.
 //
-// IMPORTANTE: NO se incluyen las tablas de estructura de categorías
-// (tipos_categoria_egreso, categorias_egreso, categorias_ingresos,
-// categorias_egresos_vivienda, categorias_egresos_varios) ni la
-// configuración del usuario, porque son la base funcional del perfil y
-// solo se siembran al crearlo. Así la cuenta queda "en cero" pero operativa.
+// IMPORTANTE: NO se incluyen las tablas de TABLAS_NUNCA_BORRAR (estructura de
+// categorías y configuración), porque son la base funcional del perfil y solo
+// se siembran al crearlo. Así la cuenta queda "en cero" pero operativa.
 const TABLAS_A_REINICIAR = [
   // Presupuesto
   "presupuesto_ingresos",
@@ -110,6 +128,12 @@ export function PerfilAcciones() {
       // Borrado secuencial por perfil_id. RLS garantiza que solo se toquen
       // las filas del usuario autenticado.
       for (const tabla of TABLAS_A_REINICIAR) {
+        // Guard de seguridad: nunca borrar las tablas de estructura/predeterminados.
+        if ((TABLAS_NUNCA_BORRAR as readonly string[]).includes(tabla)) {
+          console.log("[v0] Tabla protegida, se omite del reinicio:", tabla)
+          continue
+        }
+
         const { error } = await supabase.from(tabla).delete().eq("perfil_id", perfilActual.id)
         if (error) {
           console.log("[v0] Error al reiniciar tabla:", tabla, error.message)
