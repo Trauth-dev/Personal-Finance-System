@@ -7,14 +7,27 @@ interface ProfesionalAvatarProps {
   bgClass: string
   className?: string
   iconClassName?: string
+  // Foto real del profesional (ruta en /public). Si no se pasa, se usa el icono neutro.
+  fotoUrl?: string
 }
 
 /**
- * Avatar neutro para profesionales de ejemplo.
- * Evitamos fotos de personas ficticias: usamos un icono sobre el color del area.
- * Cuando existan profesionales reales, se reemplaza por su foto.
+ * Avatar de profesionales.
+ * - Profesionales reales: muestra su foto de perfil (fotoUrl).
+ * - Profesionales de ejemplo: icono neutro sobre el color del area
+ *   (evitamos fotos de personas ficticias).
  */
-export function ProfesionalAvatar({ nombre, bgClass, className, iconClassName }: ProfesionalAvatarProps) {
+export function ProfesionalAvatar({ nombre, bgClass, className, iconClassName, fotoUrl }: ProfesionalAvatarProps) {
+  if (fotoUrl) {
+    return (
+      <img
+        src={fotoUrl || "/placeholder.svg"}
+        alt={`Foto de ${nombre}`}
+        className={cn("rounded-full object-cover object-top shrink-0", className)}
+      />
+    )
+  }
+
   return (
     <div
       className={cn(
