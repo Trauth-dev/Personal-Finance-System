@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { MonthSelector } from "@/components/personal/month-selector"
 import { Card, CardContent } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { formatGuaranies, getParaguayDate } from "@/lib/utils"
-import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
+import { getNombreCategoriaDisplay, getColorCategoria } from "@/lib/categorias-egreso"
 import {
   Info,
   Wallet,
@@ -22,7 +22,23 @@ import {
   CalendarDays,
   TrendingUp,
   PieChart as PieChartIcon,
+  ChevronRight as ChevronRightIcon,
+  Home,
+  ShoppingCart,
+  GraduationCap,
+  Car,
+  Heart,
+  Gift,
+  PiggyBank,
+  Briefcase,
+  Landmark,
+  Smile,
+  LineChart,
+  ShieldAlert,
+  User,
+  Tag,
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
@@ -75,6 +91,12 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
   const [vistaDetallada, setVistaDetallada] = useState(false)
   const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set())
   const [txExpandidas, setTxExpandidas] = useState<Set<string>>(new Set())
+  // Categoria seleccionada en la vista Resumido (panel de detalle lateral)
+  const [selectedResumen, setSelectedResumen] = useState<string | null>(null)
+  // Ancla para autoscroll a "Categorías del presupuesto"
+  const categoriasTablaRef = useRef<HTMLDivElement>(null)
+  // Ancla al panel de detalle (para autoscroll en mobile)
+  const panelDetalleRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadData()
@@ -281,6 +303,55 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     return { ring: "#ef4444", label: "EXCEDIDO", labelBg: "bg-red-100 text-red-700", cardBg: "bg-gradient-to-br from-red-50 to-red-100/60 border-red-200", barColor: "#ef4444" }
   }
 
+  // Icono por categoria (clave interna de BD). Solo visual.
+  const ICONO_CATEGORIA: Record<string, LucideIcon> = {
+    "Gastos Vivienda": Home,
+    "Gastos Personales": User,
+    Supermercado: ShoppingCart,
+    "Pago Deudas": Landmark,
+    Salud: Heart,
+    Disfrute: Smile,
+    Transportes: Car,
+    Educacion: GraduationCap,
+    Educación: GraduationCap,
+    Donacion: Gift,
+    Donación: Gift,
+    Ahorro: PiggyBank,
+    "Ahorro 2025": PiggyBank,
+    "Gastos Varios": ShieldAlert,
+    "Libertad Financiera": LineChart,
+    "Gastos del Negocio": Briefcase,
+  }
+  const getIconoCategoria = (nombre: string): LucideIcon => ICONO_CATEGORIA[nombre] ?? Tag
+
+  // "Ver transacciones de X": despliega la fila en "Categorías del presupuesto"
+  // y hace autoscroll hacia esa seccion.
+  const verTransaccionesCategoria = (nombre: string) => {
+    setCategoriasExpandidas((prev) => {
+      const s = new Set(prev)
+      s.add(`resumen_${nombre}`)
+      return s
+    })
+    // Espera un frame para que el panel se expanda antes de hacer scroll
+    setTimeout(() => {
+      categoriasTablaRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 120)
+  }
+
+  // Selecciona/deselecciona una categoria en Resumido. En pantallas chicas
+  // (donde el panel se muestra abajo) hace autoscroll al panel de detalle.
+  const seleccionarResumen = (nombre: string) => {
+    setSelectedResumen((prev) => {
+      const next = prev === nombre ? null : nombre
+      if (next && typeof window !== "undefined" && window.innerWidth < 1280) {
+        setTimeout(() => {
+          panelDetalleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+        }, 120)
+      }
+      return next
+    })
+  }
+
   const toggleCategoriaExpandida = (nombre: string) => {
     setCategoriasExpandidas(prev => {
       const newSet = new Set(prev)
@@ -460,110 +531,282 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
             </div>
           </div>
 
-          {/* Vista Resumido (Cards Grid) */}
-          {!vistaDetallada && (
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-              {filteredCategorias.map((cat) => {
-                const status = getStatusInfo(cat.porcentaje)
-                const usedPct = Math.min(cat.porcentaje, 100)
-                const remainPct = 100 - usedPct
-                const exceeded = cat.porcentaje > 100
-                const hasNoActivity = cat.gastado === 0 && cat.presupuestado === 0
+          {/* Vista Resumido (Cards Grid + Panel de detalle) */}
+          {!vistaDetallada && (() => {
+            const selectedCat = selectedResumen
+              ? filteredCategorias.find((c) => c.nombre === selectedResumen)
+              : null
 
-                const donutData = [
-                  { name: "Usado", value: usedPct || 0.01 },
-                  { name: "Restante", value: remainPct },
-                ]
+            return (
+              <div className="flex flex-col xl:flex-row gap-4 items-start">
+                {/* Grilla de tarjetas */}
+                <div
+                  className={`grid gap-3 flex-1 min-w-0 w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 ${
+                    selectedCat ? "xl:grid-cols-3" : "xl:grid-cols-4"
+                  }`}
+                >
+                  {filteredCategorias.map((cat) => {
+                    const status = getStatusInfo(cat.porcentaje)
+                    const usedPct = Math.min(cat.porcentaje, 100)
+                    const remainPct = 100 - usedPct
+                    const exceeded = cat.porcentaje > 100
+                    const hasNoActivity = cat.gastado === 0 && cat.presupuestado === 0
+                    const isSelected = selectedResumen === cat.nombre
+                    const color = exceeded ? "#ef4444" : getColorCategoria(cat.nombre)
+                    const Icon = getIconoCategoria(cat.nombre)
+                    const nombre = getNombreCategoriaDisplay(cat.nombre)
+                    const donutData = [
+                      { name: "Usado", value: usedPct || 0.01 },
+                      { name: "Restante", value: remainPct },
+                    ]
 
-                return (
-                  <Card
-                    key={cat.nombre}
-                    className={`border transition-all hover:shadow-md ${
-                      exceeded
-                        ? "bg-gradient-to-br from-red-50 to-red-100/60 border-red-200"
-                        : hasNoActivity
-                          ? "bg-white dark:bg-slate-100 border-slate-200 opacity-60"
-                          : "bg-white dark:bg-slate-50 border-slate-200"
-                    }`}
-                  >
-                    <CardContent className="pt-5 pb-4">
-                      <div className="flex items-start gap-4">
-                        {/* Donut Chart */}
-                        <div className="relative w-[72px] h-[72px] flex-shrink-0">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={donutData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={24}
-                                outerRadius={34}
-                                startAngle={90}
-                                endAngle={-270}
-                                paddingAngle={2}
-                                dataKey="value"
-                                stroke="none"
-                              >
-                                <Cell fill={exceeded ? "#ef4444" : "#14b8a6"} />
-                                <Cell fill="#e5e7eb" />
-                              </Pie>
-                            </PieChart>
-                          </ResponsiveContainer>
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <span className={`text-[11px] font-bold ${exceeded ? "text-red-600" : "text-teal-600"}`}>
-                              {cat.porcentaje > 999 ? "+999%" : `${cat.porcentaje.toFixed(0)}%`}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          {/* Title + Badge */}
-                          <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-sm font-bold text-slate-900 truncate">{getNombreCategoriaDisplay(cat.nombre)}</h3>
-                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${status.labelBg}`}>
-                              {status.label}
-                            </span>
-                          </div>
-
-                          {/* Data rows */}
-                          <div className="space-y-1">
-                            <div className="flex justify-between text-xs">
-                              <span className="text-slate-500">Presup.</span>
-                              <span className="font-semibold text-slate-800">{formatGuaranies(cat.presupuestado)}</span>
+                    // Tarjeta compacta para categorias sin actividad
+                    if (hasNoActivity) {
+                      return (
+                        <button
+                          key={cat.nombre}
+                          type="button"
+                          onClick={() => seleccionarResumen(cat.nombre)}
+                          className={`text-left rounded-xl border p-3 bg-white transition-all hover:shadow-sm ${
+                            isSelected ? "ring-2 ring-teal-500 border-teal-300" : "border-slate-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}1a` }}>
+                                <Icon className="w-4 h-4" style={{ color }} />
+                              </span>
+                              <h3 className="text-sm font-semibold text-slate-600 truncate">{nombre}</h3>
                             </div>
-                            <div className="flex justify-between text-xs">
-                              <span className="text-slate-500">Gastado</span>
-                              <span className={`font-bold ${exceeded ? "text-red-600" : "text-slate-800"}`}>
-                                {formatGuaranies(cat.gastado)}
-                            </span>
+                            <span className="text-[11px] text-slate-400 flex-shrink-0">0% usado</span>
                           </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-slate-500">{cat.diferencia >= 0 ? "Disponible" : "Excedido"}</span>
-                            <span className={`font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
-                              {cat.diferencia >= 0 ? "+" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
+                          <p className="text-xs text-slate-400 mt-2">{formatGuaranies(cat.gastado)} / {formatGuaranies(cat.presupuestado)}</p>
+                          <p className="text-xs text-slate-400">{formatGuaranies(cat.diferencia)} restantes</p>
+                        </button>
+                      )
+                    }
+
+                    // Texto y estilo del pie de tarjeta
+                    let footerText: string
+                    let footerClass: string
+                    if (cat.diferencia < 0) {
+                      footerText = `Excedido ${formatGuaranies(Math.abs(cat.diferencia))}`
+                      footerClass = "bg-red-50 text-red-600"
+                    } else if (cat.presupuestado > 0 && cat.diferencia === 0) {
+                      footerText = "Presupuesto completamente usado"
+                      footerClass = "bg-amber-50 text-amber-700"
+                    } else {
+                      footerText = `Te quedan ${formatGuaranies(cat.diferencia)}`
+                      footerClass = "bg-emerald-50 text-emerald-700"
+                    }
+
+                    return (
+                      <button
+                        key={cat.nombre}
+                        type="button"
+                        onClick={() => seleccionarResumen(cat.nombre)}
+                        className={`text-left rounded-xl border p-4 bg-white transition-all hover:shadow-md ${
+                          isSelected
+                            ? "ring-2 ring-teal-500 border-teal-300"
+                            : exceeded
+                              ? "border-red-200"
+                              : "border-slate-200"
+                        }`}
+                      >
+                        {/* Header */}
+                        <div className="flex items-center justify-between gap-2 mb-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}1a` }}>
+                              <Icon className="w-4 h-4" style={{ color }} />
                             </span>
+                            <h3 className="text-sm font-bold text-slate-900 truncate">{nombre}</h3>
                           </div>
+                          <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 ${status.labelBg}`}>
+                            {status.label}
+                          </span>
                         </div>
 
-                        {/* Progress bar */}
-                        <div className="mt-2.5 h-1.5 rounded-full bg-gray-200 overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-500"
-                            style={{
-                              width: `${Math.min(cat.porcentaje, 100)}%`,
-                              backgroundColor: status.barColor,
-                            }}
-                          />
+                        {/* Donut */}
+                        <div className="flex flex-col items-center">
+                          <div className="relative w-[104px] h-[104px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={donutData}
+                                  cx="50%"
+                                  cy="50%"
+                                  innerRadius={38}
+                                  outerRadius={50}
+                                  startAngle={90}
+                                  endAngle={-270}
+                                  paddingAngle={2}
+                                  dataKey="value"
+                                  stroke="none"
+                                >
+                                  <Cell fill={color} />
+                                  <Cell fill="#e5e7eb" />
+                                </Pie>
+                              </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                              <span className="text-base font-bold leading-none" style={{ color }}>
+                                {cat.porcentaje > 999 ? "+999%" : `${cat.porcentaje.toFixed(cat.porcentaje % 1 === 0 ? 0 : 1)}%`}
+                              </span>
+                              <span className="text-[10px] text-slate-400 mt-0.5">usado</span>
+                            </div>
+                          </div>
+                          <p className="text-base font-bold text-slate-900 mt-2">{formatGuaranies(cat.gastado)}</p>
+                          <p className="text-[11px] text-slate-400">Gastado de {formatGuaranies(cat.presupuestado)}</p>
                         </div>
-                      </div>
+
+                        {/* Footer pill */}
+                        <div className={`mt-3 rounded-lg py-2 px-2 text-center text-xs font-semibold ${footerClass}`}>
+                          {footerText}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Panel de detalle (lateral en desktop, abajo en mobile) */}
+                {selectedCat && (() => {
+                  const cat = selectedCat
+                  const exceeded = cat.porcentaje > 100
+                  const color = exceeded ? "#ef4444" : getColorCategoria(cat.nombre)
+                  const Icon = getIconoCategoria(cat.nombre)
+                  const nombre = getNombreCategoriaDisplay(cat.nombre)
+                  const usedPct = Math.min(cat.porcentaje, 100)
+                  const donutData = [
+                    { name: "Usado", value: usedPct || 0.01 },
+                    { name: "Restante", value: 100 - usedPct },
+                  ]
+                  const txList = cat.transacciones || []
+
+                  return (
+                    <div ref={panelDetalleRef} className="w-full xl:w-[380px] xl:flex-shrink-0 xl:sticky xl:top-4 scroll-mt-20">
+                      <Card className="border border-slate-200 bg-white">
+                        <CardContent className="p-5">
+                          {/* Header */}
+                          <div className="flex items-center justify-between gap-2 mb-4">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}1a` }}>
+                                <Icon className="w-5 h-5" style={{ color }} />
+                              </span>
+                              <h3 className="text-lg font-bold text-slate-900 truncate">{nombre}</h3>
+                            </div>
+                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${badgePctClass(cat.porcentaje)}`}>
+                              {cat.porcentaje.toFixed(cat.porcentaje % 1 === 0 ? 0 : 1)}% usado
+                            </span>
+                          </div>
+
+                          {/* Donut + stats */}
+                          <div className="flex items-center gap-4">
+                            <div className="relative w-[128px] h-[128px] flex-shrink-0">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie
+                                    data={donutData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={46}
+                                    outerRadius={62}
+                                    startAngle={90}
+                                    endAngle={-270}
+                                    paddingAngle={2}
+                                    dataKey="value"
+                                    stroke="none"
+                                  >
+                                    <Cell fill={color} />
+                                    <Cell fill="#e5e7eb" />
+                                  </Pie>
+                                </PieChart>
+                              </ResponsiveContainer>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-2">
+                                <span className="text-sm font-bold text-slate-900 leading-tight">{formatGuaranies(cat.gastado)}</span>
+                                <span className="text-[10px] text-slate-400">Gastado</span>
+                              </div>
+                            </div>
+                            <div className="flex-1 space-y-2 text-sm min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-slate-500">Presupuesto</span>
+                                <span className="font-semibold text-slate-800">{formatGuaranies(cat.presupuestado)}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-slate-500">Gastado</span>
+                                <span className={`font-semibold ${exceeded ? "text-red-600" : "text-slate-800"}`}>{formatGuaranies(cat.gastado)}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-slate-500">{cat.diferencia >= 0 ? "Te queda" : "Excedido"}</span>
+                                <span className={`font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
+                                  {cat.diferencia >= 0 ? "" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Aviso segun estado */}
+                          {exceeded ? (
+                            <div className="mt-4 rounded-lg bg-red-50 border border-red-100 p-3">
+                              <p className="text-xs font-semibold text-red-700 flex items-center gap-1.5">
+                                <AlertTriangle className="w-4 h-4 flex-shrink-0" /> Superaste el presupuesto asignado
+                              </p>
+                              <p className="text-[11px] text-red-600/80 mt-0.5 pl-6">Revisa tus gastos en esta categoría para el próximo mes.</p>
+                            </div>
+                          ) : cat.presupuestado > 0 && cat.diferencia === 0 ? (
+                            <div className="mt-4 rounded-lg bg-amber-50 border border-amber-100 p-3">
+                              <p className="text-xs font-semibold text-amber-700 flex items-center gap-1.5">
+                                <AlertTriangle className="w-4 h-4 flex-shrink-0" /> Has utilizado todo el presupuesto asignado
+                              </p>
+                              <p className="text-[11px] text-amber-600/80 mt-0.5 pl-6">Considera ajustar tu presupuesto o esperar al próximo mes.</p>
+                            </div>
+                          ) : null}
+
+                          {/* Detalle */}
+                          <div className="mt-4 pt-4 border-t border-slate-100">
+                            <h4 className="text-sm font-bold text-slate-800 mb-2">Detalle de {nombre}</h4>
+                            {txList.length > 0 ? (
+                              <div className="space-y-0">
+                                <div className="grid grid-cols-12 gap-2 text-[10px] font-semibold text-slate-400 uppercase pb-1">
+                                  <span className="col-span-6">Concepto</span>
+                                  <span className="col-span-3">Fecha</span>
+                                  <span className="col-span-3 text-right">Monto</span>
+                                </div>
+                                {txList.map((t) => (
+                                  <div key={t.id} className="grid grid-cols-12 gap-2 text-xs py-1.5 border-t border-slate-50">
+                                    <span className="col-span-6 truncate text-slate-700">{tituloTransaccion(t)}</span>
+                                    <span className="col-span-3 text-slate-400">{formatFecha(t.fecha)}</span>
+                                    <span className="col-span-3 text-right font-medium text-slate-800">{formatGuaranies(t.monto)}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-400">No hay transacciones en esta categoría.</p>
+                            )}
+                            <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-xs">
+                              <span className="font-semibold text-slate-600">{cat.diferencia >= 0 ? "Sobrante del presupuesto" : "Excedido del presupuesto"}</span>
+                              <span className={`font-bold ${cat.diferencia >= 0 ? "text-teal-600" : "text-red-600"}`}>
+                                {cat.diferencia >= 0 ? "+" : "-"}{formatGuaranies(Math.abs(cat.diferencia))}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Ver transacciones */}
+                          <button
+                            type="button"
+                            onClick={() => verTransaccionesCategoria(cat.nombre)}
+                            className="mt-4 w-full flex items-center justify-between rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                          >
+                            Ver transacciones de {nombre}
+                            <ChevronRightIcon className="w-4 h-4 text-slate-400" />
+                          </button>
+                        </CardContent>
+                      </Card>
                     </div>
-                  </CardContent>
-                </Card>
-              )
-              })}
-            </div>
-          )}
+                  )
+                })()}
+              </div>
+            )
+          })()}
 
           {/* Vista Detallada (Lista expandible) */}
           {vistaDetallada && (
@@ -735,7 +978,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
               </div>
 
               {/* Categorias del presupuesto */}
-              <div className="rounded-xl border border-slate-200 overflow-hidden">
+              <div ref={categoriasTablaRef} className="rounded-xl border border-slate-200 overflow-hidden scroll-mt-24">
                 <div className="px-4 py-3 border-b border-slate-200">
                   <h4 className="text-sm font-bold text-slate-900">Categorías del presupuesto</h4>
                 </div>
