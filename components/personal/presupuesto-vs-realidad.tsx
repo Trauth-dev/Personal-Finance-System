@@ -405,8 +405,8 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
             <Scale className="w-8 h-8 text-purple-600" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Presupuesto vs Realidad</h1>
-            <p className="text-muted-foreground">Compara lo planificado con lo realmente gastado</p>
+            <h1 className="text-3xl font-bold text-slate-900">Presupuesto vs Realidad</h1>
+            <p className="text-slate-500">Compara lo planificado con lo realmente gastado</p>
           </div>
         </div>
       </div>

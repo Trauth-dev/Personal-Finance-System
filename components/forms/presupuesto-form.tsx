@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -12,7 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from 'next/navigation'
 import Link from "next/link"
-import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp, ShoppingCart, Car, Stethoscope, User, Briefcase } from 'lucide-react'
+import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, ShoppingBag, Home, CreditCard, Smile, GraduationCap, TrendingUp, Plus, MoreVertical, Trash2, BarChart3, Wallet, ChevronDown, ChevronUp, ShoppingCart, Car, Stethoscope, User, Briefcase, Save, RotateCcw } from 'lucide-react'
 import { getTodayDate, formatGuaranies, normalizarNombre as normalizarNombreUtil } from "@/lib/utils"
 import { getColorCategoria } from "@/lib/categorias-egreso"
 import { usePerfil } from "@/lib/contexts/perfil-context"
@@ -94,6 +94,84 @@ interface IngresoCategoria {
   montoPresupuestado: number
 }
 
+// ============================================================================
+// Autoguardado de BORRADOR (respaldo local, discreto y no destructivo)
+// ----------------------------------------------------------------------------
+// Guarda un borrador de lo que el usuario va cargando ANTES de presionar
+// "Establecer Presupuesto". Vive en localStorage (por perfil + mes + año), no
+// toca la base de datos y no bloquea la interfaz. El borrador se conserva hasta
+// que el guardado real en la base se confirma con éxito; si el guardado falla,
+// el borrador permanece para no perder los datos.
+// ============================================================================
+const DRAFT_PREFIX = "presupuesto_draft_v1"
+
+function draftKey(perfilId: string, anio: string, mes: string) {
+  return `${DRAFT_PREFIX}:${perfilId}:${anio}-${mes}`
+}
+
+interface PresupuestoDraft {
+  updatedAt: string
+  presupuesto: string
+  ingresos: Record<string, number>
+  categorias: Record<string, number>
+}
+
+// Firma canónica de los valores del presupuesto. Sirve para detectar si el
+// estado actual difiere de lo realmente guardado en la base (cambios sin
+// confirmar) sin comparar objetos manualmente.
+function serializePresupuesto(
+  presupuesto: string,
+  ingresos: IngresoCategoria[],
+  categoriasData: Record<string, CategoriaData>,
+): string {
+  const ing = ingresos
+    .map((i) => `${i.id}=${i.montoPresupuestado || 0}`)
+    .sort()
+    .join("|")
+  const cats = Object.entries(categoriasData)
+    .map(
+      ([k, d]) =>
+        `${k}:` +
+        d.subcategorias
+          .map((s) => `${(s.nombre || "").toLowerCase()}=${s.monto || 0}`)
+          .sort()
+          .join(","),
+    )
+    .sort()
+    .join("|")
+  return `m=${Number(presupuesto) || 0}||${ing}||${cats}`
+}
+
+function leerBorrador(perfilId: string, anio: string, mes: string): PresupuestoDraft | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = window.localStorage.getItem(draftKey(perfilId, anio, mes))
+    if (!raw) return null
+    return JSON.parse(raw) as PresupuestoDraft
+  } catch {
+    return null
+  }
+}
+
+function guardarBorrador(perfilId: string, anio: string, mes: string, draft: PresupuestoDraft) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.setItem(draftKey(perfilId, anio, mes), JSON.stringify(draft))
+  } catch {
+    // Silencioso: si localStorage no está disponible o está lleno, no
+    // interrumpimos la experiencia del usuario.
+  }
+}
+
+function borrarBorrador(perfilId: string, anio: string, mes: string) {
+  if (typeof window === "undefined") return
+  try {
+    window.localStorage.removeItem(draftKey(perfilId, anio, mes))
+  } catch {
+    // no-op
+  }
+}
+
 export function PresupuestoForm() {
   const { perfilActual } = usePerfil()
   const todayStr = getTodayDate()
@@ -110,6 +188,11 @@ export function PresupuestoForm() {
   const [addingToCategoria, setAddingToCategoria] = useState<string | null>(null)
   const [ingresosCategoria, setIngresosCategoria] = useState<IngresoCategoria[]>([])
   const [showIngresos, setShowIngresos] = useState(true)
+  // Autoguardado (borrador): snapshot de lo guardado en BD y estado del borrador
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null)
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const skipDraftRestoreRef = useRef(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -225,11 +308,11 @@ export function PresupuestoForm() {
         }
       })
 
-      setCategoriasData(initialData)
-
-      // Cargar presupuesto total si existe; si no, tomar el del mes anterior
+      // Cargar presupuesto total si existe; si no, tomar el del mes anterior.
+      // (El estado se aplica al final, junto con el posible borrador local.)
+      let presupuestoValue = ""
       if (presupuestoExistente) {
-        setPresupuesto(String(presupuestoExistente.meta_salario || ""))
+        presupuestoValue = String(presupuestoExistente.meta_salario || "")
       } else {
         const { data: metasPrevias } = await supabase
           .from("presupuesto_mensual")
@@ -239,7 +322,7 @@ export function PresupuestoForm() {
           .order("fecha", { ascending: false })
           .limit(1)
         const metaPrevia = metasPrevias?.[0]?.meta_salario
-        setPresupuesto(metaPrevia ? String(metaPrevia) : "")
+        presupuestoValue = metaPrevia ? String(metaPrevia) : ""
       }
 
       // 5. Cargar categorías de ingresos del usuario
@@ -290,6 +373,46 @@ export function PresupuestoForm() {
         nombre: cat.nombre,
         montoPresupuestado: ingresosMontoMap[cat.id] || 0
       }))
+
+      // --- Autoguardado (borrador) ---
+      // Snapshot de lo que REALMENTE está guardado en la base para este mes.
+      const dbSnapshot = serializePresupuesto(presupuestoValue, ingresosData, initialData)
+
+      // Intentar restaurar un borrador local más reciente (cambios sin confirmar).
+      const draft = skipDraftRestoreRef.current
+        ? null
+        : leerBorrador(perfilActual.id, anioSeleccionado, mesSeleccionado)
+      skipDraftRestoreRef.current = false
+
+      if (draft) {
+        // Aplicar los montos del borrador sobre la estructura recién cargada.
+        if (typeof draft.presupuesto === "string") presupuestoValue = draft.presupuesto
+        for (const ing of ingresosData) {
+          if (draft.ingresos && ing.id in draft.ingresos) {
+            ing.montoPresupuestado = Number(draft.ingresos[ing.id]) || 0
+          }
+        }
+        for (const [catKey, data] of Object.entries(initialData)) {
+          let total = 0
+          for (const sub of data.subcategorias) {
+            const k = `${catKey}|${(sub.nombre || "").toLowerCase()}`
+            if (draft.categorias && k in draft.categorias) {
+              sub.monto = Number(draft.categorias[k]) || 0
+            }
+            total += sub.monto
+          }
+          data.total = total
+        }
+        setDraftSavedAt(draft.updatedAt || null)
+      } else {
+        setDraftSavedAt(null)
+      }
+
+      // El snapshot "guardado" es siempre el de la base. Si hay un borrador, el
+      // estado actual diferirá y se mostrará el indicador de cambios sin guardar.
+      setSavedSnapshot(dbSnapshot)
+      setCategoriasData(initialData)
+      setPresupuesto(presupuestoValue)
       setIngresosCategoria(ingresosData)
 
     } catch (err) {
@@ -310,6 +433,57 @@ export function PresupuestoForm() {
       loadUserData()
     }
   }, [perfilActual?.id, mesSeleccionado, anioSeleccionado, loadUserData])
+
+  // Firma actual de los valores en pantalla y comparación con lo guardado en BD.
+  const currentSnapshot = serializePresupuesto(presupuesto, ingresosCategoria, categoriasData)
+  const isDirty = savedSnapshot !== null && currentSnapshot !== savedSnapshot
+
+  // Autoguardado discreto del borrador: cada vez que el usuario modifica un
+  // monto (y difiere de lo guardado en la base), se guarda un respaldo local
+  // con debounce. No toca la base de datos ni bloquea la interfaz.
+  useEffect(() => {
+    if (isLoadingData || !perfilActual?.id || savedSnapshot === null || !isDirty) return
+
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    draftTimerRef.current = setTimeout(() => {
+      const draft: PresupuestoDraft = {
+        updatedAt: new Date().toISOString(),
+        presupuesto,
+        ingresos: Object.fromEntries(ingresosCategoria.map((i) => [i.id, i.montoPresupuestado || 0])),
+        categorias: Object.fromEntries(
+          Object.entries(categoriasData).flatMap(([catKey, d]) =>
+            d.subcategorias.map((s) => [`${catKey}|${(s.nombre || "").toLowerCase()}`, s.monto || 0]),
+          ),
+        ),
+      }
+      guardarBorrador(perfilActual.id, anioSeleccionado, mesSeleccionado, draft)
+      setDraftSavedAt(draft.updatedAt)
+    }, 800)
+
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+    }
+  }, [
+    currentSnapshot,
+    isDirty,
+    isLoadingData,
+    perfilActual?.id,
+    anioSeleccionado,
+    mesSeleccionado,
+    savedSnapshot,
+    presupuesto,
+    ingresosCategoria,
+    categoriasData,
+  ])
+
+  // Descartar el borrador local y volver a los valores guardados en la base.
+  const handleDescartarBorrador = () => {
+    if (!perfilActual?.id) return
+    borrarBorrador(perfilActual.id, anioSeleccionado, mesSeleccionado)
+    skipDraftRestoreRef.current = true
+    setDraftSavedAt(null)
+    loadUserData()
+  }
 
   // Generar opciones de año (actual y +-2)
   const anioActual = parseInt(todayStr.slice(0, 4))
@@ -664,6 +838,14 @@ export function PresupuestoForm() {
         await supabase.from("presupuesto_ingresos").delete().in("id", idsIngresosAEliminar)
       }
 
+      // Guardado confirmado en la base: el estado actual pasa a ser el "guardado"
+      // y se elimina el borrador local. Si el guardado hubiese fallado, se lanza
+      // una excepción antes de llegar aquí y el borrador se conserva intacto.
+      setSavedSnapshot(serializePresupuesto(presupuesto, ingresosCategoria, categoriasData))
+      borrarBorrador(perfilActual.id, anioSeleccionado, mesSeleccionado)
+      setDraftSavedAt(null)
+      skipDraftRestoreRef.current = true
+
       setSuccess(true)
 
       setTimeout(() => {
@@ -955,6 +1137,29 @@ export function PresupuestoForm() {
             <div className="flex items-center gap-2 p-3 rounded-lg bg-sky-500/10 border border-sky-500/20">
               <CheckCircle className="w-4 h-4 text-sky-500" />
               <p className="text-sm text-sky-500">Presupuesto registrado exitosamente</p>
+            </div>
+          )}
+
+          {/* Autoguardado: indicador discreto del borrador local */}
+          {isDirty && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <Save className="w-3.5 h-3.5 text-sky-500 flex-shrink-0" />
+              <span>
+                Borrador guardado automáticamente
+                {draftSavedAt
+                  ? ` · ${new Date(draftSavedAt).toLocaleTimeString("es-PY", { hour: "2-digit", minute: "2-digit" })}`
+                  : ""}
+                {". "}
+                Presiona <span className="font-medium text-foreground">Establecer Presupuesto</span> para confirmar.
+              </span>
+              <button
+                type="button"
+                onClick={handleDescartarBorrador}
+                className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-foreground"
+              >
+                <RotateCcw className="w-3 h-3" />
+                Descartar
+              </button>
             </div>
           )}
 
