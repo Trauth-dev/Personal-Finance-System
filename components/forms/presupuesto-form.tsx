@@ -916,7 +916,13 @@ export function PresupuestoForm() {
             
             {showIngresos && (
               <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4 space-y-3">
-                {ingresosCategoria.length > 0 ? (
+                {isLoadingData ? (
+                  <div className="space-y-2" aria-hidden="true">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-8 rounded bg-muted/40 animate-pulse" />
+                    ))}
+                  </div>
+                ) : ingresosCategoria.length > 0 ? (
                   ingresosCategoria.map((ingreso) => (
                     <div key={ingreso.id} className="flex items-center gap-3">
                       <div className="w-2 h-2 rounded-full bg-green-500"></div>

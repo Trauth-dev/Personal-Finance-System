@@ -123,6 +123,12 @@ export function EgresoForm() {
   const egresoFeatures = features.egreso
   const [tiposCategorias, setTiposCategorias] = useState<TipoCategoria[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
+  // Todas las descripciones del perfil precargadas una sola vez. Permite filtrar
+  // al vuelo (sin ir a la base) al cambiar de tipo, evitando el retardo visible.
+  const [todasCategorias, setTodasCategorias] = useState<Categoria[]>([])
+  // Estado de carga inicial: evita mostrar el mensaje "No tienes tipos de
+  // categoría" mientras aún se están trayendo los datos.
+  const [isLoadingCategorias, setIsLoadingCategorias] = useState(true)
   const [selectedTipo, setSelectedTipo] = useState<string>("")
   const [selectedCategoria, setSelectedCategoria] = useState<string>("")
   const [monto, setMonto] = useState("")
@@ -246,6 +252,15 @@ export function EgresoForm() {
     }
   }, [selectedTipo, tiposCategorias])
 
+  // Si la precarga de descripciones termina después de haber seleccionado un
+  // tipo, re-filtramos para que la lista aparezca sin retardo ni parpadeo.
+  useEffect(() => {
+    if (selectedTipo) {
+      loadCategorias(selectedTipo)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todasCategorias])
+
   const loadTiposCategorias = async () => {
     if (!perfilActual?.id) return
 
@@ -259,49 +274,74 @@ export function EgresoForm() {
         return
       }
 
-      const { data, error: fetchError } = await supabase
-        .from("tipos_categoria_egreso")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("perfil_id", perfilActual.id)
-        .order("nombre")
+      // Traer tipos y TODAS las descripciones del perfil en paralelo, en una sola
+      // pasada. Así al cambiar de categoría el filtrado es instantáneo (local).
+      const [tiposRes, categoriasRes] = await Promise.all([
+        supabase
+          .from("tipos_categoria_egreso")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("perfil_id", perfilActual.id)
+          .order("nombre"),
+        supabase
+          .from("categorias_egreso")
+          .select("*")
+          .eq("user_id", user.id)
+          .eq("perfil_id", perfilActual.id)
+          .order("nombre"),
+      ])
 
-      if (!fetchError && data) {
+      if (!tiposRes.error && tiposRes.data) {
         // Ocultar la categoría especial "Gastos del Negocio" de la grilla:
         // se muestra únicamente en el botón junto al título.
-        const dataSinNegocio = data.filter((t) => t.nombre !== NOMBRE_CATEGORIA_NEGOCIO)
+        const dataSinNegocio = tiposRes.data.filter((t) => t.nombre !== NOMBRE_CATEGORIA_NEGOCIO)
         // Ordenar según la grilla oficial (3 columnas x 4 filas)
         setTiposCategorias(ordenarCategoriasEgreso(dataSinNegocio))
       }
+
+      if (!categoriasRes.error && categoriasRes.data) {
+        setTodasCategorias(categoriasRes.data)
+      }
     } catch (error) {
       setTiposCategorias([])
+    } finally {
+      setIsLoadingCategorias(false)
     }
   }
 
-  const loadCategorias = async (tipoId: string) => {
-    if (!perfilActual?.id) return
-
+  // Refresca desde la base todas las descripciones del perfil (tras crear una
+  // nueva). Devuelve la lista fresca para poder filtrar de inmediato.
+  const refreshTodasCategorias = async (): Promise<Categoria[]> => {
+    if (!perfilActual?.id) return todasCategorias
     try {
       const supabase = createClient()
       const {
         data: { user },
       } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user) return todasCategorias
 
       const { data, error: fetchError } = await supabase
         .from("categorias_egreso")
         .select("*")
         .eq("user_id", user.id)
         .eq("perfil_id", perfilActual.id)
-        .eq("tipo_categoria_id", tipoId)
         .order("nombre")
 
       if (!fetchError && data) {
-        setCategorias(data)
+        setTodasCategorias(data)
+        return data
       }
     } catch (error) {
-      setCategorias([])
+      // silencioso
     }
+    return todasCategorias
+  }
+
+  // Filtra las descripciones de un tipo desde la lista ya cargada en memoria
+  // (sin ida a la base): el cambio de categoría se refleja de inmediato.
+  const loadCategorias = (tipoId: string, source?: Categoria[]) => {
+    const lista = source ?? todasCategorias
+    setCategorias(lista.filter((c) => c.tipo_categoria_id === tipoId))
   }
 
   const autoSelectOrCreatePagoDeudaCategoria = async (tipoId: string) => {
@@ -340,7 +380,8 @@ export function EgresoForm() {
 
         if (!insertError && newCat && newCat[0]) {
           setSelectedCategoria(newCat[0].id)
-          await loadCategorias(tipoId)
+          const frescas = await refreshTodasCategorias()
+          loadCategorias(tipoId, frescas)
         }
       }
     } catch (error) {
@@ -530,7 +571,8 @@ export function EgresoForm() {
         .select()
 
       if (!insertError && data && data[0]) {
-        await loadCategorias(selectedTipo)
+        const frescas = await refreshTodasCategorias()
+        loadCategorias(selectedTipo, frescas)
         setSelectedCategoria(data[0].id)
         setNewCategoriaNombre("")
         setShowNewCategoria(false)
@@ -864,7 +906,21 @@ export function EgresoForm() {
           <div className="space-y-3 scroll-mt-20 sm:scroll-mt-24" ref={tipoCategoriaRef}>
             <Label>Tipo de Categoría</Label>
 
-            {tiposCategorias.length > 0 ? (
+            {isLoadingPlan || isLoadingCategorias ? (
+              <div className="grid grid-cols-3 gap-3" aria-hidden="true">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="p-4 rounded-lg border-2 border-border/30 animate-pulse"
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="w-11 h-11 rounded-full bg-muted/40" />
+                      <div className="h-3 w-16 rounded bg-muted/40" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : tiposCategorias.length > 0 ? (
               <div className="grid grid-cols-3 gap-3">
                 {tiposCategorias.map((tipo) => {
                   const Icon = ICONOS_CATEGORIAS[tipo.nombre] || Package
