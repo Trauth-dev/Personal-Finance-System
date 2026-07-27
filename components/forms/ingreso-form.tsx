@@ -46,6 +46,8 @@ export function IngresoForm() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [categorias, setCategorias] = useState<Array<{ id: string; nombre: string }>>([])
+  // Evita mostrar "No tienes categorías" mientras aún se cargan los datos.
+  const [isLoadingCategorias, setIsLoadingCategorias] = useState(true)
   const [showNewCategory, setShowNewCategory] = useState(false)
   const [newCategoryName, setNewCategoryName] = useState("")
   const [isExpanded, setIsExpanded] = useState(true)
@@ -77,6 +79,7 @@ export function IngresoForm() {
       setCategorias(
         ingresoFeatures.categoriasFijas.map((nombre) => ({ id: nombre, nombre })),
       )
+      setIsLoadingCategorias(false)
       return
     }
 
@@ -112,6 +115,8 @@ export function IngresoForm() {
       }
     } catch (error) {
       setCategorias([])
+    } finally {
+      setIsLoadingCategorias(false)
     }
   }
 
@@ -370,7 +375,13 @@ export function IngresoForm() {
 
             {isExpanded && (
               <div className="space-y-3 p-4 rounded-lg bg-background/30 border border-green-500/20">
-                {categorias.length > 0 ? (
+                {isLoadingPlan || isLoadingCategorias ? (
+                  <div className="space-y-2" aria-hidden="true">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="h-10 rounded-md bg-muted/40 animate-pulse" />
+                    ))}
+                  </div>
+                ) : categorias.length > 0 ? (
                   <RadioGroup value={tipoIngreso} onValueChange={setTipoIngreso} className="space-y-2">
                     {categorias.map((cat) => (
                       <div
