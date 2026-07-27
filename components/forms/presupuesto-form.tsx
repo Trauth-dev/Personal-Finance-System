@@ -203,11 +203,26 @@ export function PresupuestoForm() {
     setIsLoadingData(true)
 
     try {
-      // 1. Cargar tipos de categoría de egreso del usuario
-      const { data: tiposData } = await supabase
-        .from("tipos_categoria_egreso")
-        .select("id, nombre")
-        .eq("perfil_id", perfilActual.id)
+      const primerDiaMes = `${anioSeleccionado}-${mesSeleccionado}-01`
+
+      // Las 4 consultas iniciales son independientes entre sí, así que las
+      // ejecutamos en paralelo (Promise.all) en lugar de una tras otra. Esto
+      // reduce notablemente la espera: pasa de 4 idas y vueltas encadenadas a 1.
+      const [tiposRes, categoriasEgresoRes, presupuestoExistenteRes, itemsPresupuestoRes] = await Promise.all([
+        // 1. Tipos de categoría de egreso del usuario
+        supabase.from("tipos_categoria_egreso").select("id, nombre").eq("perfil_id", perfilActual.id),
+        // 2. Categorías de egreso (subcategorías) del usuario
+        supabase.from("categorias_egreso").select("id, nombre, tipo_categoria_id").eq("perfil_id", perfilActual.id),
+        // 3. Presupuesto existente para el mes seleccionado
+        supabase.from("presupuesto_mensual").select("*").eq("perfil_id", perfilActual.id).eq("fecha", primerDiaMes).single(),
+        // 4. Items de presupuesto detallado del mes seleccionado
+        supabase.from("presupuesto_categorias").select("*").eq("perfil_id", perfilActual.id).eq("mes", primerDiaMes),
+      ])
+
+      const tiposData = tiposRes.data
+      const categoriasEgreso = categoriasEgresoRes.data
+      const presupuestoExistente = presupuestoExistenteRes.data
+      const itemsPresupuesto = itemsPresupuestoRes.data
 
       // Crear mapa de nombre a ID (clave normalizada para evitar problemas de tildes/mayúsculas)
       const tiposMap: Record<string, string> = {}
@@ -215,28 +230,6 @@ export function PresupuestoForm() {
         tiposMap[normalizarNombre(tipo.nombre)] = tipo.id
       })
       setTiposCategoriaMap(tiposMap)
-
-      // 2. Cargar categorías de egreso (subcategorías) del usuario
-      const { data: categoriasEgreso } = await supabase
-        .from("categorias_egreso")
-        .select("id, nombre, tipo_categoria_id")
-        .eq("perfil_id", perfilActual.id)
-
-      // 3. Cargar presupuesto existente para el mes seleccionado
-      const primerDiaMes = `${anioSeleccionado}-${mesSeleccionado}-01`
-      const { data: presupuestoExistente } = await supabase
-        .from("presupuesto_mensual")
-        .select("*")
-        .eq("perfil_id", perfilActual.id)
-        .eq("fecha", primerDiaMes)
-        .single()
-
-      // 4. Cargar items de presupuesto detallado si existe
-      const { data: itemsPresupuesto } = await supabase
-        .from("presupuesto_categorias")
-        .select("*")
-        .eq("perfil_id", perfilActual.id)
-        .eq("mes", primerDiaMes)
 
       // Si el mes seleccionado aún no tiene presupuesto detallado cargado,
       // usar como valores predeterminados los del mes anterior más reciente

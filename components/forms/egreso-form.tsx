@@ -266,13 +266,10 @@ export function EgresoForm() {
 
     try {
       const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        return
-      }
+      // Usamos el user_id ya disponible en el perfil (en memoria) en lugar de
+      // supabase.auth.getUser(), que agrega una ida y vuelta a la red en cada carga.
+      // RLS en la base sigue garantizando la seguridad.
+      const userId = perfilActual.user_id
 
       // Traer tipos y TODAS las descripciones del perfil en paralelo, en una sola
       // pasada. Así al cambiar de categoría el filtrado es instantáneo (local).
@@ -280,13 +277,13 @@ export function EgresoForm() {
         supabase
           .from("tipos_categoria_egreso")
           .select("*")
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .eq("perfil_id", perfilActual.id)
           .order("nombre"),
         supabase
           .from("categorias_egreso")
           .select("*")
-          .eq("user_id", user.id)
+          .eq("user_id", userId)
           .eq("perfil_id", perfilActual.id)
           .order("nombre"),
       ])
