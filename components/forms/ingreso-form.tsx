@@ -85,18 +85,15 @@ export function IngresoForm() {
 
     try {
       const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        return
-      }
+      // Usamos el user_id ya disponible en el perfil (en memoria) en lugar de
+      // supabase.auth.getUser(), que hace una ida y vuelta a la red en cada carga.
+      // La seguridad la garantiza igualmente RLS en la base de datos.
+      const userId = perfilActual.user_id
 
       const { data, error: fetchError } = await supabase
         .from("categorias_ingresos")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("perfil_id", perfilActual.id)
         .order("nombre")
 
