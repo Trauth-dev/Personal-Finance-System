@@ -42,15 +42,23 @@ export default function CargaDatosPage() {
           </TabsList>
 
           <div className="mt-6 sm:mt-8">
-            <TabsContent value="ingreso">
+            {/*
+              forceMount mantiene los tres formularios montados en segundo plano.
+              Así, al cambiar de pestaña, el cambio es INSTANTÁNEO: no se
+              desmontan ni vuelven a consultar el servidor (Radix solo los oculta
+              con el atributo `hidden`). Además, los tres cargan sus datos una
+              sola vez al abrir la página, en paralelo, por lo que al hacer clic
+              en Egreso o Presupuesto sus datos ya están listos.
+            */}
+            <TabsContent value="ingreso" forceMount className="data-[state=inactive]:hidden">
               <IngresoForm />
             </TabsContent>
 
-            <TabsContent value="egreso">
+            <TabsContent value="egreso" forceMount className="data-[state=inactive]:hidden">
               <EgresoForm />
             </TabsContent>
 
-            <TabsContent value="presupuesto">
+            <TabsContent value="presupuesto" forceMount className="data-[state=inactive]:hidden">
               <PresupuestoForm />
             </TabsContent>
           </div>

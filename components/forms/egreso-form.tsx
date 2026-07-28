@@ -49,6 +49,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getTodayDate, formatGuaranies, getParaguayTimestamp, hexToRgba } from "@/lib/utils"
 import { getNombreCategoriaDisplay, ordenarCategoriasEgreso } from "@/lib/categorias-egreso"
 import { usePerfil } from "@/lib/contexts/perfil-context"
+import { getCache, setCache, invalidateCache } from "@/lib/cache/carga-cache"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
 
@@ -264,6 +265,16 @@ export function EgresoForm() {
   const loadTiposCategorias = async () => {
     if (!perfilActual?.id) return
 
+    // Mostrar de inmediato lo cacheado (sin esperar al servidor) y revalidar en
+    // segundo plano. Así la grilla aparece al instante al volver a la pestaña.
+    const cacheKey = `egreso:${perfilActual.id}`
+    const cached = getCache<{ tipos: TipoCategoria[]; categorias: Categoria[] }>(cacheKey)
+    if (cached) {
+      setTiposCategorias(cached.tipos)
+      setTodasCategorias(cached.categorias)
+      setIsLoadingCategorias(false)
+    }
+
     try {
       const supabase = createClient()
       // Usamos el user_id ya disponible en el perfil (en memoria) en lugar de
@@ -288,19 +299,29 @@ export function EgresoForm() {
           .order("nombre"),
       ])
 
+      let tiposOrdenados = cached?.tipos ?? []
+      let categoriasFrescas = cached?.categorias ?? []
+
       if (!tiposRes.error && tiposRes.data) {
         // Ocultar la categoría especial "Gastos del Negocio" de la grilla:
         // se muestra únicamente en el botón junto al título.
         const dataSinNegocio = tiposRes.data.filter((t) => t.nombre !== NOMBRE_CATEGORIA_NEGOCIO)
         // Ordenar según la grilla oficial (3 columnas x 4 filas)
-        setTiposCategorias(ordenarCategoriasEgreso(dataSinNegocio))
+        tiposOrdenados = ordenarCategoriasEgreso(dataSinNegocio)
+        setTiposCategorias(tiposOrdenados)
       }
 
       if (!categoriasRes.error && categoriasRes.data) {
-        setTodasCategorias(categoriasRes.data)
+        categoriasFrescas = categoriasRes.data
+        setTodasCategorias(categoriasFrescas)
+      }
+
+      // Actualizar la caché con lo recién traído del servidor.
+      if (!tiposRes.error && !categoriasRes.error) {
+        setCache(cacheKey, { tipos: tiposOrdenados, categorias: categoriasFrescas })
       }
     } catch (error) {
-      setTiposCategorias([])
+      if (!cached) setTiposCategorias([])
     } finally {
       setIsLoadingCategorias(false)
     }
@@ -326,6 +347,8 @@ export function EgresoForm() {
 
       if (!fetchError && data) {
         setTodasCategorias(data)
+        // Invalidar la caché para que el próximo montaje traiga la lista fresca.
+        invalidateCache(`egreso:${perfilActual.id}`)
         return data
       }
     } catch (error) {
