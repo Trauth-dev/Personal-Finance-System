@@ -14,6 +14,7 @@ import { getTodayDate, formatGuaranies } from "@/lib/utils"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { CATEGORIAS_INGRESO_BASICO } from "@/lib/plans/plan-features"
+import { getCache, setCache } from "@/lib/cache/carga-cache"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -83,6 +84,15 @@ export function IngresoForm() {
       return
     }
 
+    // Mostrar de inmediato lo que haya en caché (sin esperar al servidor) y
+    // luego revalidar en segundo plano. Así no hay esqueleto al volver a entrar.
+    const cacheKey = `ingresos:${perfilActual.id}`
+    const cached = getCache<Array<{ id: string; nombre: string }>>(cacheKey)
+    if (cached) {
+      setCategorias(cached)
+      setIsLoadingCategorias(false)
+    }
+
     try {
       const supabase = createClient()
       // Usamos el user_id ya disponible en el perfil (en memoria) en lugar de
@@ -109,9 +119,10 @@ export function IngresoForm() {
           return a.nombre.localeCompare(b.nombre)
         })
         setCategorias(ordenadas)
+        setCache(cacheKey, ordenadas)
       }
     } catch (error) {
-      setCategorias([])
+      if (!cached) setCategorias([])
     } finally {
       setIsLoadingCategorias(false)
     }
