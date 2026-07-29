@@ -53,6 +53,7 @@ interface Deuda {
   cuotas_totales: number | null
   cuotas_pagadas: number
   monto_cuota: number | null
+  montos_cuotas: number[] | null
   frecuencia_pago: string | null
   acreedor: string
   estado: string
@@ -152,37 +153,24 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="monto_total">
-            {tipoDeuda === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}
-          </Label>
-          <Input
-            id="monto_total"
-            type="text"
-            inputMode="numeric"
-            placeholder="5000000"
-            value={formData.monto_total}
-            onChange={(e) => {
-              const value = e.target.value.replace(/[^0-9]/g, "")
-              setFormData((prev) => ({ ...prev, monto_total: value }))
-            }}
-          />
-          {formData.monto_total && (
-            <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.monto_total))}</p>
-          )}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="tasa_interes">Tasa de Interés (%)</Label>
-          <Input
-            id="tasa_interes"
-            type="number"
-            step="0.01"
-            placeholder="12.5"
-            value={formData.tasa_interes}
-            onChange={(e) => setFormData((prev) => ({ ...prev, tasa_interes: e.target.value }))}
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="monto_total">
+          {tipoDeuda === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}
+        </Label>
+        <Input
+          id="monto_total"
+          type="text"
+          inputMode="numeric"
+          placeholder="5000000"
+          value={formData.monto_total}
+          onChange={(e) => {
+            const value = e.target.value.replace(/[^0-9]/g, "")
+            setFormData((prev) => ({ ...prev, monto_total: value }))
+          }}
+        />
+        {formData.monto_total && (
+          <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.monto_total))}</p>
+        )}
       </div>
 
       {/* Campos específicos para préstamo */}
@@ -192,17 +180,51 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
             <Landmark className="w-4 h-4" />
             <span className="font-medium text-sm">Datos del Préstamo</span>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="cuotas_totales">Cantidad de Cuotas</Label>
-              <Input
-                id="cuotas_totales"
-                type="number"
-                placeholder="12"
-                value={formData.cuotas_totales}
-                onChange={(e) => setFormData((prev) => ({ ...prev, cuotas_totales: e.target.value }))}
-              />
+          <div className="space-y-2">
+            <Label htmlFor="cuotas_totales">Cantidad de Cuotas</Label>
+            <Input
+              id="cuotas_totales"
+              type="number"
+              min="1"
+              placeholder="12"
+              value={formData.cuotas_totales}
+              onChange={(e) => setFormData((prev) => ({ ...prev, cuotas_totales: e.target.value }))}
+            />
+          </div>
+
+          {/* Selector: cuotas del mismo monto o montos diferentes */}
+          <div className="space-y-3">
+            <Label>¿Los montos de las cuotas son iguales?</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, cuota_igual: "si" }))}
+                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                  formData.cuota_igual === "si"
+                    ? "border-blue-400 bg-blue-500/20"
+                    : "border-border/30 hover:border-blue-400/50"
+                }`}
+              >
+                <p className="font-semibold text-sm">Mismo monto</p>
+                <p className="text-xs text-muted-foreground">Todas las cuotas son iguales</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData((prev) => ({ ...prev, cuota_igual: "no" }))}
+                className={`p-3 rounded-lg border-2 transition-all text-left ${
+                  formData.cuota_igual === "no"
+                    ? "border-blue-400 bg-blue-500/20"
+                    : "border-border/30 hover:border-blue-400/50"
+                }`}
+              >
+                <p className="font-semibold text-sm">Montos diferentes</p>
+                <p className="text-xs text-muted-foreground">Ingresar cada cuota manualmente</p>
+              </button>
             </div>
+          </div>
+
+          {/* Cuotas del mismo monto */}
+          {formData.cuota_igual === "si" && (
             <div className="space-y-2">
               <Label htmlFor="monto_cuota">Monto por Cuota</Label>
               <Input
@@ -220,7 +242,63 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
                 <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.monto_cuota))}</p>
               )}
             </div>
-          </div>
+          )}
+
+          {/* Cuotas con montos diferentes */}
+          {formData.cuota_igual === "no" && (
+            <div className="space-y-2">
+              <Label>Monto de cada cuota</Label>
+              {(() => {
+                const numCuotas = Number.parseInt(formData.cuotas_totales) || 0
+                if (numCuotas <= 0) {
+                  return (
+                    <p className="text-xs text-muted-foreground">
+                      Ingresá primero la cantidad de cuotas para cargar los montos.
+                    </p>
+                  )
+                }
+                const montos = formData.montos_cuotas || []
+                const totalCuotas = Array.from({ length: numCuotas }).reduce(
+                  (sum, _, i) => sum + (Number(montos[i]) || 0),
+                  0,
+                )
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                      {Array.from({ length: numCuotas }).map((_, i) => (
+                        <div key={i} className="space-y-1">
+                          <Label htmlFor={`cuota_${i}`} className="text-xs text-muted-foreground">
+                            Cuota {i + 1}
+                          </Label>
+                          <Input
+                            id={`cuota_${i}`}
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="450000"
+                            value={montos[i] ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/[^0-9]/g, "")
+                              setFormData((prev) => {
+                                const arr = [...(prev.montos_cuotas || [])]
+                                arr[i] = value
+                                return { ...prev, montos_cuotas: arr }
+                              })
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Total de cuotas: <span className="font-semibold text-foreground">{formatGuaranies(totalCuotas)}</span>
+                    </p>
+                  </>
+                )
+              })()}
+              <p className="text-xs text-muted-foreground">
+                La fecha de inicio y de vencimiento son las mismas para todas las cuotas.
+              </p>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="fecha_inicio">Fecha de Inicio</Label>
@@ -342,6 +420,8 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     fecha_vencimiento: "",
     cuotas_totales: "",
     monto_cuota: "",
+    cuota_igual: "si",
+    montos_cuotas: [] as string[],
     frecuencia_pago: "mensual",
     acreedor: "",
     prioridad: "media",
@@ -418,10 +498,20 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       }
 
       if (tipoDeuda === "prestamo") {
-        deudaData.cuotas_totales = formData.cuotas_totales ? Number.parseInt(formData.cuotas_totales) : null
-        deudaData.monto_cuota = formData.monto_cuota
-          ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota))
-          : null
+        const numCuotas = formData.cuotas_totales ? Number.parseInt(formData.cuotas_totales) : 0
+        deudaData.cuotas_totales = numCuotas || null
+
+        if (formData.cuota_igual === "no" && numCuotas > 0) {
+          const montos = Array.from({ length: numCuotas }).map((_, i) => Number(formData.montos_cuotas[i]) || 0)
+          deudaData.montos_cuotas = montos
+          // monto_cuota queda como valor representativo (próxima cuota a pagar) para resúmenes y calendario
+          deudaData.monto_cuota = montos[0] || null
+        } else {
+          deudaData.montos_cuotas = null
+          deudaData.monto_cuota = formData.monto_cuota
+            ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota))
+            : null
+        }
       } else {
         deudaData.limite_credito = formData.limite_credito
           ? Number.parseFloat(parseFormattedNumber(formData.limite_credito))
@@ -464,10 +554,21 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       }
 
       if (tipoDeuda === "prestamo") {
-        deudaData.cuotas_totales = formData.cuotas_totales ? Number.parseInt(formData.cuotas_totales) : null
-        deudaData.monto_cuota = formData.monto_cuota
-          ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota))
-          : null
+        const numCuotas = formData.cuotas_totales ? Number.parseInt(formData.cuotas_totales) : 0
+        deudaData.cuotas_totales = numCuotas || null
+
+        if (formData.cuota_igual === "no" && numCuotas > 0) {
+          const montos = Array.from({ length: numCuotas }).map((_, i) => Number(formData.montos_cuotas[i]) || 0)
+          deudaData.montos_cuotas = montos
+          // Valor representativo: próxima cuota pendiente según cuotas ya pagadas
+          const idx = Math.min(editingDeuda.cuotas_pagadas || 0, montos.length - 1)
+          deudaData.monto_cuota = montos[idx] || montos[0] || null
+        } else {
+          deudaData.montos_cuotas = null
+          deudaData.monto_cuota = formData.monto_cuota
+            ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota))
+            : null
+        }
         deudaData.limite_credito = null
         deudaData.fecha_corte = null
         deudaData.fecha_pago = null
@@ -479,6 +580,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
         deudaData.fecha_pago = formData.fecha_pago ? Number.parseInt(formData.fecha_pago) : null
         deudaData.cuotas_totales = null
         deudaData.monto_cuota = null
+        deudaData.montos_cuotas = null
       }
 
       const { error } = await supabase.from("deudas").update(deudaData).eq("id", editingDeuda.id)
@@ -507,7 +609,10 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       fecha_inicio: deuda.fecha_inicio,
       fecha_vencimiento: deuda.fecha_vencimiento || "",
       cuotas_totales: deuda.cuotas_totales?.toString() || "",
-      monto_cuota: deuda.monto_cuota ? formatNumberWithSeparators(deuda.monto_cuota) : "",
+      monto_cuota: deuda.monto_cuota ? deuda.monto_cuota.toString() : "",
+      cuota_igual: deuda.montos_cuotas && deuda.montos_cuotas.length > 0 ? "no" : "si",
+      montos_cuotas:
+        deuda.montos_cuotas && deuda.montos_cuotas.length > 0 ? deuda.montos_cuotas.map((m) => m.toString()) : [],
       frecuencia_pago: deuda.frecuencia_pago || "mensual",
       acreedor: deuda.acreedor,
       prioridad: deuda.prioridad,
@@ -529,6 +634,8 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       fecha_vencimiento: "",
       cuotas_totales: "",
       monto_cuota: "",
+      cuota_igual: "si",
+      montos_cuotas: [],
       frecuencia_pago: "mensual",
       acreedor: "",
       prioridad: "media",
@@ -815,11 +922,41 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                 <span className="text-2xl font-bold text-blue-400">Cuota {Math.min(cuotaActual, cuotasTotales)}</span>
                 <span className="text-lg text-muted-foreground">de {cuotasTotales}</span>
               </div>
-              {deuda.monto_cuota && (
-                <p className="text-sm mt-2 text-muted-foreground">
-                  Valor por cuota:{" "}
-                  <span className="font-semibold text-foreground">{formatGuaranies(Number(deuda.monto_cuota))}</span>
-                </p>
+              {deuda.montos_cuotas && deuda.montos_cuotas.length > 0 ? (
+                <div className="mt-2 space-y-2">
+                  <p className="text-xs text-muted-foreground">Cuotas con montos diferentes:</p>
+                  <div className="grid grid-cols-2 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                    {deuda.montos_cuotas.map((monto, i) => {
+                      const pagada = i < deuda.cuotas_pagadas
+                      const esProxima = i === deuda.cuotas_pagadas
+                      return (
+                        <div
+                          key={i}
+                          className={`flex items-center justify-between rounded-md px-2 py-1 text-xs ${
+                            pagada
+                              ? "bg-green-500/10 text-green-300"
+                              : esProxima
+                                ? "bg-blue-500/20 text-blue-200 font-semibold"
+                                : "bg-muted/40 text-muted-foreground"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            {pagada && <CheckCircle2 className="w-3 h-3" />}
+                            Cuota {i + 1}
+                          </span>
+                          <span>{formatGuaranies(Number(monto)).replace("Gs ", "")}</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : (
+                deuda.monto_cuota && (
+                  <p className="text-sm mt-2 text-muted-foreground">
+                    Valor por cuota:{" "}
+                    <span className="font-semibold text-foreground">{formatGuaranies(Number(deuda.monto_cuota))}</span>
+                  </p>
+                )
               )}
               <Progress value={(deuda.cuotas_pagadas / cuotasTotales) * 100} className="mt-2 h-2" />
               <p className="text-xs text-muted-foreground mt-1">
