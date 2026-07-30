@@ -53,6 +53,17 @@ import { getCache, setCache, invalidateCache } from "@/lib/cache/carga-cache"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
 
+// Formatea un valor numérico agregando el separador de miles (punto) mientras se escribe.
+const formatNumberWithSeparators = (value: string | number): string => {
+  if (!value && value !== 0) return ""
+  const num = typeof value === "string" ? value.replace(/\D/g, "") : value.toString()
+  if (!num) return ""
+  return num.replace(/\B(?=(\d{3})+(?!\d))/g, ".")
+}
+
+// Quita el separador de miles para obtener el número limpio.
+const parseFormattedNumber = (value: string): string => value.replace(/\./g, "").replace(/[^0-9]/g, "")
+
 interface TipoCategoria {
   id: string
   nombre: string
@@ -74,6 +85,7 @@ interface Deuda {
   cuotas_totales: number | null
   cuotas_pagadas: number
   monto_cuota: number | null
+  montos_cuotas: number[] | null
   acreedor: string
   estado: string
   limite_credito: number | null
@@ -837,16 +849,23 @@ export function EgresoForm() {
             estaPagada = nuevoMontoPagado >= Number(deudaSeleccionada.monto_total)
           }
 
-          await supabase
-            .from("deudas")
-            .update({
-              monto_total: nuevoMontoTotal,
-              monto_pagado: nuevoMontoPagado,
-              cuotas_pagadas: nuevasCuotasPagadas,
-              estado: estaPagada ? "pagada" : "activa",
-              updated_at: getParaguayTimestamp(),
-            })
-            .eq("id", selectedDeuda)
+          const updateData: any = {
+            monto_total: nuevoMontoTotal,
+            monto_pagado: nuevoMontoPagado,
+            cuotas_pagadas: nuevasCuotasPagadas,
+            estado: estaPagada ? "pagada" : "activa",
+            updated_at: getParaguayTimestamp(),
+          }
+
+          // Para préstamos con cuotas de montos diferentes, actualizar el valor
+          // representativo (monto_cuota) a la próxima cuota pendiente.
+          const montosVariables = deudaSeleccionada.montos_cuotas
+          if (montosVariables && montosVariables.length > 0) {
+            const proximaPendiente = montosVariables[nuevasCuotasPagadas]
+            updateData.monto_cuota = proximaPendiente ?? montosVariables[montosVariables.length - 1]
+          }
+
+          await supabase.from("deudas").update(updateData).eq("id", selectedDeuda)
         }
       }
 
@@ -1101,10 +1120,10 @@ export function EgresoForm() {
                             id="deuda-monto"
                             type="text"
                             inputMode="numeric"
-                            placeholder="5000000"
-                            value={nuevaDeudaForm.monto_total}
+                            placeholder="5.000.000"
+                            value={formatNumberWithSeparators(nuevaDeudaForm.monto_total)}
                             onChange={(e) => {
-                              const value = e.target.value.replace(/[^0-9]/g, "")
+                              const value = parseFormattedNumber(e.target.value)
                               setNuevaDeudaForm({ ...nuevaDeudaForm, monto_total: value })
                             }}
                           />
@@ -1153,10 +1172,10 @@ export function EgresoForm() {
                                 id="deuda-monto-cuota"
                                 type="text"
                                 inputMode="numeric"
-                                placeholder="450000"
-                                value={nuevaDeudaForm.monto_cuota}
+                                placeholder="450.000"
+                                value={formatNumberWithSeparators(nuevaDeudaForm.monto_cuota)}
                                 onChange={(e) => {
-                                  const value = e.target.value.replace(/[^0-9]/g, "")
+                                  const value = parseFormattedNumber(e.target.value)
                                   setNuevaDeudaForm({ ...nuevaDeudaForm, monto_cuota: value })
                                 }}
                               />
@@ -1313,11 +1332,18 @@ export function EgresoForm() {
                           type="button"
                           onClick={() => {
                             setSelectedDeuda(deuda.id)
-                            if (deuda.monto_cuota && !monto) {
-                              setMonto(String(deuda.monto_cuota))
+                            const proximaCuota = deuda.cuotas_pagadas + 1
+                            // Monto sugerido: si el préstamo tiene cuotas de montos diferentes,
+                            // se toma el monto de la próxima cuota pendiente; si no, el monto fijo.
+                            const montoSugerido =
+                              deuda.montos_cuotas && deuda.montos_cuotas.length > 0
+                                ? deuda.montos_cuotas[proximaCuota - 1] ?? deuda.monto_cuota
+                                : deuda.monto_cuota
+                            if (montoSugerido) {
+                              setMonto(String(montoSugerido))
                             }
                             if (deuda.cuotas_totales) {
-                              setNumeroCuota(String(deuda.cuotas_pagadas + 1))
+                              setNumeroCuota(String(proximaCuota))
                             }
                           }}
                           className={`p-4 rounded-xl border-2 transition-all text-left ${
@@ -1402,7 +1428,19 @@ export function EgresoForm() {
                               min="1"
                               max={selectedDeudaData.cuotas_totales}
                               value={numeroCuota}
-                              onChange={(e) => setNumeroCuota(e.target.value)}
+                              onChange={(e) => {
+                                const val = e.target.value
+                                setNumeroCuota(val)
+                                // Al cambiar el número de cuota, actualizar el monto sugerido
+                                // según el monto correspondiente a esa cuota (cuotas variables).
+                                const n = Number.parseInt(val)
+                                if (n && selectedDeudaData.montos_cuotas && selectedDeudaData.montos_cuotas.length > 0) {
+                                  const m = selectedDeudaData.montos_cuotas[n - 1]
+                                  if (m) setMonto(String(m))
+                                } else if (n && selectedDeudaData.monto_cuota) {
+                                  setMonto(String(selectedDeudaData.monto_cuota))
+                                }
+                              }}
                               placeholder={`1 - ${selectedDeudaData.cuotas_totales}`}
                               className="bg-background/50 border-border/50"
                             />
@@ -1414,19 +1452,31 @@ export function EgresoForm() {
 
                         <div className="space-y-2">
                           <Label className="text-sm text-muted-foreground">Monto sugerido</Label>
-                          {selectedDeudaData.monto_cuota ? (
-                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
-                              <p className="text-xl font-bold text-green-400">
-                                {formatGuaranies(Number(selectedDeudaData.monto_cuota))}
-                              </p>
-                              <p className="text-xs text-muted-foreground">por cuota</p>
-                            </div>
-                          ) : (
-                            <div className="p-3 rounded-lg bg-muted/30">
-                              <p className="text-sm text-muted-foreground">Sin cuota fija definida</p>
-                              <p className="text-xs text-muted-foreground">Ingresa el monto a pagar</p>
-                            </div>
-                          )}
+                          {(() => {
+                            // Monto sugerido según la cuota seleccionada para cuotas variables
+                            const n = Number.parseInt(numeroCuota)
+                            const montoSugerido =
+                              selectedDeudaData.montos_cuotas && selectedDeudaData.montos_cuotas.length > 0 && n
+                                ? selectedDeudaData.montos_cuotas[n - 1] ?? selectedDeudaData.monto_cuota
+                                : selectedDeudaData.monto_cuota
+                            const esVariable =
+                              !!selectedDeudaData.montos_cuotas && selectedDeudaData.montos_cuotas.length > 0
+                            return montoSugerido ? (
+                              <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                                <p className="text-xl font-bold text-green-400">
+                                  {formatGuaranies(Number(montoSugerido))}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {esVariable && n ? `cuota ${n}` : "por cuota"}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-lg bg-muted/30">
+                                <p className="text-sm text-muted-foreground">Sin cuota fija definida</p>
+                                <p className="text-xs text-muted-foreground">Ingresa el monto a pagar</p>
+                              </div>
+                            )
+                          })()}
                         </div>
                       </div>
 
@@ -1779,11 +1829,10 @@ export function EgresoForm() {
               id="monto"
               type="text"
               inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="500000"
-              value={monto}
+              placeholder="500.000"
+              value={formatNumberWithSeparators(monto)}
               onChange={(e) => {
-                const value = e.target.value.replace(/[^0-9]/g, "")
+                const value = parseFormattedNumber(e.target.value)
                 setMonto(value)
               }}
               required

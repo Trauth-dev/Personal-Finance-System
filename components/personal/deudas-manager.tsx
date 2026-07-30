@@ -50,6 +50,7 @@ interface Deuda {
   tasa_interes: number
   fecha_inicio: string
   fecha_vencimiento: string | null
+  dia_vencimiento: number | null
   cuotas_totales: number | null
   cuotas_pagadas: number
   monto_cuota: number | null
@@ -153,25 +154,27 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="monto_total">
-          {tipoDeuda === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}
-        </Label>
-        <Input
-          id="monto_total"
-          type="text"
-          inputMode="numeric"
-          placeholder="5000000"
-          value={formData.monto_total}
-          onChange={(e) => {
-            const value = e.target.value.replace(/[^0-9]/g, "")
-            setFormData((prev) => ({ ...prev, monto_total: value }))
-          }}
-        />
-        {formData.monto_total && (
-          <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.monto_total))}</p>
-        )}
-      </div>
+      {/* Monto disponible: solo aplica a tarjetas. En préstamos el monto total se
+          calcula automáticamente como la suma de las cuotas. */}
+      {tipoDeuda === "tarjeta_credito" && (
+        <div className="space-y-2">
+          <Label htmlFor="monto_total">Monto Disponible *</Label>
+          <Input
+            id="monto_total"
+            type="text"
+            inputMode="numeric"
+            placeholder="5.000.000"
+            value={formatNumberWithSeparators(formData.monto_total)}
+            onChange={(e) => {
+              const value = parseFormattedNumber(e.target.value).replace(/[^0-9]/g, "")
+              setFormData((prev) => ({ ...prev, monto_total: value }))
+            }}
+          />
+          {formData.monto_total && (
+            <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.monto_total))}</p>
+          )}
+        </div>
+      )}
 
       {/* Campos específicos para préstamo */}
       {tipoDeuda === "prestamo" && (
@@ -231,16 +234,31 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
                 id="monto_cuota"
                 type="text"
                 inputMode="numeric"
-                placeholder="450000"
-                value={formData.monto_cuota}
+                placeholder="450.000"
+                value={formatNumberWithSeparators(formData.monto_cuota)}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, "")
+                  const value = parseFormattedNumber(e.target.value).replace(/[^0-9]/g, "")
                   setFormData((prev) => ({ ...prev, monto_cuota: value }))
                 }}
               />
-              {formData.monto_cuota && (
-                <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.monto_cuota))}</p>
-              )}
+              {(() => {
+                const numCuotas = Number.parseInt(formData.cuotas_totales) || 0
+                const cuota = Number(formData.monto_cuota) || 0
+                if (!cuota) return null
+                return (
+                  <p className="text-xs text-muted-foreground">
+                    {formatGuaranies(cuota)}
+                    {numCuotas > 0 && (
+                      <>
+                        {" · "}Monto total del préstamo:{" "}
+                        <span className="font-semibold text-foreground">
+                          {formatGuaranies(cuota * numCuotas)}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                )
+              })()}
             </div>
           )}
 
@@ -274,10 +292,10 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
                             id={`cuota_${i}`}
                             type="text"
                             inputMode="numeric"
-                            placeholder="450000"
-                            value={montos[i] ?? ""}
+                            placeholder="450.000"
+                            value={formatNumberWithSeparators(montos[i] ?? "")}
                             onChange={(e) => {
-                              const value = e.target.value.replace(/[^0-9]/g, "")
+                              const value = parseFormattedNumber(e.target.value).replace(/[^0-9]/g, "")
                               setFormData((prev) => {
                                 const arr = [...(prev.montos_cuotas || [])]
                                 arr[i] = value
@@ -289,34 +307,48 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Total de cuotas: <span className="font-semibold text-foreground">{formatGuaranies(totalCuotas)}</span>
+                      Monto total del préstamo:{" "}
+                      <span className="font-semibold text-foreground">{formatGuaranies(totalCuotas)}</span>
                     </p>
                   </>
                 )
               })()}
               <p className="text-xs text-muted-foreground">
-                La fecha de inicio y de vencimiento son las mismas para todas las cuotas.
+                La fecha de inicio y el día de vencimiento son los mismos para todas las cuotas.
               </p>
             </div>
           )}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="fecha_inicio">Fecha de Inicio</Label>
+              <Label htmlFor="fecha_inicio">Fecha de Inicio (opcional)</Label>
               <Input
                 id="fecha_inicio"
                 type="date"
                 value={formData.fecha_inicio}
                 onChange={(e) => setFormData((prev) => ({ ...prev, fecha_inicio: e.target.value }))}
               />
+              <p className="text-xs text-muted-foreground">Si no la conocés, podés dejarla vacía.</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fecha_vencimiento">Fecha de Vencimiento</Label>
+              <Label htmlFor="dia_vencimiento">Día de Vencimiento</Label>
               <Input
-                id="fecha_vencimiento"
-                type="date"
-                value={formData.fecha_vencimiento}
-                onChange={(e) => setFormData((prev) => ({ ...prev, fecha_vencimiento: e.target.value }))}
+                id="dia_vencimiento"
+                type="number"
+                min="1"
+                max="31"
+                placeholder="15"
+                value={formData.dia_vencimiento}
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/[^0-9]/g, "")
+                  const num = raw ? Math.min(31, Math.max(1, Number.parseInt(raw))) : ""
+                  setFormData((prev) => ({ ...prev, dia_vencimiento: num === "" ? "" : String(num) }))
+                }}
               />
+              <p className="text-xs text-muted-foreground">
+                {formData.dia_vencimiento
+                  ? `Vence el ${formData.dia_vencimiento} de cada mes`
+                  : "Ingresá el día del mes (ej: 15)"}
+              </p>
             </div>
           </div>
         </div>
@@ -418,6 +450,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     tasa_interes: "",
     fecha_inicio: new Date().toISOString().split("T")[0],
     fecha_vencimiento: "",
+    dia_vencimiento: "",
     cuotas_totales: "",
     monto_cuota: "",
     cuota_igual: "si",
@@ -486,10 +519,8 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
         perfil_id: perfilId,
         nombre: formData.nombre,
         descripcion: formData.descripcion || null,
-        monto_total: Number.parseFloat(parseFormattedNumber(formData.monto_total)),
         tasa_interes: Number.parseFloat(formData.tasa_interes) || 0,
-        fecha_inicio: formData.fecha_inicio,
-        fecha_vencimiento: formData.fecha_vencimiento || null,
+        fecha_inicio: formData.fecha_inicio || null,
         frecuencia_pago: formData.frecuencia_pago,
         acreedor: formData.acreedor,
         prioridad: formData.prioridad,
@@ -500,19 +531,28 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       if (tipoDeuda === "prestamo") {
         const numCuotas = formData.cuotas_totales ? Number.parseInt(formData.cuotas_totales) : 0
         deudaData.cuotas_totales = numCuotas || null
+        // En préstamos el vencimiento es un día del mes (1-31), no una fecha completa
+        deudaData.dia_vencimiento = formData.dia_vencimiento ? Number.parseInt(formData.dia_vencimiento) : null
+        deudaData.fecha_vencimiento = null
 
         if (formData.cuota_igual === "no" && numCuotas > 0) {
           const montos = Array.from({ length: numCuotas }).map((_, i) => Number(formData.montos_cuotas[i]) || 0)
           deudaData.montos_cuotas = montos
           // monto_cuota queda como valor representativo (próxima cuota a pagar) para resúmenes y calendario
           deudaData.monto_cuota = montos[0] || null
+          // El monto total del préstamo es la suma de todas las cuotas
+          deudaData.monto_total = montos.reduce((sum, m) => sum + m, 0)
         } else {
           deudaData.montos_cuotas = null
-          deudaData.monto_cuota = formData.monto_cuota
-            ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota))
-            : null
+          const cuota = formData.monto_cuota ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota)) : 0
+          deudaData.monto_cuota = cuota || null
+          // Monto total = cuota * cantidad de cuotas
+          deudaData.monto_total = numCuotas > 0 ? cuota * numCuotas : cuota
         }
       } else {
+        deudaData.monto_total = Number.parseFloat(parseFormattedNumber(formData.monto_total)) || 0
+        deudaData.fecha_vencimiento = formData.fecha_vencimiento || null
+        deudaData.dia_vencimiento = null
         deudaData.limite_credito = formData.limite_credito
           ? Number.parseFloat(parseFormattedNumber(formData.limite_credito))
           : null
@@ -542,10 +582,8 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       const deudaData: any = {
         nombre: formData.nombre,
         descripcion: formData.descripcion || null,
-        monto_total: Number.parseFloat(parseFormattedNumber(formData.monto_total)),
         tasa_interes: Number.parseFloat(formData.tasa_interes) || 0,
-        fecha_inicio: formData.fecha_inicio,
-        fecha_vencimiento: formData.fecha_vencimiento || null,
+        fecha_inicio: formData.fecha_inicio || null,
         frecuencia_pago: formData.frecuencia_pago,
         acreedor: formData.acreedor,
         prioridad: formData.prioridad,
@@ -556,6 +594,8 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       if (tipoDeuda === "prestamo") {
         const numCuotas = formData.cuotas_totales ? Number.parseInt(formData.cuotas_totales) : 0
         deudaData.cuotas_totales = numCuotas || null
+        deudaData.dia_vencimiento = formData.dia_vencimiento ? Number.parseInt(formData.dia_vencimiento) : null
+        deudaData.fecha_vencimiento = null
 
         if (formData.cuota_igual === "no" && numCuotas > 0) {
           const montos = Array.from({ length: numCuotas }).map((_, i) => Number(formData.montos_cuotas[i]) || 0)
@@ -563,16 +603,20 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           // Valor representativo: próxima cuota pendiente según cuotas ya pagadas
           const idx = Math.min(editingDeuda.cuotas_pagadas || 0, montos.length - 1)
           deudaData.monto_cuota = montos[idx] || montos[0] || null
+          deudaData.monto_total = montos.reduce((sum, m) => sum + m, 0)
         } else {
           deudaData.montos_cuotas = null
-          deudaData.monto_cuota = formData.monto_cuota
-            ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota))
-            : null
+          const cuota = formData.monto_cuota ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota)) : 0
+          deudaData.monto_cuota = cuota || null
+          deudaData.monto_total = numCuotas > 0 ? cuota * numCuotas : cuota
         }
         deudaData.limite_credito = null
         deudaData.fecha_corte = null
         deudaData.fecha_pago = null
       } else {
+        deudaData.monto_total = Number.parseFloat(parseFormattedNumber(formData.monto_total)) || 0
+        deudaData.fecha_vencimiento = formData.fecha_vencimiento || null
+        deudaData.dia_vencimiento = null
         deudaData.limite_credito = formData.limite_credito
           ? Number.parseFloat(parseFormattedNumber(formData.limite_credito))
           : null
@@ -606,8 +650,9 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       descripcion: deuda.descripcion || "",
       monto_total: formatNumberWithSeparators(deuda.monto_total),
       tasa_interes: deuda.tasa_interes?.toString() || "",
-      fecha_inicio: deuda.fecha_inicio,
+      fecha_inicio: deuda.fecha_inicio || "",
       fecha_vencimiento: deuda.fecha_vencimiento || "",
+      dia_vencimiento: deuda.dia_vencimiento?.toString() || "",
       cuotas_totales: deuda.cuotas_totales?.toString() || "",
       monto_cuota: deuda.monto_cuota ? deuda.monto_cuota.toString() : "",
       cuota_igual: deuda.montos_cuotas && deuda.montos_cuotas.length > 0 ? "no" : "si",
@@ -632,6 +677,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       tasa_interes: "",
       fecha_inicio: new Date().toISOString().split("T")[0],
       fecha_vencimiento: "",
+      dia_vencimiento: "",
       cuotas_totales: "",
       monto_cuota: "",
       cuota_igual: "si",
@@ -988,11 +1034,18 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
             </div>
           )}
 
-          {deuda.fecha_vencimiento && (
+          {deuda.dia_vencimiento ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="w-4 h-4" />
-              <span>Vence: {new Date(deuda.fecha_vencimiento).toLocaleDateString("es-ES")}</span>
+              <span>Vence: el {deuda.dia_vencimiento} de cada mes</span>
             </div>
+          ) : (
+            deuda.fecha_vencimiento && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="w-4 h-4" />
+                <span>Vence: {new Date(deuda.fecha_vencimiento).toLocaleDateString("es-ES")}</span>
+              </div>
+            )
           )}
 
           {/* Botones de acciones */}
