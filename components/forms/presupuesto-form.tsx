@@ -212,7 +212,10 @@ export function PresupuestoForm() {
         // 1. Tipos de categoría de egreso del usuario
         supabase.from("tipos_categoria_egreso").select("id, nombre").eq("perfil_id", perfilActual.id),
         // 2. Categorías de egreso (subcategorías) del usuario
-        supabase.from("categorias_egreso").select("id, nombre, tipo_categoria_id").eq("perfil_id", perfilActual.id),
+        supabase
+          .from("categorias_egreso")
+          .select("id, nombre, tipo_categoria_id, mes_desde, mes_hasta")
+          .eq("perfil_id", perfilActual.id),
         // 3. Presupuesto existente para el mes seleccionado
         supabase.from("presupuesto_mensual").select("*").eq("perfil_id", perfilActual.id).eq("fecha", primerDiaMes).single(),
         // 4. Items de presupuesto detallado del mes seleccionado
@@ -273,8 +276,16 @@ export function PresupuestoForm() {
       })
 
       // Siempre cargar las subcategorías desde categorias_egreso
-      // y aplicar los montos guardados si existen
+      // y aplicar los montos guardados si existen.
+      // Solo se muestran las subcategorías VIGENTES para el mes visualizado:
+      // mes_desde/mes_hasta definen la ventana de validez (NULL = sin límite).
+      // Así, borrar una subcategoría en un mes no la elimina de meses anteriores.
       categoriasEgreso?.forEach(catEgreso => {
+        const desde = catEgreso.mes_desde as string | null
+        const hasta = catEgreso.mes_hasta as string | null
+        const vigente = (!desde || desde <= primerDiaMes) && (!hasta || hasta >= primerDiaMes)
+        if (!vigente) return
+
         // Buscar el tipo de categoría
         const tipoId = catEgreso.tipo_categoria_id
         const tipoNombre = tiposData?.find(t => t.id === tipoId)?.nombre
@@ -569,10 +580,13 @@ export function PresupuestoForm() {
 
       if (!tipoId) return
 
+      // Primer día del mes que se está visualizando (vigencia de la subcategoría)
+      const primerDiaMes = `${anioSeleccionado}-${mesSeleccionado}-01`
+
       // Verificar si ya existe la categoría de egreso con ese nombre
       const { data: existingCat } = await supabase
         .from("categorias_egreso")
-        .select("id")
+        .select("id, mes_desde, mes_hasta")
         .eq("perfil_id", perfilActual.id)
         .eq("nombre", newItemName.trim())
         .eq("tipo_categoria_id", tipoId)
@@ -580,21 +594,32 @@ export function PresupuestoForm() {
 
       let categoriaEgresoId = existingCat?.id
 
-      // Si no existe, crearla
       if (!categoriaEgresoId) {
+        // No existe: crearla vigente DESDE el mes actual (no afecta meses anteriores)
         const { data: newCat, error: catError } = await supabase
           .from("categorias_egreso")
           .insert({
             user_id: user.id,
             perfil_id: perfilActual.id,
             nombre: newItemName.trim(),
-            tipo_categoria_id: tipoId
+            tipo_categoria_id: tipoId,
+            mes_desde: primerDiaMes,
+            mes_hasta: null,
           })
           .select("id")
           .single()
 
         if (catError) throw catError
         categoriaEgresoId = newCat?.id
+      } else {
+        // Ya existe (posiblemente cerrada en un mes anterior): reabrirla para que
+        // vuelva a estar vigente desde este mes en adelante, preservando su inicio.
+        const desdeActual = existingCat?.mes_desde as string | null
+        const nuevoDesde = desdeActual === null ? null : desdeActual <= primerDiaMes ? desdeActual : primerDiaMes
+        await supabase
+          .from("categorias_egreso")
+          .update({ mes_desde: nuevoDesde, mes_hasta: null })
+          .eq("id", categoriaEgresoId)
       }
 
       // Agregar a la UI
@@ -629,20 +654,29 @@ export function PresupuestoForm() {
     }
   }
 
-  // Eliminar subcategoría - también elimina de categorias_egreso
+  // Quitar subcategoría del mes actual (y meses futuros) SIN destruir historial.
+  // En lugar de borrar la fila de categorias_egreso (lo que antes eliminaba la
+  // subcategoría de TODOS los meses y, por el CASCADE, también sus gastos), se
+  // cierra su ventana de vigencia: mes_hasta = último día del mes anterior. Así
+  // los meses previos y sus gastos/ingresos se conservan intactos.
   const handleDeleteSubcategoria = async (categoriaKey: string, itemId: string) => {
     const categoria = categoriasData[categoriaKey]
     const item = categoria?.subcategorias.find(s => s.id === itemId)
 
-    // Eliminar de categorias_egreso si tiene ID
     if (item?.categoriaEgresoId) {
       try {
+        // Último día del mes ANTERIOR al que se está visualizando
+        const y = Number(anioSeleccionado)
+        const m = Number(mesSeleccionado) // 1-12
+        const dtPrev = new Date(y, m - 1, 0) // día 0 -> último día del mes previo
+        const mesHasta = `${dtPrev.getFullYear()}-${String(dtPrev.getMonth() + 1).padStart(2, "0")}-${String(dtPrev.getDate()).padStart(2, "0")}`
+
         await supabase
           .from("categorias_egreso")
-          .delete()
+          .update({ mes_hasta: mesHasta })
           .eq("id", item.categoriaEgresoId)
       } catch (err) {
-        console.error("Error deleting from categorias_egreso:", err)
+        console.error("Error cerrando vigencia de la subcategoría:", err)
       }
     }
 

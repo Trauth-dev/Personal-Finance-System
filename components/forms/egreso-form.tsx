@@ -74,7 +74,9 @@ interface Categoria {
   id: string
   nombre: string
   tipo_categoria_id: string
-}
+  mes_desde?: string | null
+  mes_hasta?: string | null
+  }
 
 interface Deuda {
   id: string
@@ -267,12 +269,14 @@ export function EgresoForm() {
 
   // Si la precarga de descripciones termina después de haber seleccionado un
   // tipo, re-filtramos para que la lista aparezca sin retardo ni parpadeo.
+  // También re-filtra al cambiar la FECHA del gasto, para respetar la vigencia
+  // por mes de cada subcategoría (mes_desde/mes_hasta).
   useEffect(() => {
     if (selectedTipo) {
       loadCategorias(selectedTipo)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [todasCategorias])
+  }, [todasCategorias, fecha])
 
   const loadTiposCategorias = async () => {
     if (!perfilActual?.id) return
@@ -371,9 +375,20 @@ export function EgresoForm() {
 
   // Filtra las descripciones de un tipo desde la lista ya cargada en memoria
   // (sin ida a la base): el cambio de categoría se refleja de inmediato.
+  // Además respeta la vigencia por mes (mes_desde/mes_hasta) según la FECHA del
+  // gasto: una subcategoría dada de baja en un mes no aparece para meses en los
+  // que ya no está vigente, pero sí sigue disponible para los meses anteriores.
   const loadCategorias = (tipoId: string, source?: Categoria[]) => {
     const lista = source ?? todasCategorias
-    setCategorias(lista.filter((c) => c.tipo_categoria_id === tipoId))
+    const primerDiaMes = `${(fecha || getTodayDate()).slice(0, 7)}-01`
+    setCategorias(
+      lista.filter((c) => {
+        if (c.tipo_categoria_id !== tipoId) return false
+        const desde = c.mes_desde ?? null
+        const hasta = c.mes_hasta ?? null
+        return (!desde || desde <= primerDiaMes) && (!hasta || hasta >= primerDiaMes)
+      }),
+    )
   }
 
   const autoSelectOrCreatePagoDeudaCategoria = async (tipoId: string) => {
