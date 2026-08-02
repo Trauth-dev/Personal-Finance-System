@@ -396,10 +396,13 @@ export function EgresoForm() {
         .order("nombre")
 
       if (!fetchError && existingCats && existingCats.length > 0) {
-        // Auto-seleccionar la primera categoría existente
-        setSelectedCategoria(existingCats[0].id)
+        // NO autoseleccionar: el usuario elige a qué línea de presupuesto
+        // (p. ej. "TC Atlas") corresponde el pago. Antes se autoseleccionaba la
+        // primera alfabéticamente ("Copacons"), lo que atribuía mal el gasto.
+        setSelectedCategoria("")
       } else {
-        // Crear categoría por defecto "Pago de Deuda"
+        // Asegurar que exista al menos una descripción por defecto "Pago de Deuda"
+        // (sin seleccionarla automáticamente).
         const { data: newCat, error: insertError } = await supabase
           .from("categorias_egreso")
           .insert({
@@ -411,7 +414,6 @@ export function EgresoForm() {
           .select()
 
         if (!insertError && newCat && newCat[0]) {
-          setSelectedCategoria(newCat[0].id)
           const frescas = await refreshTodasCategorias()
           loadCategorias(tipoId, frescas)
         }
@@ -694,6 +696,7 @@ export function EgresoForm() {
         if (data[0].cuotas_totales) {
           setNumeroCuota("1")
         }
+        preseleccionarCategoriaPorDeuda(data[0].nombre)
       }
     } catch (error) {
       console.error("Error creating deuda:", error)
@@ -701,6 +704,17 @@ export function EgresoForm() {
     } finally {
       setIsAddingDeuda(false)
     }
+  }
+
+  // Preselecciona la descripción (subcategoría) cuyo nombre coincida con el de la
+  // deuda elegida, para que el pago se atribuya al presupuesto correcto sin que el
+  // usuario tenga que buscarla. Si no hay coincidencia, deja la selección vacía
+  // para que el usuario elija conscientemente la línea de presupuesto correcta.
+  const preseleccionarCategoriaPorDeuda = (deudaNombre: string) => {
+    const target = (deudaNombre || "").trim().toLowerCase()
+    if (!target) return
+    const match = categorias.find((c) => (c.nombre || "").trim().toLowerCase() === target)
+    setSelectedCategoria(match ? match.id : "")
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1345,6 +1359,9 @@ export function EgresoForm() {
                             if (deuda.cuotas_totales) {
                               setNumeroCuota(String(proximaCuota))
                             }
+                            // Preseleccionar la línea de presupuesto que coincida con el
+                            // nombre de la deuda (si existe); si no, dejar que el usuario elija.
+                            preseleccionarCategoriaPorDeuda(deuda.nombre)
                           }}
                           className={`p-4 rounded-xl border-2 transition-all text-left ${
                             isSelected
@@ -1552,9 +1569,15 @@ export function EgresoForm() {
             </div>
           )}
 
-          {selectedTipo && !esPagoDeudas && (
+          {selectedTipo && (!esPagoDeudas || selectedDeuda) && (
             <div className="space-y-3 scroll-mt-20 sm:scroll-mt-24" ref={descripcionRef}>
-              <Label>Descripción</Label>
+              <Label>{esPagoDeudas ? "¿A qué línea del presupuesto corresponde?" : "Descripción"}</Label>
+              {esPagoDeudas && (
+                <p className="text-xs text-muted-foreground">
+                  Elegí la tarjeta o deuda del presupuesto a la que aplica este pago (ej: TC Atlas). Así el gasto se
+                  refleja en la subcategoría correcta de Presupuesto vs Realidad.
+                </p>
+              )}
 
               {categorias.length > 0 ? (
                 <div className="grid grid-cols-2 gap-2">
