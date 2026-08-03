@@ -80,6 +80,11 @@ interface SubcategoriaItem {
   monto: number
   categoriaEgresoId?: string // ID en categorias_egreso
   tipoId?: string // ID del tipo_categoria_egreso
+  // Vínculo con una deuda real (solo para la categoría "Deudas")
+  deudaId?: string // ID en la tabla deudas
+  esDeuda?: boolean // true si esta línea proviene de una deuda real
+  tipoDeuda?: string // "prestamo" | "tarjeta_credito"
+  bloqueada?: boolean // true si no se puede quitar desde el presupuesto (préstamos)
 }
 
 interface CategoriaData {
@@ -208,24 +213,30 @@ export function PresupuestoForm() {
       // Las 4 consultas iniciales son independientes entre sí, así que las
       // ejecutamos en paralelo (Promise.all) en lugar de una tras otra. Esto
       // reduce notablemente la espera: pasa de 4 idas y vueltas encadenadas a 1.
-      const [tiposRes, categoriasEgresoRes, presupuestoExistenteRes, itemsPresupuestoRes] = await Promise.all([
+      const [tiposRes, categoriasEgresoRes, presupuestoExistenteRes, itemsPresupuestoRes, deudasRes] = await Promise.all([
         // 1. Tipos de categoría de egreso del usuario
         supabase.from("tipos_categoria_egreso").select("id, nombre").eq("perfil_id", perfilActual.id),
         // 2. Categorías de egreso (subcategorías) del usuario
         supabase
           .from("categorias_egreso")
-          .select("id, nombre, tipo_categoria_id, mes_desde, mes_hasta")
+          .select("id, nombre, tipo_categoria_id, mes_desde, mes_hasta, deuda_id")
           .eq("perfil_id", perfilActual.id),
         // 3. Presupuesto existente para el mes seleccionado
         supabase.from("presupuesto_mensual").select("*").eq("perfil_id", perfilActual.id).eq("fecha", primerDiaMes).single(),
         // 4. Items de presupuesto detallado del mes seleccionado
         supabase.from("presupuesto_categorias").select("*").eq("perfil_id", perfilActual.id).eq("mes", primerDiaMes),
+        // 5. Deudas del usuario (para vincular la categoría "Deudas" del presupuesto)
+        supabase
+          .from("deudas")
+          .select("id, nombre, tipo_deuda, estado, monto_total, monto_pagado, cuotas_totales, cuotas_pagadas, monto_cuota, montos_cuotas, fecha_inicio")
+          .eq("perfil_id", perfilActual.id),
       ])
 
       const tiposData = tiposRes.data
       const categoriasEgreso = categoriasEgresoRes.data
       const presupuestoExistente = presupuestoExistenteRes.data
       const itemsPresupuesto = itemsPresupuestoRes.data
+      const deudas = deudasRes.data
 
       // Crear mapa de nombre a ID (clave normalizada para evitar problemas de tildes/mayúsculas)
       const tiposMap: Record<string, string> = {}
@@ -275,12 +286,80 @@ export function PresupuestoForm() {
         montosGuardados[item.categoria] = Number(item.monto_presupuestado) || 0
       })
 
+      // ======================================================================
+      // VÍNCULO PRESUPUESTO <-> DEUDAS
+      // ----------------------------------------------------------------------
+      // La categoría "Deudas" del presupuesto se alimenta de la tabla `deudas`.
+      // Cada deuda se vincula a una subcategoría (categorias_egreso) mediante
+      // `deuda_id`. Si no existe el vínculo, se enlaza por nombre o se crea.
+      // Esto NO borra ni modifica deudas; solo asegura la línea de presupuesto.
+      // ======================================================================
+      const pagoDeudasTipoId = tiposMap[normalizarNombre("Pago Deudas")]
+      // Mapa deudaId -> id de su subcategoría vinculada
+      const deudaCatIdMap = new Map<string, string>()
+      // Objetos de categorias_egreso vinculados por deuda (para leer su ventana)
+      const catEgresoPorId = new Map<string, any>()
+      categoriasEgreso?.forEach((c) => catEgresoPorId.set(c.id, c))
+
+      if (pagoDeudasTipoId && deudas && deudas.length > 0) {
+        const { data: authData } = await supabase.auth.getUser()
+        const authUserId = authData?.user?.id
+
+        for (const deuda of deudas) {
+          // 1) ¿Ya existe una subcategoría vinculada por deuda_id?
+          let cat = categoriasEgreso?.find((c: any) => c.deuda_id === deuda.id)
+
+          // 2) Si no, intentar vincular por nombre (bajo el tipo "Pago Deudas")
+          if (!cat) {
+            const porNombre = categoriasEgreso?.find(
+              (c: any) =>
+                c.tipo_categoria_id === pagoDeudasTipoId &&
+                !c.deuda_id &&
+                normalizarNombre(c.nombre) === normalizarNombre(deuda.nombre),
+            )
+            if (porNombre) {
+              await supabase.from("categorias_egreso").update({ deuda_id: deuda.id }).eq("id", porNombre.id)
+              ;(porNombre as any).deuda_id = deuda.id
+              cat = porNombre
+            }
+          }
+
+          // 3) Si sigue sin existir, crearla vinculada a la deuda
+          if (!cat && authUserId) {
+            const mesDesde = deuda.fecha_inicio ? `${String(deuda.fecha_inicio).slice(0, 7)}-01` : null
+            const { data: nuevaCat } = await supabase
+              .from("categorias_egreso")
+              .insert({
+                user_id: authUserId,
+                perfil_id: perfilActual.id,
+                nombre: deuda.nombre,
+                tipo_categoria_id: pagoDeudasTipoId,
+                deuda_id: deuda.id,
+                mes_desde: mesDesde,
+                mes_hasta: null,
+              })
+              .select("id, nombre, tipo_categoria_id, mes_desde, mes_hasta, deuda_id")
+              .single()
+            if (nuevaCat) {
+              cat = nuevaCat
+              catEgresoPorId.set(nuevaCat.id, nuevaCat)
+            }
+          }
+
+          if (cat) deudaCatIdMap.set(deuda.id, cat.id)
+        }
+      }
+
       // Siempre cargar las subcategorías desde categorias_egreso
       // y aplicar los montos guardados si existen.
       // Solo se muestran las subcategorías VIGENTES para el mes visualizado:
       // mes_desde/mes_hasta definen la ventana de validez (NULL = sin límite).
       // Así, borrar una subcategoría en un mes no la elimina de meses anteriores.
       categoriasEgreso?.forEach(catEgreso => {
+        // Las subcategorías vinculadas a una deuda se construyen aparte (abajo),
+        // desde la tabla `deudas`, con sus reglas propias de visibilidad.
+        if ((catEgreso as any).deuda_id) return
+
         const desde = catEgreso.mes_desde as string | null
         const hasta = catEgreso.mes_hasta as string | null
         const vigente = (!desde || desde <= primerDiaMes) && (!hasta || hasta >= primerDiaMes)
@@ -311,6 +390,83 @@ export function PresupuestoForm() {
           }
         }
       })
+
+      // ======================================================================
+      // Construir las líneas de la categoría "Deudas" desde la tabla `deudas`.
+      // Reglas acordadas:
+      //  - Préstamo: figura mientras tenga saldo/cuotas pendientes; su monto por
+      //    defecto es la cuota siguiente (fija o variable). Al saldarse deja de
+      //    aparecer en el mes actual/futuros, pero se conserva en los meses donde
+      //    ya estaba presupuestado (historial intacto).
+      //  - Tarjeta de crédito: figura siempre (monto por defecto 0, lo carga el
+      //    usuario); puede quitarse por mes (ventana mes_hasta) sin borrar la deuda.
+      // ======================================================================
+      const pagoDeudasKey = "pct_pago_deudas"
+      if (initialData[pagoDeudasKey] && deudas && deudas.length > 0) {
+        // Nombres realmente presupuestados en ESTE mes (fila propia del mes)
+        const presupuestadosEsteMes = new Set((itemsPresupuesto || []).map((i: any) => i.categoria))
+
+        const estaSaldada = (d: any) => {
+          const porEstado = ["pagada", "pagado", "saldada", "cancelada"].includes(String(d.estado || "").toLowerCase())
+          const mt = Number(d.monto_total)
+          const porMonto = mt > 0 && Number(d.monto_pagado) >= mt
+          const ct = Number(d.cuotas_totales)
+          const porCuotas = ct > 0 && Number(d.cuotas_pagadas) >= ct
+          return porEstado || porMonto || porCuotas
+        }
+
+        const cuotaSugerida = (d: any): number => {
+          const pagadas = Number(d.cuotas_pagadas) || 0
+          const variables = d.montos_cuotas as number[] | null
+          if (variables && variables.length > 0) {
+            return Number(variables[pagadas] ?? variables[variables.length - 1]) || 0
+          }
+          return Number(d.monto_cuota) || 0
+        }
+
+        for (const deuda of deudas) {
+          const catId = deudaCatIdMap.get(deuda.id)
+          if (!catId) continue
+
+          const esPrestamo = deuda.tipo_deuda === "prestamo"
+          const saldada = estaSaldada(deuda)
+
+          // Visibilidad
+          let mostrar: boolean
+          if (esPrestamo) {
+            if (!saldada) {
+              mostrar = true // pendiente: siempre visible
+            } else {
+              mostrar = presupuestadosEsteMes.has(deuda.nombre) // saldado: solo historial
+            }
+          } else {
+            // Tarjeta: siempre, salvo que el usuario la haya quitado de este mes
+            const cat = catEgresoPorId.get(catId)
+            const hasta = cat?.mes_hasta as string | null
+            const desde = cat?.mes_desde as string | null
+            mostrar = (!desde || desde <= primerDiaMes) && (!hasta || hasta >= primerDiaMes)
+          }
+          if (!mostrar) continue
+
+          // Monto por defecto
+          const montoGuardado = montosGuardados[deuda.nombre]
+          let monto = Number(montoGuardado) || 0
+          if (!montoGuardado && esPrestamo) monto = cuotaSugerida(deuda)
+
+          initialData[pagoDeudasKey].subcategorias.push({
+            id: `deuda_${deuda.id}`,
+            nombre: deuda.nombre,
+            monto,
+            categoriaEgresoId: catId,
+            tipoId: pagoDeudasTipoId,
+            deudaId: deuda.id,
+            esDeuda: true,
+            tipoDeuda: deuda.tipo_deuda,
+            bloqueada: esPrestamo, // los préstamos no se quitan desde el presupuesto
+          })
+          initialData[pagoDeudasKey].total += monto
+        }
+      }
 
       // Cargar presupuesto total si existe; si no, tomar el del mes anterior.
       // (El estado se aplica al final, junto con el posible borrador local.)
@@ -662,6 +818,10 @@ export function PresupuestoForm() {
   const handleDeleteSubcategoria = async (categoriaKey: string, itemId: string) => {
     const categoria = categoriasData[categoriaKey]
     const item = categoria?.subcategorias.find(s => s.id === itemId)
+
+    // Los préstamos vinculados no se pueden quitar desde el presupuesto: se
+    // gestionan desde la sección Deudas y desaparecen solos al saldarse.
+    if (item?.bloqueada) return
 
     if (item?.categoriaEgresoId) {
       try {
@@ -1071,28 +1231,46 @@ export function PresupuestoForm() {
                                 placeholder="0"
                                 className="w-24 sm:w-28 h-7 text-right text-sm bg-background/50"
                               />
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-7 w-7">
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem 
-                                    className="text-destructive"
-                                    onClick={() => handleDeleteSubcategoria(categoria.key, sub.id)}
-                                  >
-                                    <Trash2 className="w-4 h-4 mr-2" />
-                                    Eliminar
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {/* Los préstamos vinculados no se pueden quitar desde el
+                                  presupuesto (se gestionan en la sección Deudas). */}
+                              {!sub.bloqueada && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      className="text-destructive"
+                                      onClick={() => handleDeleteSubcategoria(categoria.key, sub.id)}
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      {sub.esDeuda ? "Quitar de este mes" : "Eliminar"}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </div>
                           </div>
                         ))}
 
                         {/* Agregar nueva subcategoría */}
-                        {addingToCategoria === categoria.key ? (
+                        {categoria.key === "pct_pago_deudas" ? (
+                          // Las deudas no se crean como texto libre: se gestionan en
+                          // la sección Deudas. El botón redirige allí para cargarlas
+                          // de forma correcta (préstamo o tarjeta, montos, cuotas).
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="w-full mt-2 text-muted-foreground hover:text-foreground"
+                            onClick={() => router.push("/dashboard/personal/deudas")}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Agregar deuda
+                          </Button>
+                        ) : addingToCategoria === categoria.key ? (
                           <div className="flex items-center gap-2 pt-2">
                             <Input
                               type="text"
