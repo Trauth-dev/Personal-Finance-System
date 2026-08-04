@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -52,6 +52,12 @@ import { usePerfil } from "@/lib/contexts/perfil-context"
 import { getCache, setCache, invalidateCache } from "@/lib/cache/carga-cache"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
+
+// Nombres de meses (índice 0 = Enero) para el selector de "Mes del egreso".
+const MESES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
 
 // Formatea un valor numérico agregando el separador de miles (punto) mientras se escribe.
 const formatNumberWithSeparators = (value: string | number): string => {
@@ -942,6 +948,53 @@ export function EgresoForm() {
   const selectedTipoData = tiposCategorias.find((t) => t.id === selectedTipo)
   const selectedDeudaData = deudas.find((d) => d.id === selectedDeuda)
 
+  // ======================================================================
+  // Selector de "Mes del egreso"
+  // ----------------------------------------------------------------------
+  // El mes se deriva del campo `fecha` (única fuente de verdad). Al cambiarlo,
+  // las categorías/subcategorías se re-filtran por vigencia (mes_desde/mes_hasta)
+  // vía loadCategorias, mostrando exactamente las del presupuesto de ese mes.
+  // Por defecto es el mes actual; permite registrar pagos de meses anteriores.
+  // ======================================================================
+  const mesEgreso = (fecha || getTodayDate()).slice(0, 7) // "YYYY-MM"
+
+  const mesesDisponibles = useMemo(() => {
+    const hoy = getTodayDate()
+    const y0 = Number(hoy.slice(0, 4))
+    const m0 = Number(hoy.slice(5, 7)) // 1-12
+    const mapa = new Map<string, string>()
+    // Mes actual + 11 meses anteriores (12 en total)
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(y0, m0 - 1 - i, 1)
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      mapa.set(value, `${MESES[d.getMonth()]} ${d.getFullYear()}`)
+    }
+    // Garantizar que el mes seleccionado actualmente (p. ej. elegido con el
+    // campo Fecha) siempre exista como opción, aunque quede fuera del rango.
+    if (!mapa.has(mesEgreso)) {
+      const [yy, mm] = mesEgreso.split("-").map(Number)
+      if (yy && mm) mapa.set(mesEgreso, `${MESES[mm - 1]} ${yy}`)
+    }
+    return Array.from(mapa.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => (a.value < b.value ? 1 : -1)) // más reciente primero
+  }, [mesEgreso])
+
+  const handleMesEgresoChange = (value: string) => {
+    const hoy = getTodayDate()
+    // Si eligen el mes actual, usar la fecha de hoy.
+    if (value === hoy.slice(0, 7)) {
+      setFecha(hoy)
+      return
+    }
+    // Para meses anteriores: conservar el día actual, acotado al último día válido.
+    const [y, m] = value.split("-").map(Number)
+    const diaActual = Number((fecha || hoy).slice(8, 10)) || 1
+    const ultimoDia = new Date(y, m, 0).getDate()
+    const dia = Math.min(diaActual, ultimoDia)
+    setFecha(`${value}-${String(dia).padStart(2, "0")}`)
+  }
+
   return (
     <Card className="max-w-2xl mx-auto glass-effect border-border/50">
       <CardHeader>
@@ -970,6 +1023,31 @@ export function EgresoForm() {
       </CardHeader>
       <CardContent className="pt-6">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Mes del egreso: vincula las categorías/subcategorías al presupuesto
+              de ese mismo mes. Por defecto el mes actual; permite meses anteriores. */}
+          <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <Label htmlFor="mes-egreso" className="flex items-center gap-2 font-semibold">
+              <Calendar className="w-4 h-4 text-primary" />
+              Mes del egreso
+            </Label>
+            <Select value={mesEgreso} onValueChange={handleMesEgresoChange}>
+              <SelectTrigger id="mes-egreso" className="bg-background/50">
+                <SelectValue placeholder="Mes" />
+              </SelectTrigger>
+              <SelectContent>
+                {mesesDisponibles.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Las categorías y subcategorías corresponden al presupuesto de este mes. Cambialo para
+              registrar un pago de un mes anterior.
+            </p>
+          </div>
+
           {!modoNegocio && (
           <div className="space-y-3 scroll-mt-20 sm:scroll-mt-24" ref={tipoCategoriaRef}>
             <Label>Tipo de Categoría</Label>
