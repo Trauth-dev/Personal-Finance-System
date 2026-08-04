@@ -1318,6 +1318,25 @@ export function PresupuestoForm() {
               </div>
             )}
 
+            {/* Resumen de asignación: ingreso presupuestado vs. total asignado */}
+            {presupuestoNum > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1 p-3 rounded-lg bg-muted/40 border border-border">
+                  <span className="text-xs text-muted-foreground">Total Ingreso Presupuestado</span>
+                  <span className="text-base font-bold text-foreground">{formatGuaranies(presupuestoNum)}</span>
+                </div>
+                <div className="flex flex-col gap-1 p-3 rounded-lg bg-muted/40 border border-border">
+                  <span className="text-xs text-muted-foreground">Total asignado</span>
+                  <span className="text-base font-bold text-sky-500">
+                    {formatGuaranies(totalAsignado)}{" "}
+                    <span className="text-sm font-medium text-muted-foreground">
+                      ({porcentajeTotal.toFixed(1)}%)
+                    </span>
+                  </span>
+                </div>
+              </div>
+            )}
+
             {presupuestoNum > 0 && totalAsignado > presupuestoNum && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
                 <AlertCircle className="w-4 h-4 text-red-500" />
