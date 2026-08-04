@@ -100,7 +100,24 @@ export default async function ConfiguracionPage() {
                   const nombre = formData.get("nombre") as string
                   if (!nombre?.trim()) return
 
-                  await supabase.from("categorias_ingresos").insert({ user_id: user.id, nombre: nombre.trim() })
+                  // Asignar la categoría a un perfil (preferentemente el personal).
+                  // Sin perfil_id la categoría queda "huérfana" (perfil_id NULL):
+                  // invisible en los formularios que filtran por perfil, pero
+                  // ocupando la restricción única (user_id, nombre), lo que impide
+                  // volver a crearla. Por eso siempre la ligamos a un perfil.
+                  const { data: perfilDestino } = await supabase
+                    .from("perfiles")
+                    .select("id")
+                    .eq("user_id", user.id)
+                    .order("tipo", { ascending: false }) // "personal" antes que "empresarial"
+                    .limit(1)
+                    .maybeSingle()
+
+                  await supabase.from("categorias_ingresos").insert({
+                    user_id: user.id,
+                    perfil_id: perfilDestino?.id ?? null,
+                    nombre: nombre.trim(),
+                  })
 
                   redirect("/dashboard/configuracion")
                 }}
