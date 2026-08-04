@@ -154,20 +154,43 @@ export function IngresoForm() {
       } = await supabase.auth.getUser()
       if (!user) return
 
+      const nombre = newCategoryName.trim()
       const { error: insertError } = await supabase.from("categorias_ingresos").insert({
         user_id: user.id,
         perfil_id: perfilActual.id,
-        nombre: newCategoryName.trim(),
+        nombre,
       })
 
-      if (!insertError) {
-        await loadCategorias()
-        setTipoIngreso(newCategoryName.trim())
-        setNewCategoryName("")
-        setShowNewCategory(false)
+      if (insertError) {
+        // La tabla tiene una restricción única por (user_id, nombre). Si el
+        // usuario ya tenía una categoría con ese nombre (por ejemplo huérfana,
+        // con perfil_id NULL, o en otro perfil) el insert falla. En vez de
+        // dejarlo bloqueado, la RECUPERAMOS reasignándola a este perfil.
+        const esDuplicado =
+          insertError.code === "23505" || /duplicate|unique/i.test(insertError.message || "")
+        if (esDuplicado) {
+          const { error: updateError } = await supabase
+            .from("categorias_ingresos")
+            .update({ perfil_id: perfilActual.id })
+            .eq("user_id", user.id)
+            .eq("nombre", nombre)
+          if (updateError) {
+            setError(`No se pudo recuperar la categoría "${nombre}". Intenta con otro nombre.`)
+            return
+          }
+        } else {
+          setError(insertError.message || "No se pudo crear la categoría.")
+          return
+        }
       }
+
+      setError(null)
+      await loadCategorias()
+      setTipoIngreso(nombre)
+      setNewCategoryName("")
+      setShowNewCategory(false)
     } catch (error) {
-      // Manejar error silenciosamente
+      setError("Ocurrió un error al crear la categoría. Inténtalo de nuevo.")
     }
   }
 
