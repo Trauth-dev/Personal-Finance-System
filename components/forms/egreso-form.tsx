@@ -284,6 +284,27 @@ export function EgresoForm() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todasCategorias, fecha])
 
+  // Autopreselección del "Origen del Dinero" al elegir una categoría de egreso.
+  // Objetivo: evitar que el usuario cargue un egreso sin confirmar de dónde sale
+  // el dinero, cuando la elección es obvia (una sola opción).
+  //  - Si hay UNA sola caja de ahorro -> se preselecciona (prioridad).
+  //  - Si no hay una única caja pero hay UNA sola tarjeta -> se preselecciona.
+  //  - Si hay varias cajas (o varias tarjetas y ninguna caja) -> NO se
+  //    preselecciona nada; el usuario debe elegir explícitamente.
+  // Nunca sobreescribe una elección previa del usuario (origenTipo ya definido).
+  useEffect(() => {
+    if (!selectedTipo) return
+    if (origenTipo) return // el usuario (o una preselección previa) ya definió el origen
+    if (cajasAhorro.length === 1) {
+      setOrigenTipo("caja_ahorro")
+      setOrigenId(cajasAhorro[0].id)
+    } else if (cajasAhorro.length === 0 && tarjetasCredito.length === 1) {
+      setOrigenTipo("tarjeta_credito")
+      setOrigenId(tarjetasCredito[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTipo, cajasAhorro, tarjetasCredito])
+
   const loadTiposCategorias = async () => {
     if (!perfilActual?.id) return
 
