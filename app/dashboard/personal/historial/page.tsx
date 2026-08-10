@@ -7,9 +7,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { TrendingUp, TrendingDown, Calendar, Trash2, AlertCircle, Download, Edit, X, Check, Building2, CreditCard, Wallet, Landmark, Smartphone, PiggyBank, ArrowRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { formatDateWithoutTimezone } from "@/lib/utils"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,6 +76,18 @@ type OrigenInfo = {
   [egresoId: string]: { nombre: string; tipo: string }
 }
 
+const MESES_NOMBRES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
+// Convierte "YYYY-MM" en una etiqueta legible ("Agosto 2026").
+const formatMesLabel = (ym: string) => {
+  const [y, m] = ym.split("-").map(Number)
+  if (!y || !m) return ym
+  return `${MESES_NOMBRES[m - 1]} ${y}`
+}
+
 export default function PersonalHistorialPage() {
   const { perfilActual } = usePerfil()
   const [ingresos, setIngresos] = useState<Ingreso[]>([])
@@ -81,6 +100,8 @@ export default function PersonalHistorialPage() {
   const [editData, setEditData] = useState<any>(null)
   const [origenesInfo, setOrigenesInfo] = useState<OrigenInfo>({})
   const [destinosInfo, setDestinosInfo] = useState<DestinoInfo>({})
+  const [selectedMonth, setSelectedMonth] = useState<string>("todos")
+  const [isDownloading, setIsDownloading] = useState(false)
 
   useEffect(() => {
     if (perfilActual?.id) {
@@ -449,42 +470,187 @@ export default function PersonalHistorialPage() {
     }
   }
 
-  const handleExportCSV = () => {
-    const allTransactions = [
-      ...ingresos.map((i) => ({
-        tipo: "Ingreso",
-        categoria: i.tipo_ingreso,
-        monto: i.monto,
-        fecha: i.fecha,
-        concepto: "",
-      })),
-      ...egresos.map((e) => ({
-        tipo: "Egreso",
-        categoria: e.tipos_categoria_egreso?.nombre || "Sin categoría",
-        subcategoria: e.categorias_egreso?.nombre || "",
-        monto: e.monto,
-        fecha: e.fecha,
-        concepto: e.concepto || "",
-      })),
-    ].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+  // Lista de meses disponibles (YYYY-MM) a partir de todos los movimientos,
+  // ordenados del más reciente al más antiguo, para el filtro del historial.
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>()
+    ;[...ingresos, ...egresos].forEach((m) => {
+      if (m.fecha) set.add(String(m.fecha).slice(0, 7))
+    })
+    return Array.from(set).sort((a, b) => (a < b ? 1 : -1))
+  }, [ingresos, egresos])
 
-    const headers = ["Tipo", "Categoría", "Subcategoría", "Monto", "Fecha", "Concepto"]
-    const csvContent = [
-      headers.join(","),
-      ...allTransactions.map((t) =>
-        [t.tipo, t.categoria, "subcategoria" in t ? t.subcategoria : "", t.monto, t.fecha, t.concepto].join(","),
-      ),
-    ].join("\n")
+  // Aplica el filtro de mes seleccionado ("todos" = sin filtro).
+  const matchesMonth = (fecha: string | null | undefined) => {
+    if (selectedMonth === "todos") return true
+    return !!fecha && String(fecha).slice(0, 7) === selectedMonth
+  }
 
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
-    const link = document.createElement("a")
-    const url = URL.createObjectURL(blob)
-    link.setAttribute("href", url)
-    link.setAttribute("download", `historial_personal_${new Date().toISOString().split("T")[0]}.csv`)
-    link.style.visibility = "hidden"
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  const filteredIngresos = useMemo(
+    () => ingresos.filter((i) => matchesMonth(i.fecha)),
+    [ingresos, selectedMonth],
+  )
+  const filteredEgresos = useMemo(
+    () => egresos.filter((e) => matchesMonth(e.fecha)),
+    [egresos, selectedMonth],
+  )
+
+  // Descarga un archivo Excel (.xlsx) profesional con 3 hojas: Ingresos, Egresos
+  // y Presupuesto. Exporta SIEMPRE la información completa del perfil, sin
+  // importar el filtro de mes aplicado en pantalla.
+  const handleDownloadRegistro = async () => {
+    if (!perfilActual?.id) return
+    setIsDownloading(true)
+    try {
+      const supabase = createClient()
+      const ExcelJS = (await import("exceljs")).default
+
+      // Traer datos de presupuesto (egresos e ingresos presupuestados)
+      const [{ data: presupCategorias }, { data: presupIngresos }, { data: catIngresos }] = await Promise.all([
+        supabase
+          .from("presupuesto_categorias")
+          .select("mes, tipo_categoria, categoria, monto_presupuestado")
+          .eq("perfil_id", perfilActual.id)
+          .order("mes", { ascending: false }),
+        supabase
+          .from("presupuesto_ingresos")
+          .select("mes, categoria_ingreso_id, monto_presupuestado")
+          .eq("perfil_id", perfilActual.id)
+          .order("mes", { ascending: false }),
+        supabase.from("categorias_ingresos").select("id, nombre").eq("perfil_id", perfilActual.id),
+      ])
+
+      const catIngresosMap: Record<string, string> = {}
+      ;(catIngresos || []).forEach((c) => {
+        catIngresosMap[c.id] = c.nombre
+      })
+
+      const workbook = new ExcelJS.Workbook()
+      workbook.creator = "ProsperaMás"
+      workbook.created = new Date()
+
+      // Estilos reutilizables para las cabeceras
+      const headerFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FF7C3AED" } }
+      const headerFont = { bold: true, color: { argb: "FFFFFFFF" }, size: 12 }
+      const styleHeader = (row: any) => {
+        row.eachCell((cell: any) => {
+          cell.fill = headerFill
+          cell.font = headerFont
+          cell.alignment = { vertical: "middle", horizontal: "left" }
+          cell.border = { bottom: { style: "thin", color: { argb: "FFD1D5DB" } } }
+        })
+        row.height = 22
+      }
+      const zebra = (sheet: any) => {
+        sheet.eachRow((row: any, rowNumber: number) => {
+          if (rowNumber > 1 && rowNumber % 2 === 0) {
+            row.eachCell((cell: any) => {
+              if (!cell.fill || cell.fill.type !== "pattern" || cell.fill.fgColor?.argb !== "FF7C3AED") {
+                cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F3FF" } }
+              }
+            })
+          }
+        })
+      }
+      const GS = '"Gs" #,##0'
+
+      // ---------- Hoja INGRESOS ----------
+      const wsIng = workbook.addWorksheet("Ingresos", { views: [{ state: "frozen", ySplit: 1 }] })
+      wsIng.columns = [
+        { header: "Fecha", key: "fecha", width: 14 },
+        { header: "Tipo de Ingreso", key: "tipo", width: 28 },
+        { header: "Destino", key: "destino", width: 26 },
+        { header: "Monto (Gs)", key: "monto", width: 18 },
+      ]
+      ;[...ingresos]
+        .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+        .forEach((i) => {
+          wsIng.addRow({
+            fecha: formatDateWithoutTimezone(i.fecha),
+            tipo: i.tipo_ingreso || "Sin especificar",
+            destino: destinosInfo[i.id]?.nombre || (i.destino_caja_id ? "Caja de ahorro" : "-"),
+            monto: Number(i.monto) || 0,
+          })
+        })
+      wsIng.getColumn("monto").numFmt = GS
+      styleHeader(wsIng.getRow(1))
+      zebra(wsIng)
+
+      // ---------- Hoja EGRESOS ----------
+      const wsEgr = workbook.addWorksheet("Egresos", { views: [{ state: "frozen", ySplit: 1 }] })
+      wsEgr.columns = [
+        { header: "Fecha", key: "fecha", width: 14 },
+        { header: "Categoría", key: "categoria", width: 24 },
+        { header: "Subcategoría", key: "subcategoria", width: 26 },
+        { header: "Concepto", key: "concepto", width: 30 },
+        { header: "Origen del Dinero", key: "origen", width: 24 },
+        { header: "Monto (Gs)", key: "monto", width: 18 },
+      ]
+      ;[...egresos]
+        .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
+        .forEach((e) => {
+          wsEgr.addRow({
+            fecha: formatDateWithoutTimezone(e.fecha),
+            categoria: e.tipos_categoria_egreso?.nombre || "Sin categoría",
+            subcategoria: e.categorias_egreso?.nombre || "-",
+            concepto: e.concepto || "-",
+            origen: origenesInfo[e.id]?.nombre || "Sin especificar",
+            monto: Number(e.monto) || 0,
+          })
+        })
+      wsEgr.getColumn("monto").numFmt = GS
+      styleHeader(wsEgr.getRow(1))
+      zebra(wsEgr)
+
+      // ---------- Hoja PRESUPUESTO ----------
+      const wsPre = workbook.addWorksheet("Presupuesto", { views: [{ state: "frozen", ySplit: 1 }] })
+      wsPre.columns = [
+        { header: "Mes", key: "mes", width: 16 },
+        { header: "Flujo", key: "flujo", width: 14 },
+        { header: "Tipo / Categoría", key: "tipo", width: 26 },
+        { header: "Detalle", key: "detalle", width: 26 },
+        { header: "Monto Presupuestado (Gs)", key: "monto", width: 26 },
+      ]
+      ;(presupIngresos || []).forEach((p) => {
+        wsPre.addRow({
+          mes: formatMesLabel(String(p.mes).slice(0, 7)),
+          flujo: "Ingreso",
+          tipo: catIngresosMap[p.categoria_ingreso_id] || "Ingreso",
+          detalle: "-",
+          monto: Number(p.monto_presupuestado) || 0,
+        })
+      })
+      ;(presupCategorias || []).forEach((p) => {
+        wsPre.addRow({
+          mes: formatMesLabel(String(p.mes).slice(0, 7)),
+          flujo: "Egreso",
+          tipo: p.tipo_categoria || "Categoría",
+          detalle: p.categoria || "-",
+          monto: Number(p.monto_presupuestado) || 0,
+        })
+      })
+      wsPre.getColumn("monto").numFmt = GS
+      styleHeader(wsPre.getRow(1))
+      zebra(wsPre)
+
+      // Generar y descargar
+      const buffer = await workbook.xlsx.writeBuffer()
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `Registro_${perfilActual.nombre || "Personal"}_${new Date().toISOString().split("T")[0]}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error("[v0] Error al descargar registro:", err)
+    } finally {
+      setIsDownloading(false)
+    }
   }
 
   if (!perfilActual) {
@@ -505,11 +671,27 @@ export default function PersonalHistorialPage() {
       <DashboardHeader title="Editar y Eliminar Cargas" description="Edita o elimina tus movimientos personales" />
 
       <div className="p-4 md:p-6">
-        <div className="flex justify-end mb-4">
-          <Button onClick={handleExportCSV} className="gap-2 text-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-full sm:w-[200px] glass-effect text-sm">
+                <SelectValue placeholder="Filtrar por mes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos los meses</SelectItem>
+                {availableMonths.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {formatMesLabel(m)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button onClick={handleDownloadRegistro} disabled={isDownloading} className="gap-2 text-sm">
             <Download className="w-4 h-4" />
-            <span className="hidden sm:inline">Exportar a CSV</span>
-            <span className="sm:hidden">CSV</span>
+            <span className="hidden sm:inline">{isDownloading ? "Generando..." : "Descargar Registro"}</span>
+            <span className="sm:hidden">{isDownloading ? "..." : "Descargar"}</span>
           </Button>
         </div>
 
@@ -529,7 +711,7 @@ export default function PersonalHistorialPage() {
                   </Card>
                 ) : (
                   <>
-                    {[...ingresos, ...egresos]
+                    {[...filteredIngresos, ...filteredEgresos]
                       .sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime())
                       .map((item) => {
                         const isIngreso = "tipo_ingreso" in item
@@ -668,7 +850,7 @@ export default function PersonalHistorialPage() {
                           </Card>
                         )
                       })}
-                    {ingresos.length === 0 && egresos.length === 0 && (
+                    {filteredIngresos.length === 0 && filteredEgresos.length === 0 && (
                       <Card className="glass-effect border-border/50">
                         <CardContent className="py-12 text-center text-muted-foreground">
                           No hay transacciones registradas para este perfil personal
@@ -686,8 +868,8 @@ export default function PersonalHistorialPage() {
                   <Card className="glass-effect border-border/50">
                     <CardContent className="py-12 text-center text-muted-foreground">Cargando...</CardContent>
                   </Card>
-                ) : ingresos.length > 0 ? (
-                  ingresos.map((ingreso) => (
+                ) : filteredIngresos.length > 0 ? (
+                  filteredIngresos.map((ingreso) => (
                     <Card key={ingreso.id} className="glass-effect border-border/50 hover:glow-effect transition-all">
                       <CardContent className="p-3 sm:p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -774,8 +956,8 @@ export default function PersonalHistorialPage() {
                   <Card className="glass-effect border-border/50">
                     <CardContent className="py-12 text-center text-muted-foreground">Cargando...</CardContent>
                   </Card>
-                ) : egresos.length > 0 ? (
-                  egresos.map((egreso) => (
+                ) : filteredEgresos.length > 0 ? (
+                  filteredEgresos.map((egreso) => (
                     <Card key={egreso.id} className="glass-effect border-border/50 hover:glow-effect transition-all">
                       <CardContent className="p-3 sm:p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
