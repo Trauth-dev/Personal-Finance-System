@@ -7,9 +7,16 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { TrendingUp, TrendingDown, Calendar, Trash2, AlertCircle, Download, Edit, X, Check, Building2, CreditCard, Wallet, Landmark, Smartphone, PiggyBank, ArrowRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { formatDateWithoutTimezone } from "@/lib/utils"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,6 +76,18 @@ type OrigenInfo = {
   [egresoId: string]: { nombre: string; tipo: string }
 }
 
+const MESES_NOMBRES = [
+  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+]
+
+// Convierte "YYYY-MM" en una etiqueta legible ("Agosto 2026").
+const formatMesLabel = (ym: string) => {
+  const [y, m] = ym.split("-").map(Number)
+  if (!y || !m) return ym
+  return `${MESES_NOMBRES[m - 1]} ${y}`
+}
+
 export default function PersonalHistorialPage() {
   const { perfilActual } = usePerfil()
   const [ingresos, setIngresos] = useState<Ingreso[]>([])
@@ -81,6 +100,7 @@ export default function PersonalHistorialPage() {
   const [editData, setEditData] = useState<any>(null)
   const [origenesInfo, setOrigenesInfo] = useState<OrigenInfo>({})
   const [destinosInfo, setDestinosInfo] = useState<DestinoInfo>({})
+  const [selectedMonth, setSelectedMonth] = useState<string>("todos")
 
   useEffect(() => {
     if (perfilActual?.id) {
