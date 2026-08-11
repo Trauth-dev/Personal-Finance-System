@@ -38,7 +38,7 @@ import {
   X,
 } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
-import { formatGuaranies } from "@/lib/utils"
+import { formatGuaranies, formatMoneyNumber } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface Deuda {
@@ -990,7 +990,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                             {pagada && <CheckCircle2 className="w-3 h-3" />}
                             Cuota {i + 1}
                           </span>
-                          <span>{formatGuaranies(Number(monto)).replace("Gs ", "")}</span>
+                          <span>{formatMoneyNumber(Number(monto))}</span>
                         </div>
                       )
                     })}

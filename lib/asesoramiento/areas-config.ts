@@ -1,6 +1,7 @@
 import type { ComponentType, SVGProps } from "react"
 import { Wallet, Briefcase, HeartHandshake } from "lucide-react"
 import { HeadBrainIcon } from "@/components/asesoramiento/icons"
+import { formatMoney } from "@/lib/currency"
 
 // Tanto los iconos de lucide como los iconos a medida (SVG) cumplen esta firma.
 type AreaIcon = ComponentType<SVGProps<SVGSVGElement>>
@@ -258,5 +259,5 @@ export function getArea(id: string | null | undefined): AreaConfig | undefined {
 }
 
 export function formatGuaranies(monto: number): string {
-  return "Gs " + monto.toLocaleString("es-PY")
+  return formatMoney(monto)
 }

@@ -166,6 +166,13 @@ export function EgresoForm() {
   const [deudas, setDeudas] = useState<Deuda[]>([])
   const [selectedDeuda, setSelectedDeuda] = useState<string>("")
   const [numeroCuota, setNumeroCuota] = useState("")
+  // Nombre de la línea de presupuesto vinculada automáticamente a la deuda
+  // elegida. Cuando tiene valor, ocultamos el selector de línea (para no pedir
+  // dos veces lo mismo) y mostramos una confirmación con opción de cambiar.
+  const [categoriaAutoVinculada, setCategoriaAutoVinculada] = useState<string>("")
+  // Permite al usuario forzar la elección manual de la línea de presupuesto
+  // aunque exista un vínculo automático.
+  const [overrideCategoriaManual, setOverrideCategoriaManual] = useState(false)
 
   // Origen de fondos
   const [cajasAhorro, setCajasAhorro] = useState<CajaAhorro[]>([])
@@ -548,6 +555,8 @@ export function EgresoForm() {
       setEsPagoDeudas(false)
       setSelectedDeuda("")
       setNumeroCuota("")
+      setCategoriaAutoVinculada("")
+      setOverrideCategoriaManual(false)
       setOrigenTipo("")
       setOrigenId("")
       setShowNewCategoria(false)
@@ -754,9 +763,29 @@ export function EgresoForm() {
   // para que el usuario elija conscientemente la línea de presupuesto correcta.
   const preseleccionarCategoriaPorDeuda = (deudaNombre: string) => {
     const target = (deudaNombre || "").trim().toLowerCase()
-    if (!target) return
-    const match = categorias.find((c) => (c.nombre || "").trim().toLowerCase() === target)
-    setSelectedCategoria(match ? match.id : "")
+    setOverrideCategoriaManual(false)
+    if (!target) {
+      setSelectedCategoria("")
+      setCategoriaAutoVinculada("")
+      return
+    }
+    // 1) Coincidencia exacta por nombre; 2) coincidencia parcial (una contiene a
+    // la otra), para tolerar variaciones como "Préstamo Personal" vs "Préstamo".
+    const exact = categorias.find((c) => (c.nombre || "").trim().toLowerCase() === target)
+    const partial =
+      exact ||
+      categorias.find((c) => {
+        const n = (c.nombre || "").trim().toLowerCase()
+        return n.length > 0 && (n.includes(target) || target.includes(n))
+      })
+    if (partial) {
+      setSelectedCategoria(partial.id)
+      setCategoriaAutoVinculada(partial.nombre)
+    } else {
+      // Sin coincidencia: dejamos que el usuario elija la línea manualmente.
+      setSelectedCategoria("")
+      setCategoriaAutoVinculada("")
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -934,6 +963,8 @@ export function EgresoForm() {
       setSelectedDeuda("")
       setNumeroCuota("")
       setEsPagoDeudas(false)
+      setCategoriaAutoVinculada("")
+      setOverrideCategoriaManual(false)
       setOrigenTipo("")
       setOrigenId("")
       setModoNegocio(false)
@@ -1686,14 +1717,39 @@ export function EgresoForm() {
           {selectedTipo && (!esPagoDeudas || selectedDeuda) && (
             <div className="space-y-3 scroll-mt-20 sm:scroll-mt-24" ref={descripcionRef}>
               <Label>{esPagoDeudas ? "¿A qué línea del presupuesto corresponde?" : "Descripción"}</Label>
-              {esPagoDeudas && (
-                <p className="text-xs text-muted-foreground">
-                  Elegí la tarjeta o deuda del presupuesto a la que aplica este pago (ej: TC Atlas). Así el gasto se
-                  refleja en la subcategoría correcta de Presupuesto vs Realidad.
-                </p>
-              )}
 
-              {categorias.length > 0 ? (
+              {/* Vínculo automático: al elegir la deuda ya sabemos a qué línea de
+                  presupuesto corresponde, así que lo confirmamos sin pedirlo de
+                  nuevo. El usuario puede cambiarlo si lo necesita. */}
+              {esPagoDeudas && categoriaAutoVinculada && !overrideCategoriaManual ? (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <p className="text-sm text-muted-foreground truncate">
+                      Se aplicará a la línea{" "}
+                      <span className="font-semibold text-emerald-300">{categoriaAutoVinculada}</span>
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs text-emerald-300 hover:text-emerald-200 shrink-0"
+                    onClick={() => setOverrideCategoriaManual(true)}
+                  >
+                    Cambiar
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  {esPagoDeudas && (
+                    <p className="text-xs text-muted-foreground">
+                      Elegí la tarjeta o deuda del presupuesto a la que aplica este pago (ej: TC Atlas). Así el gasto se
+                      refleja en la subcategoría correcta de Presupuesto vs Realidad.
+                    </p>
+                  )}
+
+                  {categorias.length > 0 ? (
                 <div className="grid grid-cols-2 gap-2">
                   {categorias.map((cat) => {
                     const isSelected = selectedCategoria === cat.id
@@ -1781,6 +1837,8 @@ export function EgresoForm() {
                     </Button>
                   </div>
                 </div>
+              )}
+                </>
               )}
             </div>
           )}
