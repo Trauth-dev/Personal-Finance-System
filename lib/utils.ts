@@ -1,13 +1,22 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { formatMoney } from "@/lib/currency"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Reexport para que las pantallas puedan usar el formateador central de dinero.
+export { formatMoney, formatMoneyNumber, getCurrencySymbol } from "@/lib/currency"
+
+/**
+ * Formatea un monto de dinero. Se mantiene el nombre `formatGuaranies` por
+ * compatibilidad con los cientos de usos existentes, pero ahora delega en
+ * `formatMoney`, que respeta la moneda del usuario (guaraníes, dólares, etc.).
+ * Para usuarios de Paraguay el resultado es idéntico al anterior ("Gs 1.234").
+ */
 export function formatGuaranies(amount: number | null | undefined): string {
-  const safeAmount = amount ?? 0
-  return `Gs ${safeAmount.toLocaleString("es-PY", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  return formatMoney(amount)
 }
 
 /**

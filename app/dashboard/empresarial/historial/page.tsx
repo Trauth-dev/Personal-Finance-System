@@ -11,7 +11,7 @@ import { TrendingUp, TrendingDown, Calendar, Trash2, AlertCircle, Edit, Download
 import { createClient } from "@/lib/supabase/client"
 import { useEffect, useState } from "react"
 import { usePerfil } from "@/lib/contexts/perfil-context"
-import { formatDateWithoutTimezone } from "@/lib/utils"
+import { formatDateWithoutTimezone, formatMoney } from "@/lib/utils"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -259,7 +259,8 @@ export default function HistorialEmpresarialPage() {
                                         isIngreso ? "text-primary" : "text-destructive"
                                       }`}
                                     >
-                                      {isIngreso ? "+" : "-"}₲{Number(item.monto).toLocaleString("es-PY")}
+                                      {isIngreso ? "+" : "-"}
+                                      {formatMoney(Number(item.monto))}
                                     </p>
                                   </div>
                                   <Button
@@ -324,7 +325,7 @@ export default function HistorialEmpresarialPage() {
                           </div>
                           <div className="flex items-center gap-4">
                             <p className="text-2xl font-bold text-primary">
-                              +₲{Number(ingreso.monto).toLocaleString("es-PY")}
+                              +{formatMoney(Number(ingreso.monto))}
                             </p>
                             <Button
                               variant="ghost"
@@ -391,7 +392,7 @@ export default function HistorialEmpresarialPage() {
                           </div>
                           <div className="flex items-center gap-4">
                             <p className="text-2xl font-bold text-destructive">
-                              -₲{Number(egreso.monto).toLocaleString("es-PY")}
+                              -{formatMoney(Number(egreso.monto))}
                             </p>
                             <Button
                               variant="ghost"

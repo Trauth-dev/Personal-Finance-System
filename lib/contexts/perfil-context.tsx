@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { setCurrentCurrency, getCurrentCurrency, DEFAULT_CURRENCY, DEFAULT_COUNTRY_CODE } from "@/lib/currency"
 
 interface Perfil {
   id: string
@@ -20,6 +21,10 @@ interface PerfilContextType {
   recargarPerfiles: () => Promise<void>
   isLoading: boolean
   sistemaActivo: boolean
+  /** Moneda del usuario (ej. "PYG", "USD"). */
+  moneda: string
+  /** País del usuario (código ISO, ej. "PY"). */
+  pais: string
 }
 
 const PerfilContext = createContext<PerfilContextType | undefined>(undefined)
@@ -29,6 +34,8 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
   const [perfiles, setPerfiles] = useState<Perfil[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [sistemaActivo, setSistemaActivo] = useState(false)
+  const [moneda, setMoneda] = useState<string>(getCurrentCurrency())
+  const [pais, setPais] = useState<string>(DEFAULT_COUNTRY_CODE)
 
   const cargarPerfiles = async () => {
     try {
@@ -47,6 +54,23 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
         setSistemaActivo(false)
         setIsLoading(false)
         return
+      }
+
+      // Cargar moneda/país del usuario y activarlos globalmente para el
+      // formateo de dinero (formatMoney/formatGuaranies) en toda la app.
+      try {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("moneda, pais")
+          .eq("id", user.id)
+          .maybeSingle()
+
+        const monedaUsuario = profile?.moneda || DEFAULT_CURRENCY
+        setCurrentCurrency(monedaUsuario)
+        setMoneda(monedaUsuario)
+        setPais(profile?.pais || DEFAULT_COUNTRY_CODE)
+      } catch {
+        setCurrentCurrency(DEFAULT_CURRENCY)
       }
 
       const { data, error } = await supabase
@@ -123,6 +147,8 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
         recargarPerfiles,
         isLoading,
         sistemaActivo,
+        moneda,
+        pais,
       }}
     >
       {children}

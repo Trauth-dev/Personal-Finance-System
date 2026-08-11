@@ -50,6 +50,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               email: user.email,
               nombre_completo: user.user_metadata?.nombre_completo || user.email?.split("@")[0] || "Usuario",
               telefono: user.user_metadata?.telefono || null,
+              // País/moneda elegidos al registrarse (por defecto Paraguay/PYG).
+              pais: user.user_metadata?.pais || "PY",
+              moneda: user.user_metadata?.moneda || "PYG",
+              zona_horaria: user.user_metadata?.zona_horaria || "America/Asuncion",
+              codigo_telefono: user.user_metadata?.codigo_telefono || "+595",
               // Usuarios nuevos arrancan con plan basico
               plan_tier: "basico",
             })
