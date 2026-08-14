@@ -2,7 +2,14 @@
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { setCurrentCurrency, getCurrentCurrency, DEFAULT_CURRENCY, DEFAULT_COUNTRY_CODE } from "@/lib/currency"
+import {
+  setCurrentCurrency,
+  getCurrentCurrency,
+  setCurrentTimezone,
+  DEFAULT_CURRENCY,
+  DEFAULT_COUNTRY_CODE,
+  DEFAULT_TIMEZONE,
+} from "@/lib/currency"
 
 interface Perfil {
   id: string
@@ -61,16 +68,18 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
       try {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("moneda, pais")
+          .select("moneda, pais, zona_horaria")
           .eq("id", user.id)
           .maybeSingle()
 
         const monedaUsuario = profile?.moneda || DEFAULT_CURRENCY
         setCurrentCurrency(monedaUsuario)
+        setCurrentTimezone(profile?.zona_horaria || DEFAULT_TIMEZONE)
         setMoneda(monedaUsuario)
         setPais(profile?.pais || DEFAULT_COUNTRY_CODE)
       } catch {
         setCurrentCurrency(DEFAULT_CURRENCY)
+        setCurrentTimezone(DEFAULT_TIMEZONE)
       }
 
       const { data, error } = await supabase

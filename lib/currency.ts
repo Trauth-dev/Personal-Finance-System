@@ -83,6 +83,8 @@ export const COUNTRIES: CountryConfig[] = [
 
 export const DEFAULT_COUNTRY_CODE = "PY"
 export const DEFAULT_CURRENCY: CurrencyCode = "PYG"
+export const DEFAULT_TIMEZONE = "America/Asuncion"
+export const DEFAULT_LOCALE = "es-PY"
 
 export function getCountryByCode(code: string | null | undefined): CountryConfig {
   return COUNTRIES.find((c) => c.code === code) ?? COUNTRIES[0]
@@ -144,4 +146,35 @@ export function formatMoneyNumber(amount: number | null | undefined, currency?: 
 /** Devuelve el símbolo de la moneda activa (o la indicada). */
 export function getCurrencySymbol(currency?: string): string {
   return getCurrencyConfig(currency ?? getCurrentCurrency()).symbol
+}
+
+/* -------------------------------------------------------------------------- */
+/* Zona horaria y locale actuales del usuario (variables de módulo)            */
+/* -------------------------------------------------------------------------- */
+
+const TZ_STORAGE_KEY = "user_timezone"
+
+let _currentTimezone: string =
+  (typeof window !== "undefined" && localStorage.getItem(TZ_STORAGE_KEY)) || DEFAULT_TIMEZONE
+
+/** Establece la zona horaria activa del usuario (persistida en localStorage). */
+export function setCurrentTimezone(tz: string | null | undefined) {
+  const valid = tz && tz.length > 0 ? tz : DEFAULT_TIMEZONE
+  _currentTimezone = valid
+  if (typeof window !== "undefined") {
+    localStorage.setItem(TZ_STORAGE_KEY, valid)
+  }
+}
+
+/** Devuelve la zona horaria IANA activa del usuario (ej. "America/Asuncion"). */
+export function getCurrentTimezone(): string {
+  return _currentTimezone
+}
+
+/**
+ * Devuelve el locale para formatear fechas según la moneda/país activos.
+ * Reutiliza el locale de la moneda (es-PY, en-US, pt-BR, etc.).
+ */
+export function getCurrentLocale(): string {
+  return getCurrencyConfig(getCurrentCurrency()).locale || DEFAULT_LOCALE
 }

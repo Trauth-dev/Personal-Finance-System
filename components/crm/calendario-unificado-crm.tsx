@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { formatMoney } from "@/lib/currency"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -530,7 +531,7 @@ export function CalendarioUnificadoCRM({ perfilId }: CalendarioUnificadoCRMProps
                           {evento.monto && (
                             <div className="flex items-center gap-1 text-[9px] font-medium">
                               <DollarSign className="h-2 w-2" />
-                              Gs. {evento.monto.toLocaleString()}
+                              {formatMoney(evento.monto)}
                             </div>
                           )}
                         </div>
