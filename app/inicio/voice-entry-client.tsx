@@ -40,7 +40,7 @@ import {
   HelpCircle,
   ChevronRight,
 } from "lucide-react"
-import { formatGuaranies, getTodayDate, normalizarNombre } from "@/lib/utils"
+import { formatGuaranies, getTodayDate, normalizarNombre, getCurrencySymbol } from "@/lib/utils"
 import { cn } from "@/lib/utils"
 
 interface TipoCategoria {
@@ -1271,7 +1271,7 @@ const [greeting, setGreeting] = useState("Hola")
 
               {/* Monto */}
               <div className="space-y-2">
-                <Label className="text-slate-300">Monto (Guaranies)</Label>
+                <Label className="text-slate-300">Monto ({getCurrencySymbol()})</Label>
                 <Input
                   type="text"
                   inputMode="numeric"

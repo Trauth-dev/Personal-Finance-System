@@ -1,11 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-import { Settings, TrendingUp, Home, Sparkles, Plus, Trash2, Lock } from "lucide-react"
+import { Settings, TrendingUp, Home, Sparkles, Plus, Trash2, Lock, Globe } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { CambiarContrasenaForm } from "@/components/cambiar-contrasena-form"
 import { PerfilAcciones } from "@/components/configuracion/perfil-acciones"
+import { PaisMonedaForm } from "@/components/configuracion/pais-moneda-form"
 
 // Oculta la gestión de "Tipos de Ingreso", "Categorías Vivienda" y
 // "Categorías Varios" en el perfil Personal (ambos planes). Cambiar a true
@@ -19,6 +20,12 @@ export default async function ConfiguracionPage() {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) redirect("/auth/login")
+
+  const { data: perfilUsuario } = await supabase
+    .from("profiles")
+    .select("pais, moneda")
+    .eq("id", user.id)
+    .maybeSingle()
 
   const { data: categoriasIngresos } = await supabase
     .from("categorias_ingresos")
@@ -67,6 +74,27 @@ export default async function ConfiguracionPage() {
           </CardHeader>
           <CardContent className="p-6">
             <CambiarContrasenaForm />
+          </CardContent>
+        </Card>
+
+        {/* Región y moneda de la cuenta */}
+        <Card className="bg-slate-900/50 border-blue-500/30 backdrop-blur-sm">
+          <CardHeader className="bg-gradient-to-r from-blue-500/20 to-cyan-500/20 border-b border-blue-500/30">
+            <div className="flex items-center gap-3">
+              <Globe className="w-6 h-6 text-blue-400" />
+              <div>
+                <CardTitle className="text-white">Región y Moneda</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Elegí tu país para definir la moneda en la que se muestran tus montos
+                </CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <PaisMonedaForm
+              paisInicial={perfilUsuario?.pais || "PY"}
+              monedaInicial={perfilUsuario?.moneda || "PYG"}
+            />
           </CardContent>
         </Card>
 

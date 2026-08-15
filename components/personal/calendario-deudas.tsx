@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Progress } from "@/components/ui/progress"
 import { Calendar, Zap, Save, Wand2, ChevronLeft, ChevronRight } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
-import { formatGuaranies } from "@/lib/utils"
+import { formatMoneyNumber } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface Deuda {
@@ -437,13 +437,13 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                       <Progress value={progreso} className="h-1 w-full" />
                     </div>
                     <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs p-2 rounded text-right">
-                      {formatGuaranies(deuda.monto_cuota || cuotaMensual).replace('Gs ', '')}
+                      {formatMoneyNumber(deuda.monto_cuota || cuotaMensual)}
                     </div>
                     <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs p-2 rounded text-center">
                       {cuotasRestantes}
                     </div>
                     <div className="bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs p-2 rounded text-right font-medium">
-                      {formatGuaranies(pendiente).replace('Gs ', '')}
+                      {formatMoneyNumber(pendiente)}
                     </div>
                     {meses.map(mes => {
                       const pago = pagos[mes.key] || 0
@@ -466,12 +466,12 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                         >
                           {tienePagoReal ? (
                             <div className="h-6 flex items-center justify-end pr-1 text-emerald-700 dark:text-emerald-300 font-bold">
-                              {formatGuaranies(pagoReal).replace('Gs ', '')}
+                              {formatMoneyNumber(pagoReal)}
                             </div>
                           ) : (
                             <Input
                               type="text"
-                              value={pago > 0 ? formatGuaranies(pago).replace('Gs ', '') : ''}
+                              value={pago > 0 ? formatMoneyNumber(pago) : ''}
                               onChange={(e) => actualizarPago(deuda.id, mes.key, e.target.value)}
                               className={`h-6 text-xs text-right p-1 border-0 ${
                                 tienePago 
@@ -486,10 +486,10 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                       )
                     })}
                     <div className={`text-xs p-2 rounded text-right font-bold ${saldoFinal === 0 ? 'bg-green-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100'}`}>
-                      {formatGuaranies(totalPagado).replace('Gs ', '')}
+                      {formatMoneyNumber(totalPagado)}
                     </div>
                     <div className={`text-xs p-2 rounded text-right font-bold ${saldoFinal === 0 ? 'bg-green-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100'}`}>
-                      {saldoFinal === 0 ? '0' : formatGuaranies(saldoFinal).replace('Gs ', '')}
+                      {saldoFinal === 0 ? '0' : formatMoneyNumber(saldoFinal)}
                     </div>
                   </div>
                 )
@@ -520,11 +520,11 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                 <div className="p-2"></div>
                 <div className="p-2"></div>
                 <div className="bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold p-2 rounded text-right">
-                  {formatGuaranies(deudas.reduce((sum, d) => sum + (d.monto_cuota || 0), 0)).replace('Gs ', '')}
+                  {formatMoneyNumber(deudas.reduce((sum, d) => sum + (d.monto_cuota || 0), 0))}
                 </div>
                 <div className="p-2"></div>
                 <div className="bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-slate-100 text-xs font-bold p-2 rounded text-right">
-                  {formatGuaranies(totalGeneral).replace('Gs ', '')}
+                  {formatMoneyNumber(totalGeneral)}
                 </div>
                 {meses.map(mes => (
                   <div 
@@ -535,11 +535,11 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                         : 'bg-green-200 dark:bg-green-800/60 text-green-800 dark:text-green-200'
                     }`}
                   >
-                    {formatGuaranies(totalesPorMes[mes.key] || 0).replace('Gs ', '')}
+                    {formatMoneyNumber(totalesPorMes[mes.key] || 0)}
                   </div>
                 ))}
                 <div className="bg-green-500 text-white text-xs font-bold p-2 rounded text-right">
-                  {formatGuaranies(Object.values(totalesPorMes).reduce((a, b) => a + b, 0)).replace('Gs ', '')}
+                  {formatMoneyNumber(Object.values(totalesPorMes).reduce((a, b) => a + b, 0))}
                 </div>
                 <div className="bg-green-500 text-white text-xs font-bold p-2 rounded text-right">
                   0
@@ -557,7 +557,7 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                 <div className="bg-cyan-100 dark:bg-cyan-800/50 p-1 rounded">
                   <Input
                     type="text"
-                    value={acelerador > 0 ? formatGuaranies(acelerador).replace('Gs ', '') : ''}
+                    value={acelerador > 0 ? formatMoneyNumber(acelerador) : ''}
                     onChange={(e) => setAcelerador(Number(e.target.value.replace(/\D/g, '')) || 0)}
                     className="h-6 text-xs text-right p-1 border-0 bg-transparent text-cyan-700 dark:text-cyan-200 font-bold"
                     placeholder="0"
@@ -565,12 +565,12 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
                 </div>
                 <div className="p-2"></div>
                 <div className="bg-amber-100 dark:bg-amber-800/50 text-xs font-bold p-2 rounded text-right text-amber-700 dark:text-amber-200">
-                  {formatGuaranies(deudas.reduce((sum, d) => sum + (d.monto_cuota || 0), 0) + acelerador).replace('Gs ', '')}
+                  {formatMoneyNumber(deudas.reduce((sum, d) => sum + (d.monto_cuota || 0), 0) + acelerador)}
                 </div>
                 {meses.map((mes, i) => (
                   <div key={mes.key} className={`p-2 rounded ${i === 0 && !mes.esPasado ? 'bg-amber-100 dark:bg-amber-800/50' : ''}`}>
                     {i === 0 && acelerador > 0 && !mes.esPasado && (
-                      <span className="text-xs font-bold text-amber-700 dark:text-amber-200">{formatGuaranies(acelerador).replace('Gs ', '')}</span>
+                      <span className="text-xs font-bold text-amber-700 dark:text-amber-200">{formatMoneyNumber(acelerador)}</span>
                     )}
                   </div>
                 ))}

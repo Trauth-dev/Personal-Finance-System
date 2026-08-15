@@ -10,11 +10,20 @@ import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Mail, Lock, User, AlertCircle, Phone } from "lucide-react"
+import { Mail, Lock, User, AlertCircle, Phone, Globe } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { COUNTRIES, getCountryByCode } from "@/lib/currency"
 
 export default function RegistroPage() {
   const [nombreCompleto, setNombreCompleto] = useState("")
   const [email, setEmail] = useState("")
+  const [paisCode, setPaisCode] = useState("PY")
   const [telefono, setTelefono] = useState("")
   const [password, setPassword] = useState("")
   const [repeatPassword, setRepeatPassword] = useState("")
@@ -22,10 +31,19 @@ export default function RegistroPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
-  // Solo permitir digitos en el campo de telefono y limitar largo razonable
+  const paisSeleccionado = getCountryByCode(paisCode)
+
+  // Solo permitir digitos en el campo de telefono y limitar largo segun el pais
   const handleTelefonoChange = (value: string) => {
-    const soloDigitos = value.replace(/\D/g, "").slice(0, 9)
+    const soloDigitos = value.replace(/\D/g, "").slice(0, paisSeleccionado.phoneLength)
     setTelefono(soloDigitos)
+  }
+
+  // Al cambiar de pais, recortar el telefono al largo del nuevo pais
+  const handlePaisChange = (code: string) => {
+    setPaisCode(code)
+    const nuevoPais = getCountryByCode(code)
+    setTelefono((prev) => prev.replace(/\D/g, "").slice(0, nuevoPais.phoneLength))
   }
 
   const handleSignUp = async (e: React.FormEvent) => {
@@ -41,9 +59,11 @@ export default function RegistroPage() {
       return
     }
 
-    // Validacion de telefono Paraguay: 9 digitos comenzando en 9 (ej: 981123456)
-    if (telefono.length !== 9 || !telefono.startsWith("9")) {
-      setError("Ingresa un número de celular válido de Paraguay (9 dígitos, ej: 981123456)")
+    // Validacion de telefono segun el pais seleccionado (largo esperado)
+    if (telefono.length !== paisSeleccionado.phoneLength) {
+      setError(
+        `Ingresa un número de celular válido de ${paisSeleccionado.name} (${paisSeleccionado.phoneLength} dígitos)`,
+      )
       return
     }
 
@@ -69,7 +89,11 @@ export default function RegistroPage() {
           emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || `${window.location.origin}/dashboard`,
           data: {
             nombre_completo: nombreCompleto,
-            telefono: `+595${telefono}`,
+            telefono: `${paisSeleccionado.dialCode}${telefono}`,
+            pais: paisSeleccionado.code,
+            moneda: paisSeleccionado.currency,
+            zona_horaria: paisSeleccionado.timezone,
+            codigo_telefono: paisSeleccionado.dialCode,
           },
         },
       })
@@ -155,20 +179,46 @@ export default function RegistroPage() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="pais" className="flex items-center gap-2">
+                  <Globe className="w-4 h-4" />
+                  País
+                </Label>
+                <Select value={paisCode} onValueChange={handlePaisChange} disabled={isLoading}>
+                  <SelectTrigger id="pais" className="bg-background/50">
+                    <SelectValue placeholder="Seleccioná tu país" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COUNTRIES.map((c) => (
+                      <SelectItem key={c.code} value={c.code}>
+                        <span className="flex items-center gap-2">
+                          <span className="text-base leading-none">{c.flag}</span>
+                          <span>{c.name}</span>
+                          <span className="text-muted-foreground">({c.currency})</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Tu cuenta usará la moneda de tu país: {paisSeleccionado.name} ({paisSeleccionado.currency}).
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="telefono" className="flex items-center gap-2">
                   <Phone className="w-4 h-4" />
                   Número de Celular
                 </Label>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 px-3 h-10 rounded-md border border-input bg-background/50 text-sm text-muted-foreground flex-shrink-0">
-                    <span className="text-base leading-none">🇵🇾</span>
-                    <span className="font-medium text-foreground">+595</span>
+                    <span className="text-base leading-none">{paisSeleccionado.flag}</span>
+                    <span className="font-medium text-foreground">{paisSeleccionado.dialCode}</span>
                   </div>
                   <Input
                     id="telefono"
                     type="tel"
                     inputMode="numeric"
-                    placeholder="981 123 456"
+                    placeholder={"0".repeat(paisSeleccionado.phoneLength)}
                     required
                     value={telefono}
                     onChange={(e) => handleTelefonoChange(e.target.value)}
@@ -177,7 +227,9 @@ export default function RegistroPage() {
                     autoComplete="tel-national"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">Ingresa tu número sin el 0 inicial (ej: 981123456)</p>
+                <p className="text-xs text-muted-foreground">
+                  Ingresa tu número sin el 0 inicial ({paisSeleccionado.phoneLength} dígitos).
+                </p>
               </div>
 
               <div className="space-y-2">

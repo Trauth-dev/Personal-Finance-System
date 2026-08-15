@@ -12,8 +12,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { usePlanTier } from "@/hooks/use-plan-tier"
-import { formatGuaranies } from "@/lib/utils"
+import { formatMoney } from "@/lib/utils"
 import { cn } from "@/lib/utils"
+
+// Los planes se cobran SIEMPRE en guaraníes (PagoPar liquida en PYG), por eso
+// el precio se muestra fijo en guaraníes sin importar la moneda del usuario.
+const formatPrecioPlan = (precio: number) => formatMoney(precio, "PYG")
 
 // Secciones del perfil Personal. `basico` indica si esta incluida en el Plan Basico.
 // (Se excluye "Diagnostico Inteligente" a proposito, se retirara mas adelante.)
@@ -64,26 +68,55 @@ export function PlanesPricing() {
   const { tier, isLoading } = usePlanTier()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [planSeleccionado, setPlanSeleccionado] = useState<PlanDef | null>(null)
+  const [procesando, setProcesando] = useState(false)
+  const [errorPago, setErrorPago] = useState<string | null>(null)
+  const [noConfigurado, setNoConfigurado] = useState(false)
 
   const handleSelectPlan = (plan: PlanDef) => {
-    // =====================================================================
-    // PUNTO DE INTEGRACION PAGOPAR (pendiente de credenciales/API)
-    // ---------------------------------------------------------------------
-    // Cuando PagoPar entregue el token publico y privado, reemplazar el
-    // bloque de abajo por la llamada real al backend, por ejemplo:
-    //
-    //   const res = await fetch("/api/pagopar/checkout", {
-    //     method: "POST",
-    //     headers: { "Content-Type": "application/json" },
-    //     body: JSON.stringify({ planId: plan.id, monto: plan.precio }),
-    //   })
-    //   const { checkoutUrl } = await res.json()
-    //   window.location.href = checkoutUrl  // redirige a la pasarela de PagoPar
-    //
-    // Por ahora mostramos un aviso de "proximamente".
-    // =====================================================================
     setPlanSeleccionado(plan)
+    setErrorPago(null)
+    setNoConfigurado(false)
     setDialogOpen(true)
+  }
+
+  // Llama al backend para crear la transacción en PagoPar y redirige a la
+  // pasarela de pago. El cobro es siempre en guaraníes (PagoPar liquida en PYG).
+  const iniciarPago = async () => {
+    if (!planSeleccionado) return
+    setProcesando(true)
+    setErrorPago(null)
+    setNoConfigurado(false)
+    try {
+      const res = await fetch("/api/pagopar/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: planSeleccionado.id }),
+      })
+
+      if (res.status === 501) {
+        // Credenciales de PagoPar aún no cargadas.
+        setNoConfigurado(true)
+        return
+      }
+
+      const data = (await res.json()) as { checkoutUrl?: string; error?: string }
+      if (!res.ok || !data.checkoutUrl) {
+        setErrorPago("No pudimos iniciar el pago. Intentá nuevamente en unos minutos.")
+        return
+      }
+
+      // Redirigir a la pasarela. Si estamos dentro de un iframe (preview),
+      // abrimos en una pestaña nueva.
+      if (window.self !== window.top) {
+        window.open(data.checkoutUrl, "_blank", "noopener,noreferrer")
+      } else {
+        window.location.href = data.checkoutUrl
+      }
+    } catch {
+      setErrorPago("Ocurrió un error de conexión. Intentá nuevamente.")
+    } finally {
+      setProcesando(false)
+    }
   }
 
   return (
@@ -165,7 +198,7 @@ export function PlanesPricing() {
                 {/* Precio */}
                 <div className="mt-5 flex items-end gap-1">
                   <span className="text-4xl font-extrabold tracking-tight text-white">
-                    {formatGuaranies(plan.precio)}
+                    {formatPrecioPlan(plan.precio)}
                   </span>
                   <span className="pb-1 text-sm text-slate-400">/mes</span>
                 </div>
@@ -291,30 +324,67 @@ export function PlanesPricing() {
                   Estas a un paso de mejorar tu plan a{" "}
                   <span className="font-semibold text-white">{planSeleccionado.nombre}</span> por{" "}
                   <span className="font-semibold text-emerald-400">
-                    {formatGuaranies(planSeleccionado.precio)}/mes
+                    {formatPrecioPlan(planSeleccionado.precio)}/mes
                   </span>
                   .
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-lg border border-[#0055A4]/30 bg-[#0055A4]/10 p-4 text-sm text-slate-300">
-            <p className="flex items-center gap-2 font-medium text-[#5b9bd5]">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Pago con PagoPar - proximamente
+          {noConfigurado ? (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-slate-300">
+              <p className="font-medium text-amber-400">Pago en configuración</p>
+              <p className="mt-2 text-slate-400">
+                Estamos terminando de conectar la pasarela PagoPar. En breve vas a poder completar la
+                mejora de tu plan con tarjeta, QR o transferencia.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-[#0055A4]/30 bg-[#0055A4]/10 p-4 text-sm text-slate-300">
+              <p className="flex items-center gap-2 font-medium text-[#5b9bd5]">
+                <ShieldCheck className="h-4 w-4" />
+                Pago seguro con PagoPar
+              </p>
+              <p className="mt-2 text-slate-400">
+                Vas a ser redirigido a la pasarela de PagoPar para pagar con tarjeta, QR o
+                transferencia. El cobro se realiza en guaraníes (Gs).
+              </p>
+            </div>
+          )}
+
+          {errorPago && (
+            <p className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+              {errorPago}
             </p>
-            <p className="mt-2 text-slate-400">
-              La pasarela de pago PagoPar se habilitara muy pronto. En cuanto este disponible, podras
-              completar la mejora de tu plan directamente desde aqui con tarjeta, QR o transferencia.
-            </p>
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={() => setDialogOpen(false)}
-              className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
-            >
-              Entendido
-            </Button>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            {noConfigurado ? (
+              <Button
+                onClick={() => setDialogOpen(false)}
+                className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
+              >
+                Entendido
+              </Button>
+            ) : (
+              <Button
+                onClick={iniciarPago}
+                disabled={procesando}
+                className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
+              >
+                {procesando ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Redirigiendo a PagoPar...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Pagar {planSeleccionado && formatPrecioPlan(planSeleccionado.precio)}
+                  </>
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

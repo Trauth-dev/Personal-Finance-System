@@ -9,7 +9,7 @@ import { TrendingUp, TrendingDown, Calendar, Trash2, AlertCircle, Download, Edit
 import { createClient } from "@/lib/supabase/client"
 import { useEffect, useState, useMemo } from "react"
 import { usePerfil } from "@/lib/contexts/perfil-context"
-import { formatDateWithoutTimezone } from "@/lib/utils"
+import { formatDateWithoutTimezone, formatMoney } from "@/lib/utils"
 import {
   Select,
   SelectContent,
@@ -820,7 +820,8 @@ export default function PersonalHistorialPage() {
                                           : egreso?.tipos_categoria_egreso?.color || "#ef4444",
                                       }}
                                     >
-                                      {isIngreso ? "+" : "-"}₲{Number(item.monto).toLocaleString("es-PY")}
+                                      {isIngreso ? "+" : "-"}
+                                      {formatMoney(Number(item.monto))}
                                     </p>
                                   </div>
                                   <div className="flex items-center gap-1">
@@ -912,7 +913,7 @@ export default function PersonalHistorialPage() {
                           </div>
                           <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-4 mt-2 sm:mt-0">
                             <p className="text-lg sm:text-2xl font-bold text-primary">
-                              +₲{Number(ingreso.monto).toLocaleString("es-PY")}
+                              +{formatMoney(Number(ingreso.monto))}
                             </p>
                             <div className="flex items-center gap-1">
                               <Button
@@ -1023,7 +1024,7 @@ export default function PersonalHistorialPage() {
                               className="text-lg sm:text-2xl font-bold"
                               style={{ color: egreso.tipos_categoria_egreso?.color || "#ef4444" }}
                             >
-                              -₲{Number(egreso.monto).toLocaleString("es-PY")}
+                              -{formatMoney(Number(egreso.monto))}
                             </p>
                             <div className="flex items-center gap-1">
                               <Button

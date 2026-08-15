@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { formatMoney as formatMoneyGlobal } from "@/lib/currency"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -790,7 +791,7 @@ export function AgendamientosManager({ perfilId }: AgendamientosManagerProps) {
   }
 
   const formatMoney = (amount: number) => {
-    return `Gs. ${amount.toLocaleString("es-PY")}`
+    return formatMoneyGlobal(amount)
   }
 
   // Render estrellas
