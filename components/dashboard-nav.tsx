@@ -23,6 +23,7 @@ import {
   Users,
   Package,
   ShoppingCart,
+  ShoppingBag,
   Building2,
   Boxes,
   PiggyBank,
@@ -148,16 +149,6 @@ const navItemsEmpresarial = [
     icon: Building2,
   },
   {
-    title: "Dashboard Secundario",
-    href: "/dashboard/empresarial/resumen",
-    icon: Activity,
-  },
-  {
-    title: "Diagnostico inteligente",
-    href: "/dashboard/empresarial/terciario",
-    icon: BarChart3,
-  },
-  {
     title: "Carga de Ingreso y Egreso",
     href: "/dashboard/carga",
     icon: PlusCircle,
@@ -178,19 +169,14 @@ const navItemsEmpresarial = [
     icon: Boxes,
   },
   {
+    title: "Compras",
+    href: "/dashboard/empresarial/compras",
+    icon: ShoppingBag,
+  },
+  {
     title: "Ventas",
     href: "/dashboard/empresarial/ventas",
     icon: ShoppingCart,
-  },
-  {
-    title: "Historial",
-    href: "/dashboard/empresarial/historial",
-    icon: History,
-  },
-  {
-    title: "Asesoramiento + Herramientas",
-    href: "/dashboard/empresarial/analisis",
-    icon: BarChart3,
   },
   {
     title: "Flujo de Caja",
@@ -198,10 +184,20 @@ const navItemsEmpresarial = [
     icon: TrendingUp,
   },
   {
-    title: "Categorías",
-    href: "/dashboard/empresarial/categorias",
-    icon: PieChart,
+    title: "Reportes",
+    href: "/dashboard/empresarial/reportes",
+    icon: BarChart3,
   },
+  {
+    title: "Historial",
+    href: "/dashboard/empresarial/historial",
+    icon: History,
+  },
+  // Ocultos temporalmente (páginas aún no desarrolladas):
+  // Dashboard Secundario -> /dashboard/empresarial/resumen
+  // Diagnóstico inteligente -> /dashboard/empresarial/terciario
+  // Asesoramiento + Herramientas -> /dashboard/empresarial/analisis
+  // Categorías -> /dashboard/empresarial/categorias
 ]
 
 const navItemsCRM = [

@@ -35,6 +35,7 @@ interface Venta {
   fecha: string
   notas: string | null
   created_at: string
+  ingreso_id: string | null
   inventario?: {
     nombre: string
   }
@@ -160,9 +161,12 @@ export function VentasManager() {
 
     try {
       const total = calcularTotal()
+      // producto_nombre es NOT NULL en la tabla: lo tomamos del producto elegido.
+      const productoNombre = producto?.nombre || "Producto"
 
       const dataToSave = {
         producto_id: formData.producto_id,
+        producto_nombre: productoNombre,
         cantidad: cantidad,
         precio_unitario: Number.parseFloat(formData.precio_unitario),
         total: total,
@@ -176,16 +180,51 @@ export function VentasManager() {
 
         if (error) throw error
 
+        // Mantener sincronizado el ingreso vinculado (si existe)
+        if (editingVenta.ingreso_id) {
+          await supabase
+            .from("ingresos")
+            .update({
+              tipo_ingreso: "Ventas",
+              monto: total,
+              fecha: formData.fecha,
+            })
+            .eq("id", editingVenta.ingreso_id)
+        }
+
         toast.success("Venta actualizada exitosamente")
       } else {
+        // 1) Crear el ingreso primero, para vincularlo a la venta
+        const { data: ingresoData, error: ingresoError } = await supabase
+          .from("ingresos")
+          .insert({
+            user_id: perfilActual.user_id,
+            perfil_id: perfilActual.id,
+            tipo_ingreso: "Ventas",
+            monto: total,
+            fecha: formData.fecha,
+          })
+          .select("id")
+          .single()
+
+        if (ingresoError) throw ingresoError
+
+        // 2) Crear la venta vinculada al ingreso
         const { error } = await supabase.from("ventas").insert({
           ...dataToSave,
           perfil_id: perfilActual.id,
+          ingreso_id: ingresoData?.id ?? null,
         })
 
-        if (error) throw error
+        if (error) {
+          // Revertir el ingreso si la venta falla, para no dejar ingresos huérfanos
+          if (ingresoData?.id) {
+            await supabase.from("ingresos").delete().eq("id", ingresoData.id)
+          }
+          throw error
+        }
 
-        // Actualizar stock del producto
+        // 3) Actualizar stock del producto
         if (producto) {
           const { error: stockError } = await supabase
             .from("inventario")
@@ -197,7 +236,7 @@ export function VentasManager() {
           if (stockError) throw stockError
         }
 
-        toast.success("Venta registrada exitosamente")
+        toast.success("Venta registrada e ingreso generado")
       }
 
       setIsDialogOpen(false)
@@ -223,16 +262,34 @@ export function VentasManager() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar esta venta?")) return
+    if (!confirm("¿Estás seguro de que deseas eliminar esta venta? También se eliminará el ingreso asociado.")) return
 
     const supabase = createClient()
 
     try {
+      const venta = ventas.find((v) => v.id === id)
+
+      // Reponer el stock del producto vendido
+      if (venta?.producto_id) {
+        const producto = productos.find((p) => p.id === venta.producto_id)
+        if (producto) {
+          await supabase
+            .from("inventario")
+            .update({ stock_actual: producto.stock_actual + Number(venta.cantidad) })
+            .eq("id", venta.producto_id)
+        }
+      }
+
       const { error } = await supabase.from("ventas").delete().eq("id", id)
 
       if (error) throw error
 
-      toast.success("Venta eliminada exitosamente")
+      // Eliminar el ingreso vinculado, para que las finanzas queden consistentes
+      if (venta?.ingreso_id) {
+        await supabase.from("ingresos").delete().eq("id", venta.ingreso_id)
+      }
+
+      toast.success("Venta e ingreso eliminados")
       cargarDatos()
     } catch (error) {
       console.error("Error al eliminar venta:", error)
