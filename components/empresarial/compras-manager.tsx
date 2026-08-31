@@ -20,15 +20,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Badge } from "@/components/ui/badge"
 import { Plus, Search, Edit, Trash2, ShoppingBag } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { formatMoney } from "@/lib/currency"
 
-const SIN_MATERIA = "none"
+const SIN_PROVEEDOR = "none"
+
+// Tipo de destino de la compra: a qué se le suma el stock
+type Destino = "producto" | "materia" | "otro"
 
 interface Compra {
   id: string
+  producto_id: string | null
   materia_prima_id: string | null
   materia_prima_nombre: string
   proveedor_id: string | null
@@ -54,20 +59,29 @@ interface MateriaPrima {
   costo_unitario: number
 }
 
+interface Producto {
+  id: string
+  nombre: string
+  stock_actual: number
+  precio_costo: number
+}
+
 export function ComprasManager() {
   const { perfilActual } = usePerfil()
   const [compras, setCompras] = useState<Compra[]>([])
   const [proveedores, setProveedores] = useState<Proveedor[]>([])
   const [materiasPrimas, setMateriasPrimas] = useState<MateriaPrima[]>([])
+  const [productos, setProductos] = useState<Producto[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCompra, setEditingCompra] = useState<Compra | null>(null)
 
   const [formData, setFormData] = useState({
-    materia_prima_id: SIN_MATERIA,
-    materia_prima_nombre: "",
-    proveedor_id: SIN_MATERIA,
+    destino: "producto" as Destino,
+    item_id: "",
+    item_nombre: "",
+    proveedor_id: SIN_PROVEEDOR,
     cantidad: "",
     costo_unitario: "",
     fecha: format(new Date(), "yyyy-MM-dd"),
@@ -87,19 +101,26 @@ export function ComprasManager() {
     setIsLoading(true)
 
     try {
-      const [{ data: comprasData }, { data: proveedoresData }, { data: materiasData }] = await Promise.all([
-        supabase.from("compras").select("*").eq("perfil_id", perfilActual.id).order("fecha", { ascending: false }),
-        supabase.from("proveedores").select("id, nombre").eq("perfil_id", perfilActual.id).order("nombre"),
-        supabase
-          .from("materias_primas")
-          .select("id, nombre, stock_actual, costo_unitario")
-          .eq("perfil_id", perfilActual.id)
-          .order("nombre"),
-      ])
+      const [{ data: comprasData }, { data: proveedoresData }, { data: materiasData }, { data: productosData }] =
+        await Promise.all([
+          supabase.from("compras").select("*").eq("perfil_id", perfilActual.id).order("fecha", { ascending: false }),
+          supabase.from("proveedores").select("id, nombre").eq("perfil_id", perfilActual.id).order("nombre"),
+          supabase
+            .from("materias_primas")
+            .select("id, nombre, stock_actual, costo_unitario")
+            .eq("perfil_id", perfilActual.id)
+            .order("nombre"),
+          supabase
+            .from("inventario")
+            .select("id, nombre, stock_actual, precio_costo")
+            .eq("perfil_id", perfilActual.id)
+            .order("nombre"),
+        ])
 
       setCompras(comprasData || [])
       setProveedores(proveedoresData || [])
       setMateriasPrimas(materiasData || [])
+      setProductos(productosData || [])
     } catch (error) {
       console.error("Error al cargar datos:", error)
       toast.error("Error al cargar datos")
@@ -108,24 +129,60 @@ export function ComprasManager() {
     }
   }
 
-  const handleMateriaChange = (materiaId: string) => {
-    if (materiaId === SIN_MATERIA) {
-      setFormData({ ...formData, materia_prima_id: SIN_MATERIA })
-      return
+  const handleDestinoChange = (destino: Destino) => {
+    setFormData({ ...formData, destino, item_id: "", item_nombre: "" })
+  }
+
+  const handleItemChange = (itemId: string) => {
+    if (formData.destino === "producto") {
+      const p = productos.find((x) => x.id === itemId)
+      setFormData({
+        ...formData,
+        item_id: itemId,
+        item_nombre: p?.nombre || "",
+        costo_unitario: p ? p.precio_costo.toString() : formData.costo_unitario,
+      })
+    } else {
+      const m = materiasPrimas.find((x) => x.id === itemId)
+      setFormData({
+        ...formData,
+        item_id: itemId,
+        item_nombre: m?.nombre || "",
+        costo_unitario: m ? m.costo_unitario.toString() : formData.costo_unitario,
+      })
     }
-    const materia = materiasPrimas.find((m) => m.id === materiaId)
-    setFormData({
-      ...formData,
-      materia_prima_id: materiaId,
-      materia_prima_nombre: materia?.nombre || "",
-      costo_unitario: materia ? materia.costo_unitario.toString() : formData.costo_unitario,
-    })
   }
 
   const calcularTotal = () => {
     const cantidad = Number.parseFloat(formData.cantidad) || 0
     const costo = Number.parseFloat(formData.costo_unitario) || 0
     return cantidad * costo
+  }
+
+  // Suma (signo +1) o resta (signo -1) stock al destino de una compra
+  const ajustarStock = async (
+    supabase: ReturnType<typeof createClient>,
+    compra: { producto_id: string | null; materia_prima_id: string | null; cantidad: number },
+    signo: 1 | -1,
+  ) => {
+    const delta = signo * Number(compra.cantidad)
+    if (compra.producto_id) {
+      const p = productos.find((x) => x.id === compra.producto_id)
+      if (p) {
+        await supabase
+          .from("inventario")
+          .update({ stock_actual: Math.max(0, Number(p.stock_actual) + delta) })
+          .eq("id", compra.producto_id)
+      }
+    } else if (compra.materia_prima_id) {
+      const m = materiasPrimas.find((x) => x.id === compra.materia_prima_id)
+      if (m) {
+        await supabase
+          .from("materias_primas")
+          .update({ stock_actual: Math.max(0, Number(m.stock_actual) + delta) })
+          .eq("id", compra.materia_prima_id)
+      }
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -148,16 +205,36 @@ export function ComprasManager() {
       return
     }
 
-    const proveedor = proveedores.find((p) => p.id === formData.proveedor_id)
-    const materia = materiasPrimas.find((m) => m.id === formData.materia_prima_id)
+    // Resolver el ítem comprado según el destino
+    let productoId: string | null = null
+    let materiaPrimaId: string | null = null
+    let itemNombre = ""
 
-    // Nombre del ítem comprado: materia prima elegida o texto libre
-    const materiaNombre = materia?.nombre || formData.materia_prima_nombre.trim()
-    if (!materiaNombre) {
-      toast.error("Indicá qué compraste (materia prima o descripción)")
-      return
+    if (formData.destino === "producto") {
+      const p = productos.find((x) => x.id === formData.item_id)
+      if (!p) {
+        toast.error("Seleccioná un producto de inventario")
+        return
+      }
+      productoId = p.id
+      itemNombre = p.nombre
+    } else if (formData.destino === "materia") {
+      const m = materiasPrimas.find((x) => x.id === formData.item_id)
+      if (!m) {
+        toast.error("Seleccioná una materia prima")
+        return
+      }
+      materiaPrimaId = m.id
+      itemNombre = m.nombre
+    } else {
+      itemNombre = formData.item_nombre.trim()
+      if (!itemNombre) {
+        toast.error("Indicá qué compraste")
+        return
+      }
     }
 
+    const proveedor = proveedores.find((p) => p.id === formData.proveedor_id)
     const supabase = createClient()
 
     try {
@@ -165,8 +242,9 @@ export function ComprasManager() {
       const proveedorNombre = proveedor?.nombre || "Sin proveedor"
 
       const dataToSave = {
-        materia_prima_id: materia?.id || null,
-        materia_prima_nombre: materiaNombre,
+        producto_id: productoId,
+        materia_prima_id: materiaPrimaId,
+        materia_prima_nombre: itemNombre,
         proveedor_id: proveedor?.id || null,
         proveedor_nombre: proveedorNombre,
         cantidad,
@@ -177,18 +255,20 @@ export function ComprasManager() {
       }
 
       if (editingCompra) {
+        // Revertir el stock del destino anterior antes de aplicar el nuevo
+        await ajustarStock(supabase, editingCompra, -1)
+
         const { error } = await supabase.from("compras").update(dataToSave).eq("id", editingCompra.id)
         if (error) throw error
+
+        // Aplicar el stock del nuevo destino
+        await ajustarStock(supabase, { producto_id: productoId, materia_prima_id: materiaPrimaId, cantidad }, 1)
 
         // Sincronizar el egreso vinculado
         if (editingCompra.egreso_id) {
           await supabase
             .from("egresos")
-            .update({
-              monto: total,
-              fecha: formData.fecha,
-              concepto: `Compra: ${materiaNombre}`,
-            })
+            .update({ monto: total, fecha: formData.fecha, concepto: `Compra: ${itemNombre}` })
             .eq("id", editingCompra.egreso_id)
         }
 
@@ -202,7 +282,7 @@ export function ComprasManager() {
             perfil_id: perfilActual.id,
             monto: total,
             fecha: formData.fecha,
-            concepto: `Compra: ${materiaNombre}`,
+            concepto: `Compra: ${itemNombre}`,
           })
           .select("id")
           .single()
@@ -223,13 +303,8 @@ export function ComprasManager() {
           throw error
         }
 
-        // 3) Sumar stock a la materia prima (si se eligió una)
-        if (materia) {
-          await supabase
-            .from("materias_primas")
-            .update({ stock_actual: Number(materia.stock_actual) + cantidad })
-            .eq("id", materia.id)
-        }
+        // 3) Sumar stock al destino elegido (producto o materia prima)
+        await ajustarStock(supabase, { producto_id: productoId, materia_prima_id: materiaPrimaId, cantidad }, 1)
 
         toast.success("Compra registrada y egreso generado")
       }
@@ -244,11 +319,13 @@ export function ComprasManager() {
   }
 
   const handleEdit = (compra: Compra) => {
+    const destino: Destino = compra.producto_id ? "producto" : compra.materia_prima_id ? "materia" : "otro"
     setEditingCompra(compra)
     setFormData({
-      materia_prima_id: compra.materia_prima_id || SIN_MATERIA,
-      materia_prima_nombre: compra.materia_prima_nombre,
-      proveedor_id: compra.proveedor_id || SIN_MATERIA,
+      destino,
+      item_id: compra.producto_id || compra.materia_prima_id || "",
+      item_nombre: compra.materia_prima_nombre,
+      proveedor_id: compra.proveedor_id || SIN_PROVEEDOR,
       cantidad: compra.cantidad.toString(),
       costo_unitario: compra.costo_unitario.toString(),
       fecha: compra.fecha,
@@ -258,22 +335,16 @@ export function ComprasManager() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta compra? También se eliminará el egreso asociado.")) return
+    if (!confirm("¿Eliminar esta compra? También se eliminará el egreso asociado y se revertirá el stock.")) return
 
     const supabase = createClient()
 
     try {
       const compra = compras.find((c) => c.id === id)
 
-      // Revertir el stock sumado a la materia prima
-      if (compra?.materia_prima_id) {
-        const materia = materiasPrimas.find((m) => m.id === compra.materia_prima_id)
-        if (materia) {
-          await supabase
-            .from("materias_primas")
-            .update({ stock_actual: Math.max(0, Number(materia.stock_actual) - Number(compra.cantidad)) })
-            .eq("id", compra.materia_prima_id)
-        }
+      // Revertir el stock sumado (al producto o materia prima)
+      if (compra) {
+        await ajustarStock(supabase, compra, -1)
       }
 
       const { error } = await supabase.from("compras").delete().eq("id", id)
@@ -293,9 +364,10 @@ export function ComprasManager() {
 
   const resetForm = () => {
     setFormData({
-      materia_prima_id: SIN_MATERIA,
-      materia_prima_nombre: "",
-      proveedor_id: SIN_MATERIA,
+      destino: "producto",
+      item_id: "",
+      item_nombre: "",
+      proveedor_id: SIN_PROVEEDOR,
       cantidad: "",
       costo_unitario: "",
       fecha: format(new Date(), "yyyy-MM-dd"),
@@ -318,6 +390,9 @@ export function ComprasManager() {
     })
     .reduce((sum, c) => sum + Number(c.total), 0)
   const totalHistorico = compras.reduce((sum, c) => sum + Number(c.total), 0)
+
+  const tipoCompra = (c: Compra) =>
+    c.producto_id ? "Producto" : c.materia_prima_id ? "Materia prima" : "Otro"
 
   if (!perfilActual) {
     return (
@@ -365,7 +440,7 @@ export function ComprasManager() {
             <div>
               <CardTitle>Registro de Compras</CardTitle>
               <CardDescription>
-                Cada compra genera automáticamente un egreso en tus finanzas empresariales
+                Cada compra genera un egreso y suma stock al producto o materia prima elegido
               </CardDescription>
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -385,6 +460,21 @@ export function ComprasManager() {
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Destino de la compra */}
+                  <div className="space-y-2">
+                    <Label>¿Qué estás comprando?</Label>
+                    <Select value={formData.destino} onValueChange={(v) => handleDestinoChange(v as Destino)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="producto">Producto de inventario (reventa)</SelectItem>
+                        <SelectItem value="materia">Materia prima</SelectItem>
+                        <SelectItem value="otro">Otro / gasto (sin stock)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="proveedor_id">Proveedor</Label>
@@ -396,7 +486,7 @@ export function ComprasManager() {
                           <SelectValue placeholder="Seleccionar proveedor" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value={SIN_MATERIA}>Sin proveedor</SelectItem>
+                          <SelectItem value={SIN_PROVEEDOR}>Sin proveedor</SelectItem>
                           {proveedores.map((p) => (
                             <SelectItem key={p.id} value={p.id}>
                               {p.nombre}
@@ -406,30 +496,61 @@ export function ComprasManager() {
                       </Select>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="materia_prima_id">Materia prima</Label>
-                      <Select value={formData.materia_prima_id} onValueChange={handleMateriaChange}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={SIN_MATERIA}>Otro / descripción libre</SelectItem>
-                          {materiasPrimas.map((m) => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.nombre}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {formData.destino === "producto" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="item_id">Producto *</Label>
+                        <Select value={formData.item_id} onValueChange={handleItemChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar producto" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {productos.length === 0 ? (
+                              <SelectItem value="none" disabled>
+                                No hay productos en inventario
+                              </SelectItem>
+                            ) : (
+                              productos.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>
+                                  {p.nombre} (stock: {p.stock_actual})
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
-                    {formData.materia_prima_id === SIN_MATERIA && (
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="materia_prima_nombre">¿Qué compraste? *</Label>
+                    {formData.destino === "materia" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="item_id">Materia prima *</Label>
+                        <Select value={formData.item_id} onValueChange={handleItemChange}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar materia prima" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {materiasPrimas.length === 0 ? (
+                              <SelectItem value="none" disabled>
+                                No hay materias primas
+                              </SelectItem>
+                            ) : (
+                              materiasPrimas.map((m) => (
+                                <SelectItem key={m.id} value={m.id}>
+                                  {m.nombre} (stock: {m.stock_actual})
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {formData.destino === "otro" && (
+                      <div className="space-y-2">
+                        <Label htmlFor="item_nombre">¿Qué compraste? *</Label>
                         <Input
-                          id="materia_prima_nombre"
-                          value={formData.materia_prima_nombre}
-                          onChange={(e) => setFormData({ ...formData, materia_prima_nombre: e.target.value })}
+                          id="item_nombre"
+                          value={formData.item_nombre}
+                          onChange={(e) => setFormData({ ...formData, item_nombre: e.target.value })}
                           placeholder="Ej: Envases, etiquetas, servicio..."
                         />
                       </div>
@@ -536,7 +657,8 @@ export function ComprasManager() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Producto</TableHead>
+                    <TableHead>Ítem</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead>Proveedor</TableHead>
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Costo Unit.</TableHead>
@@ -549,6 +671,9 @@ export function ComprasManager() {
                   {filteredCompras.map((compra) => (
                     <TableRow key={compra.id}>
                       <TableCell className="font-medium">{compra.materia_prima_nombre}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{tipoCompra(compra)}</Badge>
+                      </TableCell>
                       <TableCell>{compra.proveedor_nombre}</TableCell>
                       <TableCell>{compra.cantidad}</TableCell>
                       <TableCell>{formatMoney(compra.costo_unitario)}</TableCell>
