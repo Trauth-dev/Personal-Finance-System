@@ -179,6 +179,11 @@ const navItemsEmpresarial = [
     icon: ShoppingCart,
   },
   {
+    title: "Cuentas por Cobrar/Pagar",
+    href: "/dashboard/empresarial/cuentas",
+    icon: Wallet,
+  },
+  {
     title: "Flujo de Caja",
     href: "/dashboard/empresarial/flujo",
     icon: TrendingUp,

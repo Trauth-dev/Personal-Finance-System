@@ -44,6 +44,8 @@ interface Compra {
   fecha: string
   notas: string | null
   egreso_id: string | null
+  estado_pago: string
+  fecha_pago: string | null
   created_at: string
 }
 
@@ -86,6 +88,7 @@ export function ComprasManager() {
     costo_unitario: "",
     fecha: format(new Date(), "yyyy-MM-dd"),
     notas: "",
+    estado_pago: "pagado",
   })
 
   useEffect(() => {
@@ -252,6 +255,8 @@ export function ComprasManager() {
         total,
         fecha: formData.fecha,
         notas: formData.notas || null,
+        estado_pago: formData.estado_pago,
+        fecha_pago: formData.estado_pago === "pagado" ? formData.fecha : null,
       }
 
       if (editingCompra) {
@@ -330,6 +335,7 @@ export function ComprasManager() {
       costo_unitario: compra.costo_unitario.toString(),
       fecha: compra.fecha,
       notas: compra.notas || "",
+      estado_pago: compra.estado_pago || "pagado",
     })
     setIsDialogOpen(true)
   }
@@ -372,6 +378,7 @@ export function ComprasManager() {
       costo_unitario: "",
       fecha: format(new Date(), "yyyy-MM-dd"),
       notas: "",
+      estado_pago: "pagado",
     })
     setEditingCompra(null)
   }
@@ -602,6 +609,22 @@ export function ComprasManager() {
                   </div>
 
                   <div className="space-y-2">
+                    <Label htmlFor="estado_pago">Estado de pago *</Label>
+                    <Select
+                      value={formData.estado_pago}
+                      onValueChange={(value) => setFormData({ ...formData, estado_pago: value })}
+                    >
+                      <SelectTrigger id="estado_pago">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pagado">Pagado (contado)</SelectItem>
+                        <SelectItem value="pendiente">Pendiente (a crédito)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="notas">Notas</Label>
                     <Textarea
                       id="notas"
@@ -664,6 +687,7 @@ export function ComprasManager() {
                     <TableHead>Costo Unit.</TableHead>
                     <TableHead>Total</TableHead>
                     <TableHead>Fecha</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -679,6 +703,17 @@ export function ComprasManager() {
                       <TableCell>{formatMoney(compra.costo_unitario)}</TableCell>
                       <TableCell className="font-semibold">{formatMoney(compra.total)}</TableCell>
                       <TableCell>{format(new Date(compra.fecha), "dd/MM/yyyy")}</TableCell>
+                      <TableCell>
+                        {compra.estado_pago === "pendiente" ? (
+                          <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400">
+                            Por pagar
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-green-500/40 text-green-600 dark:text-green-400">
+                            Pagado
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => handleEdit(compra)}>

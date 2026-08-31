@@ -14,7 +14,9 @@ interface ReportesEmpresarialesProps {
 
 interface MetricasGenerales {
   ventasTotales: number
-  costosTotales: number
+  costoVentas: number
+  comprasTotales: number
+  gastosFijos: number
   utilidadBruta: number
   margenBruto: number
   productosVendidos: number
@@ -63,29 +65,46 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
     try {
       const fechaInicio = calcularFechaInicio(periodo)
 
-      const [ventasRes, inventarioRes, proveedoresRes, comprasRes] = await Promise.all([
+      const [ventasRes, inventarioRes, proveedoresRes, comprasRes, egresosRes] = await Promise.all([
         supabase.from("ventas").select("*").eq("perfil_id", perfilActual.id).gte("fecha", fechaInicio),
         supabase.from("inventario").select("*").eq("perfil_id", perfilActual.id).eq("activo", true),
         supabase.from("proveedores").select("*").eq("perfil_id", perfilActual.id).eq("activo", true),
         supabase.from("compras").select("*").eq("perfil_id", perfilActual.id).gte("fecha", fechaInicio),
+        supabase.from("egresos").select("monto, concepto").eq("perfil_id", perfilActual.id).gte("fecha", fechaInicio),
       ])
 
       const ventas = ventasRes.data || []
       const inventario = inventarioRes.data || []
       const proveedores = proveedoresRes.data || []
       const compras = comprasRes.data || []
+      const egresos = egresosRes.data || []
 
       const ventasTotales = ventas.reduce((sum, v) => sum + Number(v.total), 0)
-      const costosTotales = compras.reduce((sum, c) => sum + Number(c.total), 0)
-      const utilidadBruta = ventasTotales - costosTotales
+      // Compras del período (egreso de caja por reabastecimiento). NO es el costo de ventas.
+      const comprasTotales = compras.reduce((sum, c) => sum + Number(c.total), 0)
+      // Costo de Ventas (COGS): costo de lo efectivamente vendido = cantidad vendida × precio de costo del producto.
+      const costoVentas = ventas.reduce((sum, v) => {
+        const producto = inventario.find((i) => i.nombre === v.producto_nombre)
+        const costoUnitario = producto ? Number(producto.precio_costo) : 0
+        return sum + Number(v.cantidad) * costoUnitario
+      }, 0)
+      const utilidadBruta = ventasTotales - costoVentas
       const margenBruto = ventasTotales > 0 ? (utilidadBruta / ventasTotales) * 100 : 0
       const productosVendidos = ventas.reduce((sum, v) => sum + Number(v.cantidad), 0)
       const valorInventario = inventario.reduce((sum, i) => sum + Number(i.stock_actual) * Number(i.precio_costo), 0)
       const stockBajo = inventario.filter((i) => Number(i.stock_actual) <= Number(i.stock_minimo)).length
 
+      // Costos fijos (gastos operativos): egresos del negocio que NO son reabastecimiento de mercadería.
+      // Las compras generan egresos con concepto "Compra: ...", así que los excluimos.
+      const gastosFijos = egresos
+        .filter((e) => !String(e.concepto || "").startsWith("Compra:"))
+        .reduce((sum, e) => sum + Number(e.monto), 0)
+
       setMetricas({
         ventasTotales,
-        costosTotales,
+        costoVentas,
+        comprasTotales,
+        gastosFijos,
         utilidadBruta,
         margenBruto,
         productosVendidos,
@@ -247,7 +266,9 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{metricas.proveedoresActivos}</div>
-              <p className="text-xs text-muted-foreground mt-1">Costos: {formatCurrency(metricas.costosTotales)}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Compras del período: {formatCurrency(metricas.comprasTotales)}
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -382,8 +403,11 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
                   </div>
 
                   <div className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-950/20 rounded-lg">
-                    <span className="font-medium">Costo de Ventas</span>
-                    <span className="text-lg font-bold text-red-600">-{formatCurrency(metricas.costosTotales)}</span>
+                    <div className="flex flex-col">
+                      <span className="font-medium">Costo de Ventas (CMV)</span>
+                      <span className="text-xs text-muted-foreground">Costo de lo efectivamente vendido</span>
+                    </div>
+                    <span className="text-lg font-bold text-red-600">-{formatCurrency(metricas.costoVentas)}</span>
                   </div>
 
                   <div className="border-t-2 border-dashed pt-3">
@@ -392,6 +416,15 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
                       <span className="text-xl font-bold text-blue-600">{formatCurrency(metricas.utilidadBruta)}</span>
                     </div>
                   </div>
+
+                  <div className="flex justify-between items-center px-3 py-2 text-sm text-muted-foreground">
+                    <span>Compras del período (reabastecimiento)</span>
+                    <span>{formatCurrency(metricas.comprasTotales)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground px-3">
+                    Las compras reponen inventario y afectan tu caja, pero solo se vuelven costo cuando el producto se
+                    vende. Por eso la utilidad bruta usa el costo de ventas (CMV), no el total comprado.
+                  </p>
 
                   <div className="grid grid-cols-2 gap-4 mt-6">
                     <div className="p-4 border rounded-lg">
