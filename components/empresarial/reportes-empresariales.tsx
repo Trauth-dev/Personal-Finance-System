@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePerfil } from "@/lib/contexts/perfil-context"
-import { TrendingUp, DollarSign, Package, ShoppingCart, Users, AlertCircle } from "lucide-react"
+import { TrendingUp, DollarSign, Package, ShoppingCart, Users, AlertCircle, Target } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface ReportesEmpresarialesProps {
@@ -275,7 +275,7 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
       )}
 
       <Tabs defaultValue="ventas" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="ventas">
             <ShoppingCart className="h-4 w-4 mr-2" />
             Ventas
@@ -287,6 +287,10 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
           <TabsTrigger value="rentabilidad">
             <TrendingUp className="h-4 w-4 mr-2" />
             Rentabilidad
+          </TabsTrigger>
+          <TabsTrigger value="equilibrio">
+            <Target className="h-4 w-4 mr-2" />
+            Equilibrio
           </TabsTrigger>
         </TabsList>
 
@@ -438,6 +442,106 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="equilibrio" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Punto de Equilibrio</CardTitle>
+              <CardDescription>Cuánto necesitás vender para cubrir todos tus costos y no perder</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metricas &&
+                (() => {
+                  // Margen de contribución: por cada Gs vendido, cuánto queda tras el costo de la mercadería.
+                  const margenContribucion = metricas.margenBruto / 100
+                  const ventasEquilibrio = margenContribucion > 0 ? metricas.gastosFijos / margenContribucion : 0
+                  const utilidadNeta = metricas.utilidadBruta - metricas.gastosFijos
+                  const cubierto =
+                    ventasEquilibrio > 0 ? Math.min(100, (metricas.ventasTotales / ventasEquilibrio) * 100) : 0
+                  const alcanzado = metricas.ventasTotales >= ventasEquilibrio && ventasEquilibrio > 0
+
+                  return (
+                    <div className="space-y-4">
+                      {metricas.gastosFijos === 0 ? (
+                        <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                          <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="text-sm">
+                            <p className="font-medium text-amber-600 dark:text-amber-400">
+                              No registraste gastos fijos en este período.
+                            </p>
+                            <p className="text-muted-foreground mt-0.5">
+                              Cargá tus gastos operativos (alquiler, sueldos, servicios) como egresos para calcular el
+                              punto de equilibrio real.
+                            </p>
+                          </div>
+                        </div>
+                      ) : margenContribucion <= 0 ? (
+                        <div className="flex items-start gap-3 p-4 rounded-lg border border-red-500/30 bg-red-500/10">
+                          <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                          <p className="text-sm text-red-600 dark:text-red-400">
+                            Tu margen bruto es cero o negativo: estás vendiendo al costo o por debajo, así que no hay
+                            punto de equilibrio posible. Revisá tus precios de venta.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="p-5 rounded-lg bg-primary/10 border border-primary/20 text-center">
+                            <p className="text-sm text-muted-foreground mb-1">Necesitás vender para no perder</p>
+                            <p className="text-3xl font-bold text-primary">{formatCurrency(ventasEquilibrio)}</p>
+                            <p className="text-xs text-muted-foreground mt-1">en el período seleccionado</p>
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span className="text-muted-foreground">Progreso hacia el equilibrio</span>
+                              <span className="font-medium">{cubierto.toFixed(0)}%</span>
+                            </div>
+                            <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${alcanzado ? "bg-green-500" : "bg-primary"}`}
+                                style={{ width: `${cubierto}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {alcanzado
+                                ? `Ya superaste el punto de equilibrio. Tu ganancia neta del período es ${formatCurrency(utilidadNeta)}.`
+                                : `Te faltan ${formatCurrency(ventasEquilibrio - metricas.ventasTotales)} en ventas para cubrir tus costos.`}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 pt-2">
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground mb-1">Gastos fijos del período</p>
+                              <p className="text-xl font-bold">{formatCurrency(metricas.gastosFijos)}</p>
+                            </div>
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground mb-1">Margen de contribución</p>
+                              <p className="text-xl font-bold">{metricas.margenBruto.toFixed(1)}%</p>
+                            </div>
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground mb-1">Ventas actuales</p>
+                              <p className="text-xl font-bold">{formatCurrency(metricas.ventasTotales)}</p>
+                            </div>
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground mb-1">Ganancia neta</p>
+                              <p className={`text-xl font-bold ${utilidadNeta >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {formatCurrency(utilidadNeta)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground">
+                            El punto de equilibrio se calcula dividiendo tus gastos fijos entre el margen de
+                            contribución. Los gastos fijos son tus egresos del período que no son compra de mercadería.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )
+                })()}
             </CardContent>
           </Card>
         </TabsContent>
