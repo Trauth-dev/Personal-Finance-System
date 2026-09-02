@@ -46,6 +46,7 @@ interface Compra {
   egreso_id: string | null
   estado_pago: string
   fecha_pago: string | null
+  fecha_vencimiento: string | null
   created_at: string
 }
 
@@ -89,6 +90,7 @@ export function ComprasManager() {
     fecha: format(new Date(), "yyyy-MM-dd"),
     notas: "",
     estado_pago: "pagado",
+    fecha_vencimiento: "",
   })
 
   useEffect(() => {
@@ -257,6 +259,8 @@ export function ComprasManager() {
         notas: formData.notas || null,
         estado_pago: formData.estado_pago,
         fecha_pago: formData.estado_pago === "pagado" ? formData.fecha : null,
+        fecha_vencimiento:
+          formData.estado_pago === "pendiente" && formData.fecha_vencimiento ? formData.fecha_vencimiento : null,
       }
 
       if (editingCompra) {
@@ -336,6 +340,7 @@ export function ComprasManager() {
       fecha: compra.fecha,
       notas: compra.notas || "",
       estado_pago: compra.estado_pago || "pagado",
+      fecha_vencimiento: compra.fecha_vencimiento || "",
     })
     setIsDialogOpen(true)
   }
@@ -379,6 +384,7 @@ export function ComprasManager() {
       fecha: format(new Date(), "yyyy-MM-dd"),
       notas: "",
       estado_pago: "pagado",
+      fecha_vencimiento: "",
     })
     setEditingCompra(null)
   }
@@ -623,6 +629,22 @@ export function ComprasManager() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {formData.estado_pago === "pendiente" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="fecha_vencimiento">Fecha de vencimiento del pago</Label>
+                      <Input
+                        id="fecha_vencimiento"
+                        type="date"
+                        value={formData.fecha_vencimiento}
+                        min={formData.fecha}
+                        onChange={(e) => setFormData({ ...formData, fecha_vencimiento: e.target.value })}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Opcional. Se usa para avisarte cuándo debés pagar esta compra.
+                      </p>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="notas">Notas</Label>

@@ -40,6 +40,7 @@ interface Venta {
   ingreso_id: string | null
   estado_pago: string
   fecha_pago: string | null
+  fecha_vencimiento: string | null
   inventario?: {
     nombre: string
   }
@@ -71,6 +72,7 @@ export function VentasManager() {
     fecha: format(new Date(), "yyyy-MM-dd"),
     notas: "",
     estado_pago: "pagado",
+    fecha_vencimiento: "",
   })
 
   useEffect(() => {
@@ -183,6 +185,8 @@ export function VentasManager() {
         notas: formData.notas || null,
         estado_pago: formData.estado_pago,
         fecha_pago: formData.estado_pago === "pagado" ? formData.fecha : null,
+        fecha_vencimiento:
+          formData.estado_pago === "pendiente" && formData.fecha_vencimiento ? formData.fecha_vencimiento : null,
       }
 
       if (editingVenta) {
@@ -268,6 +272,7 @@ export function VentasManager() {
       fecha: venta.fecha,
       notas: venta.notas || "",
       estado_pago: venta.estado_pago || "pagado",
+      fecha_vencimiento: venta.fecha_vencimiento || "",
     })
     setIsDialogOpen(true)
   }
@@ -317,6 +322,7 @@ export function VentasManager() {
       fecha: format(new Date(), "yyyy-MM-dd"),
       notas: "",
       estado_pago: "pagado",
+      fecha_vencimiento: "",
     })
     setEditingVenta(null)
   }
@@ -489,6 +495,22 @@ export function VentasManager() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {formData.estado_pago === "pendiente" && (
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="fecha_vencimiento">Fecha de vencimiento del cobro</Label>
+                        <Input
+                          id="fecha_vencimiento"
+                          type="date"
+                          value={formData.fecha_vencimiento}
+                          min={formData.fecha}
+                          onChange={(e) => setFormData({ ...formData, fecha_vencimiento: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Opcional. Se usa para avisarte cuándo debés cobrar esta venta.
+                        </p>
+                      </div>
+                    )}
                   </div>
 
                   {productoSeleccionado && !editingVenta && (

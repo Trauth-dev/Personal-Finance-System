@@ -278,7 +278,7 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
         <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="ventas">
             <ShoppingCart className="h-4 w-4 mr-2" />
-            Ventas
+            Por Producto
           </TabsTrigger>
           <TabsTrigger value="inventario">
             <Package className="h-4 w-4 mr-2" />
@@ -295,52 +295,108 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
         </TabsList>
 
         <TabsContent value="ventas" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ventas por Producto</CardTitle>
-              <CardDescription>Análisis detallado de ventas por producto</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {ventasPorProducto.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No hay ventas en este período</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left p-2">Producto</th>
-                          <th className="text-right p-2">Cantidad</th>
-                          <th className="text-right p-2">Ingresos</th>
-                          <th className="text-right p-2">Utilidad</th>
-                          <th className="text-right p-2">Margen</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ventasPorProducto.map((venta, index) => (
-                          <tr key={index} className="border-b hover:bg-muted/50">
-                            <td className="p-2 font-medium">{venta.producto_nombre}</td>
-                            <td className="text-right p-2">{venta.cantidad_vendida}</td>
-                            <td className="text-right p-2">{formatCurrency(venta.ingresos_totales)}</td>
-                            <td className="text-right p-2">
-                              <span className={venta.utilidad >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(venta.utilidad)}
-                              </span>
-                            </td>
-                            <td className="text-right p-2">
-                              <span className={venta.margen >= 0 ? "text-green-600" : "text-red-600"}>
-                                {venta.margen.toFixed(1)}%
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {ventasPorProducto.length === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Rentabilidad por Producto</CardTitle>
+                <CardDescription>Qué productos te dejan más ganancia</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-center text-muted-foreground py-8">No hay ventas en este período</p>
+              </CardContent>
+            </Card>
+          ) : (
+            (() => {
+              const ranking = [...ventasPorProducto].sort((a, b) => b.utilidad - a.utilidad)
+              const utilidadTotal = ranking.reduce((s, p) => s + p.utilidad, 0)
+              const maxMargen = Math.max(...ranking.map((p) => Math.abs(p.margen)), 1)
+              const masRentable = ranking[0]
+              const menosRentable = ranking[ranking.length - 1]
+
+              return (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Card className="border-l-4 border-l-green-500">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          Producto más rentable
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-lg font-bold">{masRentable.producto_nombre}</p>
+                        <p className="text-sm text-green-600">
+                          {formatCurrency(masRentable.utilidad)} de utilidad · margen {masRentable.margen.toFixed(1)}%
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-l-4 border-l-amber-500">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          Producto menos rentable
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-lg font-bold">{menosRentable.producto_nombre}</p>
+                        <p className={`text-sm ${menosRentable.utilidad >= 0 ? "text-amber-600" : "text-red-600"}`}>
+                          {formatCurrency(menosRentable.utilidad)} de utilidad · margen{" "}
+                          {menosRentable.margen.toFixed(1)}%
+                        </p>
+                      </CardContent>
+                    </Card>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Ranking de Rentabilidad</CardTitle>
+                      <CardDescription>
+                        Ordenado por utilidad. La barra muestra el margen relativo de cada producto.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {ranking.map((p, index) => {
+                          const participacion = utilidadTotal > 0 ? (p.utilidad / utilidadTotal) * 100 : 0
+                          const anchoBarra = (Math.abs(p.margen) / maxMargen) * 100
+                          return (
+                            <div key={index} className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                                    {index + 1}
+                                  </span>
+                                  <span className="truncate font-medium">{p.producto_nombre}</span>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <span className={`font-bold ${p.utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                    {formatCurrency(p.utilidad)}
+                                  </span>
+                                  <span className="ml-2 text-sm text-muted-foreground">{p.margen.toFixed(1)}%</span>
+                                </div>
+                              </div>
+                              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={`h-full rounded-full ${p.margen >= 0 ? "bg-green-500" : "bg-red-500"}`}
+                                  style={{ width: `${anchoBarra}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>
+                                  {p.cantidad_vendida} u. vendidas · {formatCurrency(p.ingresos_totales)} en ingresos
+                                </span>
+                                {utilidadTotal > 0 && p.utilidad > 0 && (
+                                  <span>{participacion.toFixed(0)}% de la utilidad total</span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )
+            })()
+          )}
         </TabsContent>
 
         <TabsContent value="inventario" className="space-y-4">
