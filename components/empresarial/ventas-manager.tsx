@@ -20,10 +20,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Search, Edit, Trash2, ShoppingCart } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Plus, Search, Edit, Trash2, ShoppingCart, AlertTriangle, PackageX } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
+import Link from "next/link"
 
 interface Venta {
   id: string
@@ -35,6 +37,10 @@ interface Venta {
   fecha: string
   notas: string | null
   created_at: string
+  ingreso_id: string | null
+  estado_pago: string
+  fecha_pago: string | null
+  fecha_vencimiento: string | null
   inventario?: {
     nombre: string
   }
@@ -45,6 +51,7 @@ interface Producto {
   nombre: string
   precio_venta: number
   stock_actual: number
+  stock_minimo: number
 }
 
 export function VentasManager() {
@@ -64,6 +71,8 @@ export function VentasManager() {
     cliente_nombre: "",
     fecha: format(new Date(), "yyyy-MM-dd"),
     notas: "",
+    estado_pago: "pagado",
+    fecha_vencimiento: "",
   })
 
   useEffect(() => {
@@ -98,7 +107,7 @@ export function VentasManager() {
       // Cargar productos
       const { data: productosData, error: productosError } = await supabase
         .from("inventario")
-        .select("id, nombre, precio_venta, stock_actual")
+        .select("id, nombre, precio_venta, stock_actual, stock_minimo")
         .eq("perfil_id", perfilActual.id)
         .order("nombre", { ascending: true })
 
@@ -149,10 +158,12 @@ export function VentasManager() {
       return
     }
 
-    // Verificar stock disponible
+    // Verificar stock disponible (solo en ventas nuevas: al editar, el stock ya se descontó)
     const producto = productos.find((p) => p.id === formData.producto_id)
-    if (producto && cantidad > producto.stock_actual) {
-      toast.error(`Stock insuficiente. Disponible: ${producto.stock_actual}`)
+    if (!editingVenta && producto && cantidad > producto.stock_actual) {
+      toast.error(
+        `Stock insuficiente de "${producto.nombre}". Disponible: ${producto.stock_actual}. Registrá una compra para reabastecer.`,
+      )
       return
     }
 
@@ -160,15 +171,22 @@ export function VentasManager() {
 
     try {
       const total = calcularTotal()
+      // producto_nombre es NOT NULL en la tabla: lo tomamos del producto elegido.
+      const productoNombre = producto?.nombre || "Producto"
 
       const dataToSave = {
         producto_id: formData.producto_id,
+        producto_nombre: productoNombre,
         cantidad: cantidad,
         precio_unitario: Number.parseFloat(formData.precio_unitario),
         total: total,
         cliente_nombre: formData.cliente_nombre || null,
         fecha: formData.fecha,
         notas: formData.notas || null,
+        estado_pago: formData.estado_pago,
+        fecha_pago: formData.estado_pago === "pagado" ? formData.fecha : null,
+        fecha_vencimiento:
+          formData.estado_pago === "pendiente" && formData.fecha_vencimiento ? formData.fecha_vencimiento : null,
       }
 
       if (editingVenta) {
@@ -176,16 +194,51 @@ export function VentasManager() {
 
         if (error) throw error
 
+        // Mantener sincronizado el ingreso vinculado (si existe)
+        if (editingVenta.ingreso_id) {
+          await supabase
+            .from("ingresos")
+            .update({
+              tipo_ingreso: "Ventas",
+              monto: total,
+              fecha: formData.fecha,
+            })
+            .eq("id", editingVenta.ingreso_id)
+        }
+
         toast.success("Venta actualizada exitosamente")
       } else {
+        // 1) Crear el ingreso primero, para vincularlo a la venta
+        const { data: ingresoData, error: ingresoError } = await supabase
+          .from("ingresos")
+          .insert({
+            user_id: perfilActual.user_id,
+            perfil_id: perfilActual.id,
+            tipo_ingreso: "Ventas",
+            monto: total,
+            fecha: formData.fecha,
+          })
+          .select("id")
+          .single()
+
+        if (ingresoError) throw ingresoError
+
+        // 2) Crear la venta vinculada al ingreso
         const { error } = await supabase.from("ventas").insert({
           ...dataToSave,
           perfil_id: perfilActual.id,
+          ingreso_id: ingresoData?.id ?? null,
         })
 
-        if (error) throw error
+        if (error) {
+          // Revertir el ingreso si la venta falla, para no dejar ingresos huérfanos
+          if (ingresoData?.id) {
+            await supabase.from("ingresos").delete().eq("id", ingresoData.id)
+          }
+          throw error
+        }
 
-        // Actualizar stock del producto
+        // 3) Actualizar stock del producto
         if (producto) {
           const { error: stockError } = await supabase
             .from("inventario")
@@ -197,7 +250,7 @@ export function VentasManager() {
           if (stockError) throw stockError
         }
 
-        toast.success("Venta registrada exitosamente")
+        toast.success("Venta registrada e ingreso generado")
       }
 
       setIsDialogOpen(false)
@@ -218,21 +271,41 @@ export function VentasManager() {
       cliente_nombre: venta.cliente_nombre || "",
       fecha: venta.fecha,
       notas: venta.notas || "",
+      estado_pago: venta.estado_pago || "pagado",
+      fecha_vencimiento: venta.fecha_vencimiento || "",
     })
     setIsDialogOpen(true)
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar esta venta?")) return
+    if (!confirm("¿Estás seguro de que deseas eliminar esta venta? También se eliminará el ingreso asociado.")) return
 
     const supabase = createClient()
 
     try {
+      const venta = ventas.find((v) => v.id === id)
+
+      // Reponer el stock del producto vendido
+      if (venta?.producto_id) {
+        const producto = productos.find((p) => p.id === venta.producto_id)
+        if (producto) {
+          await supabase
+            .from("inventario")
+            .update({ stock_actual: producto.stock_actual + Number(venta.cantidad) })
+            .eq("id", venta.producto_id)
+        }
+      }
+
       const { error } = await supabase.from("ventas").delete().eq("id", id)
 
       if (error) throw error
 
-      toast.success("Venta eliminada exitosamente")
+      // Eliminar el ingreso vinculado, para que las finanzas queden consistentes
+      if (venta?.ingreso_id) {
+        await supabase.from("ingresos").delete().eq("id", venta.ingreso_id)
+      }
+
+      toast.success("Venta e ingreso eliminados")
       cargarDatos()
     } catch (error) {
       console.error("Error al eliminar venta:", error)
@@ -248,6 +321,8 @@ export function VentasManager() {
       cliente_nombre: "",
       fecha: format(new Date(), "yyyy-MM-dd"),
       notas: "",
+      estado_pago: "pagado",
+      fecha_vencimiento: "",
     })
     setEditingVenta(null)
   }
@@ -261,6 +336,16 @@ export function VentasManager() {
   const totalVentas = ventas.reduce((sum, v) => sum + v.total, 0)
   const ventasHoy = ventas.filter((v) => v.fecha === format(new Date(), "yyyy-MM-dd"))
   const totalVentasHoy = ventasHoy.reduce((sum, v) => sum + v.total, 0)
+
+  // Estado de stock del producto seleccionado (para el aviso en el formulario)
+  const productoSeleccionado = productos.find((p) => p.id === formData.producto_id)
+  const cantidadNum = Number.parseFloat(formData.cantidad) || 0
+  const stockDisponible = productoSeleccionado ? Number(productoSeleccionado.stock_actual) : 0
+  const stockMinimo = productoSeleccionado ? Number(productoSeleccionado.stock_minimo) : 0
+  // Al editar, el stock ya fue descontado, así que no recalculamos el remanente
+  const stockInsuficiente = !editingVenta && !!productoSeleccionado && cantidadNum > stockDisponible
+  const stockRestante = stockDisponible - cantidadNum
+  const quedaBajoMinimo = !editingVenta && !!productoSeleccionado && !stockInsuficiente && stockRestante <= stockMinimo
 
   if (!perfilActual) {
     return (
@@ -385,7 +470,7 @@ export function VentasManager() {
                       />
                     </div>
 
-                    <div className="space-y-2 md:col-span-2">
+                    <div className="space-y-2">
                       <Label htmlFor="cliente_nombre">Cliente</Label>
                       <Input
                         id="cliente_nombre"
@@ -394,7 +479,83 @@ export function VentasManager() {
                         placeholder="Nombre del cliente (opcional)"
                       />
                     </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="estado_pago">Estado de pago *</Label>
+                      <Select
+                        value={formData.estado_pago}
+                        onValueChange={(value) => setFormData({ ...formData, estado_pago: value })}
+                      >
+                        <SelectTrigger id="estado_pago">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pagado">Cobrado (contado)</SelectItem>
+                          <SelectItem value="pendiente">Pendiente (a crédito)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {formData.estado_pago === "pendiente" && (
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="fecha_vencimiento">Fecha de vencimiento del cobro</Label>
+                        <Input
+                          id="fecha_vencimiento"
+                          type="date"
+                          value={formData.fecha_vencimiento}
+                          min={formData.fecha}
+                          onChange={(e) => setFormData({ ...formData, fecha_vencimiento: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Opcional. Se usa para avisarte cuándo debés cobrar esta venta.
+                        </p>
+                      </div>
+                    )}
                   </div>
+
+                  {productoSeleccionado && !editingVenta && (
+                    <div className="space-y-2">
+                      {stockInsuficiente ? (
+                        <div className="flex items-start gap-3 p-3 rounded-lg border border-red-500/30 bg-red-500/10">
+                          <PackageX className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                          <div className="flex-1 text-sm">
+                            <p className="font-medium text-red-600 dark:text-red-400">
+                              Stock insuficiente: solo hay {stockDisponible} unidad(es) de{" "}
+                              {productoSeleccionado.nombre}.
+                            </p>
+                            <p className="text-muted-foreground mt-0.5">
+                              No podés vender {cantidadNum}. Reabastecé el producto para continuar.
+                            </p>
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 h-7 border-red-500/40 bg-transparent"
+                            >
+                              <Link href="/dashboard/empresarial/compras">Registrar compra</Link>
+                            </Button>
+                          </div>
+                        </div>
+                      ) : quedaBajoMinimo ? (
+                        <div className="flex items-start gap-3 p-3 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                          <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="flex-1 text-sm">
+                            <p className="font-medium text-amber-600 dark:text-amber-400">
+                              Después de esta venta quedarán {stockRestante} unidad(es), por debajo del mínimo (
+                              {stockMinimo}).
+                            </p>
+                            <p className="text-muted-foreground mt-0.5">Considerá reabastecer pronto.</p>
+                          </div>
+                        </div>
+                      ) : cantidadNum > 0 ? (
+                        <p className="text-sm text-muted-foreground">
+                          Stock disponible: {stockDisponible} · quedarán {stockRestante} tras la venta.
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Stock disponible: {stockDisponible} unidad(es).</p>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="notas">Notas</Label>
@@ -427,7 +588,9 @@ export function VentasManager() {
                     >
                       Cancelar
                     </Button>
-                    <Button type="submit">{editingVenta ? "Actualizar" : "Registrar"} Venta</Button>
+                    <Button type="submit" disabled={stockInsuficiente}>
+                      {editingVenta ? "Actualizar" : "Registrar"} Venta
+                    </Button>
                   </div>
                 </form>
               </DialogContent>
@@ -467,6 +630,7 @@ export function VentasManager() {
                     <TableHead>Cantidad</TableHead>
                     <TableHead>Precio Unit.</TableHead>
                     <TableHead>Total</TableHead>
+                    <TableHead>Estado</TableHead>
                     <TableHead className="text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -479,6 +643,17 @@ export function VentasManager() {
                       <TableCell>{venta.cantidad}</TableCell>
                       <TableCell>Gs {venta.precio_unitario.toLocaleString()}</TableCell>
                       <TableCell className="font-bold">Gs {venta.total.toLocaleString()}</TableCell>
+                      <TableCell>
+                        {venta.estado_pago === "pendiente" ? (
+                          <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400">
+                            Por cobrar
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-green-500/40 text-green-600 dark:text-green-400">
+                            Cobrado
+                          </Badge>
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button variant="ghost" size="sm" onClick={() => handleEdit(venta)}>

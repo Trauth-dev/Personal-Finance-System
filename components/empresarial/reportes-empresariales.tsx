@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePerfil } from "@/lib/contexts/perfil-context"
-import { TrendingUp, DollarSign, Package, ShoppingCart, Users, AlertCircle } from "lucide-react"
+import { TrendingUp, DollarSign, Package, ShoppingCart, Users, AlertCircle, Target } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface ReportesEmpresarialesProps {
@@ -14,7 +14,9 @@ interface ReportesEmpresarialesProps {
 
 interface MetricasGenerales {
   ventasTotales: number
-  costosTotales: number
+  costoVentas: number
+  comprasTotales: number
+  gastosFijos: number
   utilidadBruta: number
   margenBruto: number
   productosVendidos: number
@@ -63,29 +65,46 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
     try {
       const fechaInicio = calcularFechaInicio(periodo)
 
-      const [ventasRes, inventarioRes, proveedoresRes, comprasRes] = await Promise.all([
+      const [ventasRes, inventarioRes, proveedoresRes, comprasRes, egresosRes] = await Promise.all([
         supabase.from("ventas").select("*").eq("perfil_id", perfilActual.id).gte("fecha", fechaInicio),
         supabase.from("inventario").select("*").eq("perfil_id", perfilActual.id).eq("activo", true),
         supabase.from("proveedores").select("*").eq("perfil_id", perfilActual.id).eq("activo", true),
         supabase.from("compras").select("*").eq("perfil_id", perfilActual.id).gte("fecha", fechaInicio),
+        supabase.from("egresos").select("monto, concepto").eq("perfil_id", perfilActual.id).gte("fecha", fechaInicio),
       ])
 
       const ventas = ventasRes.data || []
       const inventario = inventarioRes.data || []
       const proveedores = proveedoresRes.data || []
       const compras = comprasRes.data || []
+      const egresos = egresosRes.data || []
 
       const ventasTotales = ventas.reduce((sum, v) => sum + Number(v.total), 0)
-      const costosTotales = compras.reduce((sum, c) => sum + Number(c.total), 0)
-      const utilidadBruta = ventasTotales - costosTotales
+      // Compras del período (egreso de caja por reabastecimiento). NO es el costo de ventas.
+      const comprasTotales = compras.reduce((sum, c) => sum + Number(c.total), 0)
+      // Costo de Ventas (COGS): costo de lo efectivamente vendido = cantidad vendida × precio de costo del producto.
+      const costoVentas = ventas.reduce((sum, v) => {
+        const producto = inventario.find((i) => i.nombre === v.producto_nombre)
+        const costoUnitario = producto ? Number(producto.precio_costo) : 0
+        return sum + Number(v.cantidad) * costoUnitario
+      }, 0)
+      const utilidadBruta = ventasTotales - costoVentas
       const margenBruto = ventasTotales > 0 ? (utilidadBruta / ventasTotales) * 100 : 0
       const productosVendidos = ventas.reduce((sum, v) => sum + Number(v.cantidad), 0)
       const valorInventario = inventario.reduce((sum, i) => sum + Number(i.stock_actual) * Number(i.precio_costo), 0)
       const stockBajo = inventario.filter((i) => Number(i.stock_actual) <= Number(i.stock_minimo)).length
 
+      // Costos fijos (gastos operativos): egresos del negocio que NO son reabastecimiento de mercadería.
+      // Las compras generan egresos con concepto "Compra: ...", así que los excluimos.
+      const gastosFijos = egresos
+        .filter((e) => !String(e.concepto || "").startsWith("Compra:"))
+        .reduce((sum, e) => sum + Number(e.monto), 0)
+
       setMetricas({
         ventasTotales,
-        costosTotales,
+        costoVentas,
+        comprasTotales,
+        gastosFijos,
         utilidadBruta,
         margenBruto,
         productosVendidos,
@@ -247,17 +266,19 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{metricas.proveedoresActivos}</div>
-              <p className="text-xs text-muted-foreground mt-1">Costos: {formatCurrency(metricas.costosTotales)}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Compras del período: {formatCurrency(metricas.comprasTotales)}
+              </p>
             </CardContent>
           </Card>
         </div>
       )}
 
       <Tabs defaultValue="ventas" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="ventas">
             <ShoppingCart className="h-4 w-4 mr-2" />
-            Ventas
+            Por Producto
           </TabsTrigger>
           <TabsTrigger value="inventario">
             <Package className="h-4 w-4 mr-2" />
@@ -267,55 +288,115 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
             <TrendingUp className="h-4 w-4 mr-2" />
             Rentabilidad
           </TabsTrigger>
+          <TabsTrigger value="equilibrio">
+            <Target className="h-4 w-4 mr-2" />
+            Equilibrio
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="ventas" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Ventas por Producto</CardTitle>
-              <CardDescription>Análisis detallado de ventas por producto</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {ventasPorProducto.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No hay ventas en este período</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left p-2">Producto</th>
-                          <th className="text-right p-2">Cantidad</th>
-                          <th className="text-right p-2">Ingresos</th>
-                          <th className="text-right p-2">Utilidad</th>
-                          <th className="text-right p-2">Margen</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {ventasPorProducto.map((venta, index) => (
-                          <tr key={index} className="border-b hover:bg-muted/50">
-                            <td className="p-2 font-medium">{venta.producto_nombre}</td>
-                            <td className="text-right p-2">{venta.cantidad_vendida}</td>
-                            <td className="text-right p-2">{formatCurrency(venta.ingresos_totales)}</td>
-                            <td className="text-right p-2">
-                              <span className={venta.utilidad >= 0 ? "text-green-600" : "text-red-600"}>
-                                {formatCurrency(venta.utilidad)}
-                              </span>
-                            </td>
-                            <td className="text-right p-2">
-                              <span className={venta.margen >= 0 ? "text-green-600" : "text-red-600"}>
-                                {venta.margen.toFixed(1)}%
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+          {ventasPorProducto.length === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Rentabilidad por Producto</CardTitle>
+                <CardDescription>Qué productos te dejan más ganancia</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-center text-muted-foreground py-8">No hay ventas en este período</p>
+              </CardContent>
+            </Card>
+          ) : (
+            (() => {
+              const ranking = [...ventasPorProducto].sort((a, b) => b.utilidad - a.utilidad)
+              const utilidadTotal = ranking.reduce((s, p) => s + p.utilidad, 0)
+              const maxMargen = Math.max(...ranking.map((p) => Math.abs(p.margen)), 1)
+              const masRentable = ranking[0]
+              const menosRentable = ranking[ranking.length - 1]
+
+              return (
+                <>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Card className="border-l-4 border-l-green-500">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          Producto más rentable
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-lg font-bold">{masRentable.producto_nombre}</p>
+                        <p className="text-sm text-green-600">
+                          {formatCurrency(masRentable.utilidad)} de utilidad · margen {masRentable.margen.toFixed(1)}%
+                        </p>
+                      </CardContent>
+                    </Card>
+                    <Card className="border-l-4 border-l-amber-500">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium text-muted-foreground">
+                          Producto menos rentable
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-lg font-bold">{menosRentable.producto_nombre}</p>
+                        <p className={`text-sm ${menosRentable.utilidad >= 0 ? "text-amber-600" : "text-red-600"}`}>
+                          {formatCurrency(menosRentable.utilidad)} de utilidad · margen{" "}
+                          {menosRentable.margen.toFixed(1)}%
+                        </p>
+                      </CardContent>
+                    </Card>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Ranking de Rentabilidad</CardTitle>
+                      <CardDescription>
+                        Ordenado por utilidad. La barra muestra el margen relativo de cada producto.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {ranking.map((p, index) => {
+                          const participacion = utilidadTotal > 0 ? (p.utilidad / utilidadTotal) * 100 : 0
+                          const anchoBarra = (Math.abs(p.margen) / maxMargen) * 100
+                          return (
+                            <div key={index} className="space-y-1.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+                                    {index + 1}
+                                  </span>
+                                  <span className="truncate font-medium">{p.producto_nombre}</span>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  <span className={`font-bold ${p.utilidad >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                    {formatCurrency(p.utilidad)}
+                                  </span>
+                                  <span className="ml-2 text-sm text-muted-foreground">{p.margen.toFixed(1)}%</span>
+                                </div>
+                              </div>
+                              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={`h-full rounded-full ${p.margen >= 0 ? "bg-green-500" : "bg-red-500"}`}
+                                  style={{ width: `${anchoBarra}%` }}
+                                />
+                              </div>
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>
+                                  {p.cantidad_vendida} u. vendidas · {formatCurrency(p.ingresos_totales)} en ingresos
+                                </span>
+                                {utilidadTotal > 0 && p.utilidad > 0 && (
+                                  <span>{participacion.toFixed(0)}% de la utilidad total</span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </>
+              )
+            })()
+          )}
         </TabsContent>
 
         <TabsContent value="inventario" className="space-y-4">
@@ -382,8 +463,11 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
                   </div>
 
                   <div className="flex justify-between items-center p-3 bg-red-50 dark:bg-red-950/20 rounded-lg">
-                    <span className="font-medium">Costo de Ventas</span>
-                    <span className="text-lg font-bold text-red-600">-{formatCurrency(metricas.costosTotales)}</span>
+                    <div className="flex flex-col">
+                      <span className="font-medium">Costo de Ventas (CMV)</span>
+                      <span className="text-xs text-muted-foreground">Costo de lo efectivamente vendido</span>
+                    </div>
+                    <span className="text-lg font-bold text-red-600">-{formatCurrency(metricas.costoVentas)}</span>
                   </div>
 
                   <div className="border-t-2 border-dashed pt-3">
@@ -392,6 +476,15 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
                       <span className="text-xl font-bold text-blue-600">{formatCurrency(metricas.utilidadBruta)}</span>
                     </div>
                   </div>
+
+                  <div className="flex justify-between items-center px-3 py-2 text-sm text-muted-foreground">
+                    <span>Compras del período (reabastecimiento)</span>
+                    <span>{formatCurrency(metricas.comprasTotales)}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground px-3">
+                    Las compras reponen inventario y afectan tu caja, pero solo se vuelven costo cuando el producto se
+                    vende. Por eso la utilidad bruta usa el costo de ventas (CMV), no el total comprado.
+                  </p>
 
                   <div className="grid grid-cols-2 gap-4 mt-6">
                     <div className="p-4 border rounded-lg">
@@ -405,6 +498,106 @@ export function ReportesEmpresariales({ userId }: ReportesEmpresarialesProps) {
                   </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="equilibrio" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Punto de Equilibrio</CardTitle>
+              <CardDescription>Cuánto necesitás vender para cubrir todos tus costos y no perder</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {metricas &&
+                (() => {
+                  // Margen de contribución: por cada Gs vendido, cuánto queda tras el costo de la mercadería.
+                  const margenContribucion = metricas.margenBruto / 100
+                  const ventasEquilibrio = margenContribucion > 0 ? metricas.gastosFijos / margenContribucion : 0
+                  const utilidadNeta = metricas.utilidadBruta - metricas.gastosFijos
+                  const cubierto =
+                    ventasEquilibrio > 0 ? Math.min(100, (metricas.ventasTotales / ventasEquilibrio) * 100) : 0
+                  const alcanzado = metricas.ventasTotales >= ventasEquilibrio && ventasEquilibrio > 0
+
+                  return (
+                    <div className="space-y-4">
+                      {metricas.gastosFijos === 0 ? (
+                        <div className="flex items-start gap-3 p-4 rounded-lg border border-amber-500/30 bg-amber-500/10">
+                          <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="text-sm">
+                            <p className="font-medium text-amber-600 dark:text-amber-400">
+                              No registraste gastos fijos en este período.
+                            </p>
+                            <p className="text-muted-foreground mt-0.5">
+                              Cargá tus gastos operativos (alquiler, sueldos, servicios) como egresos para calcular el
+                              punto de equilibrio real.
+                            </p>
+                          </div>
+                        </div>
+                      ) : margenContribucion <= 0 ? (
+                        <div className="flex items-start gap-3 p-4 rounded-lg border border-red-500/30 bg-red-500/10">
+                          <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+                          <p className="text-sm text-red-600 dark:text-red-400">
+                            Tu margen bruto es cero o negativo: estás vendiendo al costo o por debajo, así que no hay
+                            punto de equilibrio posible. Revisá tus precios de venta.
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="p-5 rounded-lg bg-primary/10 border border-primary/20 text-center">
+                            <p className="text-sm text-muted-foreground mb-1">Necesitás vender para no perder</p>
+                            <p className="text-3xl font-bold text-primary">{formatCurrency(ventasEquilibrio)}</p>
+                            <p className="text-xs text-muted-foreground mt-1">en el período seleccionado</p>
+                          </div>
+
+                          <div>
+                            <div className="flex justify-between text-sm mb-1">
+                              <span className="text-muted-foreground">Progreso hacia el equilibrio</span>
+                              <span className="font-medium">{cubierto.toFixed(0)}%</span>
+                            </div>
+                            <div className="h-3 w-full rounded-full bg-muted overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${alcanzado ? "bg-green-500" : "bg-primary"}`}
+                                style={{ width: `${cubierto}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {alcanzado
+                                ? `Ya superaste el punto de equilibrio. Tu ganancia neta del período es ${formatCurrency(utilidadNeta)}.`
+                                : `Te faltan ${formatCurrency(ventasEquilibrio - metricas.ventasTotales)} en ventas para cubrir tus costos.`}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4 pt-2">
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground mb-1">Gastos fijos del período</p>
+                              <p className="text-xl font-bold">{formatCurrency(metricas.gastosFijos)}</p>
+                            </div>
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground mb-1">Margen de contribución</p>
+                              <p className="text-xl font-bold">{metricas.margenBruto.toFixed(1)}%</p>
+                            </div>
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground mb-1">Ventas actuales</p>
+                              <p className="text-xl font-bold">{formatCurrency(metricas.ventasTotales)}</p>
+                            </div>
+                            <div className="p-4 border rounded-lg">
+                              <p className="text-sm text-muted-foreground mb-1">Ganancia neta</p>
+                              <p className={`text-xl font-bold ${utilidadNeta >= 0 ? "text-green-600" : "text-red-600"}`}>
+                                {formatCurrency(utilidadNeta)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <p className="text-xs text-muted-foreground">
+                            El punto de equilibrio se calcula dividiendo tus gastos fijos entre el margen de
+                            contribución. Los gastos fijos son tus egresos del período que no son compra de mercadería.
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  )
+                })()}
             </CardContent>
           </Card>
         </TabsContent>
