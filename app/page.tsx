@@ -28,22 +28,22 @@ export default function LandingPage() {
 
         {/* Hero Section */}
         <div className="text-center max-w-4xl mx-auto mb-20">
-          <h1 className="text-6xl font-bold mb-6 text-balance bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
-            Abundancia con Propósito
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold mb-6 text-balance leading-tight bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+            Prosperá más. Viví con propósito.
           </h1>
-          <p className="text-xl text-muted-foreground mb-8 text-pretty">
-            Sistema de gestión financiera personal ultra moderno. Visualiza, analiza y optimiza tus ingresos y gastos
-            con dashboards innovadores.
+          <p className="text-base sm:text-lg lg:text-xl text-muted-foreground mb-8 text-pretty max-w-2xl mx-auto">
+            Organizá tus finanzas, entendé mejor tu dinero y tomá decisiones que te acerquen a la vida que querés
+            construir.
           </p>
-          <div className="flex gap-4 justify-center">
-            <Link href="/auth/registro">
-              <Button size="lg" className="glow-effect group">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+            <Link href="/auth/registro" className="w-full sm:w-auto">
+              <Button size="lg" className="glow-effect group w-full sm:w-auto">
                 Comenzar Ahora
                 <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Button>
             </Link>
-            <Link href="/auth/login">
-              <Button size="lg" variant="outline" className="glass-effect bg-transparent">
+            <Link href="/auth/login" className="w-full sm:w-auto">
+              <Button size="lg" variant="outline" className="glass-effect bg-transparent w-full sm:w-auto">
                 Iniciar Sesión
               </Button>
             </Link>
