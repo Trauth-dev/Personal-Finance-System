@@ -7,6 +7,10 @@ export async function GET(request: Request) {
   const code = requestUrl.searchParams.get("code")
   const token_hash = requestUrl.searchParams.get("token_hash")
   const type = requestUrl.searchParams.get("type")
+  // Destino opcional tras el login (ej. login con Google -> /dashboard).
+  // Solo se aceptan rutas internas para evitar redirecciones abiertas.
+  const nextParam = requestUrl.searchParams.get("next")
+  const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : null
   const error = requestUrl.searchParams.get("error")
   const error_description = requestUrl.searchParams.get("error_description")
 
@@ -60,7 +64,8 @@ export async function GET(request: Request) {
     }
 
     console.log("[v0] Sesión establecida correctamente para usuario:", data.user?.email)
-    return NextResponse.redirect(new URL("/auth/actualizar-contrasena", requestUrl.origin))
+    // Si viene un destino (login con Google), vamos ahí; si no, es recuperación de contraseña.
+    return NextResponse.redirect(new URL(safeNext ?? "/auth/actualizar-contrasena", requestUrl.origin))
   }
 
   if (token_hash && type) {
