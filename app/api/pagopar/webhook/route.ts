@@ -47,19 +47,36 @@ export async function POST(request: Request) {
     const pagado = estado?.pagado ?? Boolean(item?.pagado)
 
     if (pagado && pago.estado !== "pagado") {
-      // 4) Activar el plan comprado.
+      // 4) Activar/renovar la suscripcion Prospera+ por 30 dias.
+      //    Si el usuario todavia tiene tiempo vigente, se extiende desde ahi
+      //    (no se pierden dias); si venció o nunca pago, arranca desde ahora.
+      const { data: perfilActual } = await admin
+        .from("profiles")
+        .select("suscripcion_vence")
+        .eq("id", pago.user_id)
+        .maybeSingle()
+
+      const ahora = Date.now()
+      const venceActual = perfilActual?.suscripcion_vence
+        ? new Date(perfilActual.suscripcion_vence).getTime()
+        : 0
+      const base = Math.max(ahora, venceActual)
+      const nuevoVence = new Date(base + 30 * 24 * 60 * 60 * 1000).toISOString()
+
       await admin
         .from("profiles")
-        .update({ plan_tier: pago.plan_id })
+        .update({ plan_tier: "completo", suscripcion_vence: nuevoVence })
         .eq("id", pago.user_id)
 
-      // Asegurar acceso personal activo (todos los planes incluyen lo personal).
-      await admin
-        .from("user_plan_access")
-        .upsert(
+      // Plan unico: dar acceso a TODOS los perfiles (personal, empresarial y crm).
+      await admin.from("user_plan_access").upsert(
+        [
           { user_id: pago.user_id, plan_type: "personal", is_active: true, granted_by: "pagopar" },
-          { onConflict: "user_id,plan_type" },
-        )
+          { user_id: pago.user_id, plan_type: "empresarial", is_active: true, granted_by: "pagopar" },
+          { user_id: pago.user_id, plan_type: "crm", is_active: true, granted_by: "pagopar" },
+        ],
+        { onConflict: "user_id,plan_type" },
+      )
 
       // 5) Marcar el pago como pagado (conciliación).
       await admin

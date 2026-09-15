@@ -106,18 +106,20 @@ export function useUserPlanAccess(): UseUserPlanAccessReturn {
     fetchAccess()
   }, [fetchAccess])
 
-  // Lista de planes permitidos
-  const allowedPlans: PlanType[] = planAccesses.map(access => access.plan_type)
+  // Plan unico "Prospera+": todos los usuarios tienen acceso a TODOS los perfiles
+  // (personal, empresarial y crm). El unico control de acceso es la suscripcion
+  // (ver useSuscripcion + PlanAccessGuard), no el tipo de perfil.
+  const allowedPlans: PlanType[] = ["personal", "empresarial", "crm"]
 
   // Verificar si tiene acceso a un plan específico
-  const hasAccess = useCallback((plan: PlanType): boolean => {
-    return allowedPlans.includes(plan)
-  }, [allowedPlans])
+  const hasAccess = useCallback((_plan: PlanType): boolean => {
+    return true
+  }, [])
 
   // Verificar si tiene acceso a al menos uno de los planes
-  const hasAnyAccess = useCallback((plans: PlanType[]): boolean => {
-    return plans.some(plan => allowedPlans.includes(plan))
-  }, [allowedPlans])
+  const hasAnyAccess = useCallback((_plans: PlanType[]): boolean => {
+    return true
+  }, [])
 
   return {
     allowedPlans,

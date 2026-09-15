@@ -48,34 +48,11 @@ export function usePlanTier(): UsePlanTierReturn {
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchTier = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      const supabase = createClient()
-
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        setTier("completo")
-        return
-      }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("plan_tier")
-        .eq("id", user.id)
-        .maybeSingle()
-
-      // Si no hay perfil aun (usuario nuevo) o el valor es 'basico', tratar como basico.
-      // Solo 'completo' explicito otorga acceso completo.
-      setTier(profile?.plan_tier === "completo" ? "completo" : "basico")
-    } catch {
-      // Ante un error, no restringir de mas: asumir completo
-      setTier("completo")
-    } finally {
-      setIsLoading(false)
-    }
+    // Plan unico "Prospera+": ya no hay distincion basico/completo. Todo usuario
+    // con la app desbloqueada tiene acceso completo. El acceso real esta gobernado
+    // por la suscripcion (ver useSuscripcion + PlanAccessGuard), no por el tier.
+    setTier("completo")
+    setIsLoading(false)
   }, [])
 
   useEffect(() => {

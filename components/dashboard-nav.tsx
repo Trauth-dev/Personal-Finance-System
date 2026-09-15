@@ -279,7 +279,7 @@ const navItemsCommon = [
 // Seccion "Mejorar Plan": visible para el perfil Personal en AMBOS planes
 // (basico y completo). Se ubica al final, justo por encima de "Configuracion".
 const mejorarPlanItem = {
-  title: "Mejorar Plan",
+  title: "Mi Suscripción",
   href: "/dashboard/personal/mejorar-plan",
   icon: Sparkles,
 }
