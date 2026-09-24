@@ -2,10 +2,13 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { tieneAccesoLibre } from "@/lib/plans/acceso-libre"
 
 interface UseSuscripcionReturn {
-  // true si la suscripcion esta vigente (pago y no vencida)
+  // true si la suscripcion esta vigente (pago y no vencida) o el usuario tiene acceso libre
   activa: boolean
+  // true si el usuario es socio/fundador con acceso libre (sin abonar)
+  exento: boolean
   // fecha hasta la que esta vigente (ISO) o null si nunca pago
   vence: string | null
   // dias restantes hasta el vencimiento (0 si vencida o sin pago)
@@ -23,6 +26,7 @@ interface UseSuscripcionReturn {
  */
 export function useSuscripcion(): UseSuscripcionReturn {
   const [vence, setVence] = useState<string | null>(null)
+  const [exento, setExento] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchSuscripcion = useCallback(async () => {
@@ -36,8 +40,12 @@ export function useSuscripcion(): UseSuscripcionReturn {
 
       if (!user) {
         setVence(null)
+        setExento(false)
         return
       }
+
+      // Los socios/fundadores tienen acceso libre sin abonar.
+      setExento(tieneAccesoLibre(user.email))
 
       const { data: profile } = await supabase
         .from("profiles")
@@ -48,6 +56,7 @@ export function useSuscripcion(): UseSuscripcionReturn {
       setVence(profile?.suscripcion_vence ?? null)
     } catch {
       setVence(null)
+      setExento(false)
     } finally {
       setIsLoading(false)
     }
@@ -59,11 +68,12 @@ export function useSuscripcion(): UseSuscripcionReturn {
 
   const ahora = Date.now()
   const venceMs = vence ? new Date(vence).getTime() : 0
-  const activa = venceMs > ahora
-  const diasRestantes = activa ? Math.ceil((venceMs - ahora) / (1000 * 60 * 60 * 24)) : 0
+  const activa = exento || venceMs > ahora
+  const diasRestantes = venceMs > ahora ? Math.ceil((venceMs - ahora) / (1000 * 60 * 60 * 24)) : 0
 
   return {
     activa,
+    exento,
     vence,
     diasRestantes,
     isLoading,
