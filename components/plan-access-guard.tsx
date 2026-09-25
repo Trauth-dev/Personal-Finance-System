@@ -1,131 +1,196 @@
 "use client"
 
-import { usePathname } from "next/navigation"
-import { useUserPlanAccess, getRequiredPlanForRoute, PLAN_LABELS, PLAN_DESCRIPTIONS, type PlanType } from "@/hooks/use-user-plan-access"
-import { usePlanTier, isRouteAllowedForBasico } from "@/hooks/use-plan-tier"
-import { Lock, ArrowLeft } from "lucide-react"
+import { useState } from "react"
+import { useSuscripcion } from "@/hooks/use-suscripcion"
+import { Lock, ShieldCheck, CreditCard, Loader2, Sparkles, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import Link from "next/link"
+import { createClient } from "@/lib/supabase/client"
+import { formatMoney } from "@/lib/utils"
 
 interface PlanAccessGuardProps {
   children: React.ReactNode
 }
 
+// Precio del plan unico Prospera+ (guaraníes). PagoPar liquida en PYG.
+const PRECIO_PROSPERA = 100000
+
+const BENEFICIOS = [
+  "Acceso a los perfiles Personal, Empresarial y CRM",
+  "Carga de ingresos y egresos ilimitada",
+  "Cajas de ahorro, deudas y plan anti-deudas",
+  "Metas, presupuesto y asesoramiento con herramientas",
+  "Todas las funciones actuales y futuras del plan",
+]
+
+/**
+ * Muro de pago (paywall) de Prospera+.
+ *
+ * Modelo de plan unico: si el usuario tiene la suscripcion activa
+ * (profiles.suscripcion_vence > ahora), ve la app completa. Si no pago o su
+ * suscripcion vencio, ve esta pantalla con el boton para pagar via PagoPar.
+ */
 export function PlanAccessGuard({ children }: PlanAccessGuardProps) {
-  const pathname = usePathname()
-  const { hasAccess, isLoading, allowedPlans } = useUserPlanAccess()
-  const { isBasico, isLoading: isLoadingTier } = usePlanTier()
-  
-  // Determinar que plan requiere la ruta actual
-  const requiredPlan = getRequiredPlanForRoute(pathname)
-  
-  // Si esta cargando, mostrar loading
-  if (isLoading || isLoadingTier) {
+  const { activa, isLoading } = useSuscripcion()
+  const [procesando, setProcesando] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [noConfigurado, setNoConfigurado] = useState(false)
+
+  const iniciarPago = async () => {
+    setProcesando(true)
+    setError(null)
+    setNoConfigurado(false)
+    try {
+      const res = await fetch("/api/pagopar/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: "prospera" }),
+      })
+
+      if (res.status === 501) {
+        setNoConfigurado(true)
+        return
+      }
+
+      const data = (await res.json()) as { checkoutUrl?: string; error?: string }
+      if (!res.ok || !data.checkoutUrl) {
+        setError("No pudimos iniciar el pago. Intentá nuevamente en unos minutos.")
+        return
+      }
+
+      // Redirigir a la pasarela. Dentro de un iframe (preview) abrimos pestaña nueva.
+      if (window.self !== window.top) {
+        window.open(data.checkoutUrl, "_blank", "noopener,noreferrer")
+      } else {
+        window.location.href = data.checkoutUrl
+      }
+    } catch {
+      setError("Ocurrió un error de conexión. Intentá nuevamente.")
+    } finally {
+      setProcesando(false)
+    }
+  }
+
+  const cerrarSesion = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    window.location.href = "/auth/login"
+  }
+
+  // Cargando estado de la suscripcion
+  if (isLoading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-primary" />
       </div>
     )
   }
 
-  // Restriccion por nivel de plan (basico): bloquear rutas no permitidas
-  if (isBasico && !isRouteAllowedForBasico(pathname)) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-        <div className="max-w-md w-full text-center space-y-6">
-          <div className="mx-auto w-20 h-20 rounded-full bg-slate-800/50 flex items-center justify-center border border-slate-700">
-            <Lock className="w-10 h-10 text-slate-400" />
-          </div>
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-white">Función Premium</h1>
-            <p className="text-slate-400">
-              Esta sección no está incluida en tu <span className="text-cyan-400 font-semibold">Plan Básico</span>
-            </p>
-          </div>
-          <div className="p-4 rounded-lg bg-slate-800/30 border border-slate-700">
-            <p className="text-sm text-slate-300">
-              Mejora tu plan para acceder a Diagnóstico Inteligente, Cajas de Ahorro, Deudas, Plan Anti-Deudas,
-              Metas, Asesoramiento y más herramientas.
-            </p>
-          </div>
-          <div className="pt-4">
-            <Link href="/dashboard/personal">
-              <Button variant="outline" className="gap-2">
-                <ArrowLeft className="w-4 h-4" />
-                Volver al Dashboard
-              </Button>
-            </Link>
-          </div>
-          <p className="text-xs text-slate-500">
-            Para mejorar tu plan, contacta al administrador.
-          </p>
-        </div>
-      </div>
-    )
-  }
-  
-  // Si no requiere plan especifico o tiene acceso, mostrar contenido
-  if (!requiredPlan || hasAccess(requiredPlan)) {
+  // Suscripcion activa: acceso completo
+  if (activa) {
     return <>{children}</>
   }
-  
-  // No tiene acceso - mostrar pantalla de bloqueo
+
+  // Sin suscripcion activa: muro de pago
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-      <div className="max-w-md w-full text-center space-y-6">
-        {/* Icono de bloqueo */}
-        <div className="mx-auto w-20 h-20 rounded-full bg-slate-800/50 flex items-center justify-center border border-slate-700">
-          <Lock className="w-10 h-10 text-slate-400" />
-        </div>
-        
-        {/* Titulo */}
-        <div className="space-y-2">
-          <h1 className="text-2xl font-bold text-white">
-            Acceso Restringido
-          </h1>
-          <p className="text-slate-400">
-            No tienes acceso al plan <span className="text-cyan-400 font-semibold">{PLAN_LABELS[requiredPlan]}</span>
-          </p>
-        </div>
-        
-        {/* Descripcion del plan */}
-        <div className="p-4 rounded-lg bg-slate-800/30 border border-slate-700">
-          <p className="text-sm text-slate-300">
-            {PLAN_DESCRIPTIONS[requiredPlan]}
-          </p>
-        </div>
-        
-        {/* Planes actuales */}
-        {allowedPlans.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-sm text-slate-500">Tus planes actuales:</p>
-            <div className="flex flex-wrap justify-center gap-2">
-              {allowedPlans.map((plan) => (
-                <span
-                  key={plan}
-                  className="px-3 py-1 rounded-full bg-cyan-500/10 text-cyan-400 text-sm border border-cyan-500/20"
-                >
-                  {PLAN_LABELS[plan]}
-                </span>
-              ))}
-            </div>
+    <div className="flex min-h-[70vh] items-center justify-center px-4 py-8">
+      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-6 sm:p-8">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-70"
+          style={{
+            background:
+              "radial-gradient(600px circle at 20% 0%, rgba(16,185,129,0.14), transparent 45%), radial-gradient(600px circle at 90% 10%, rgba(0,85,164,0.16), transparent 45%)",
+          }}
+        />
+
+        <div className="relative">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
+            <Lock className="h-8 w-8 text-emerald-400" />
           </div>
-        )}
-        
-        {/* Boton de regreso */}
-        <div className="pt-4">
-          <Link href="/dashboard/personal">
-            <Button variant="outline" className="gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              Volver al Dashboard
+
+          <div className="mt-5 text-center">
+            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-semibold text-emerald-400">
+              <Sparkles className="h-3.5 w-3.5" />
+              Plan Prospera+
+            </span>
+            <h1 className="mt-4 text-balance text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
+              Activá tu suscripción para continuar
+            </h1>
+            <p className="mt-3 text-pretty text-sm leading-relaxed text-slate-400">
+              Prospera+ es una suscripción mensual con acceso total a la plataforma. Aboná para
+              desbloquear todas las herramientas.
+            </p>
+          </div>
+
+          {/* Precio */}
+          <div className="mt-6 flex items-end justify-center gap-1">
+            <span className="text-4xl font-extrabold tracking-tight text-white">
+              {formatMoney(PRECIO_PROSPERA, "PYG")}
+            </span>
+            <span className="pb-1 text-sm text-slate-400">/mes</span>
+          </div>
+
+          {/* Beneficios */}
+          <ul className="mx-auto mt-6 max-w-sm space-y-2.5">
+            {BENEFICIOS.map((b) => (
+              <li key={b} className="flex items-start gap-3">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
+                  <Check className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-sm text-slate-300">{b}</span>
+              </li>
+            ))}
+          </ul>
+
+          {noConfigurado && (
+            <div className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
+              <p className="font-medium text-amber-400">Pago en configuración</p>
+              <p className="mt-2 text-slate-400">
+                Estamos terminando de conectar la pasarela PagoPar. En breve vas a poder completar el
+                pago con tarjeta, QR o transferencia.
+              </p>
+            </div>
+          )}
+
+          {error && (
+            <p className="mt-6 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300">
+              {error}
+            </p>
+          )}
+
+          {/* CTA */}
+          <div className="mt-7 space-y-3">
+            <Button
+              onClick={iniciarPago}
+              disabled={procesando}
+              className="w-full bg-emerald-500 py-6 text-base font-semibold text-white hover:bg-emerald-600"
+            >
+              {procesando ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Redirigiendo a PagoPar...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="mr-2 h-5 w-5" />
+                  Pagar {formatMoney(PRECIO_PROSPERA, "PYG")}
+                </>
+              )}
             </Button>
-          </Link>
+
+            <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
+              <ShieldCheck className="h-3.5 w-3.5" />
+              Pago seguro con PagoPar Paraguay — tarjetas, QR y transferencias
+            </p>
+
+            <button
+              onClick={cerrarSesion}
+              className="mx-auto block text-xs text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline"
+            >
+              Cerrar sesión
+            </button>
+          </div>
         </div>
-        
-        {/* Nota de contacto */}
-        <p className="text-xs text-slate-500">
-          Si crees que deberias tener acceso a este plan, contacta al administrador.
-        </p>
       </div>
     </div>
   )

@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
 
 type Ingreso = {
   id: string
@@ -102,6 +103,11 @@ export default function PersonalHistorialPage() {
   const [destinosInfo, setDestinosInfo] = useState<DestinoInfo>({})
   const [selectedMonth, setSelectedMonth] = useState<string>("todos")
   const [isDownloading, setIsDownloading] = useState(false)
+  const [activeTab, setActiveTab] = useState<"todos" | "ingresos" | "egresos">("todos")
+  // Mapa de items seleccionados: id -> tipo. Permite borrar en lote respetando el tipo.
+  const [selected, setSelected] = useState<Record<string, "ingreso" | "egreso">>({})
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     if (perfilActual?.id) {
@@ -201,15 +207,15 @@ export default function PersonalHistorialPage() {
     setIsLoading(false)
   }
 
-  const handleDelete = async () => {
-    if (!deleteId || !deleteType) return
-
+  // Ejecuta el borrado de UN item (con todas sus reversiones de caja/tarjeta/deuda),
+  // sin tocar el estado de UI ni recargar. Reutilizable para borrado individual y en lote.
+  const applyDeletion = async (id: string, type: "ingreso" | "egreso") => {
     const supabase = createClient()
-    const table = deleteType === "ingreso" ? "ingresos" : "egresos"
+    const table = type === "ingreso" ? "ingresos" : "egresos"
 
     // Si es un ingreso con destino caja, revertir el deposito
-    if (deleteType === "ingreso") {
-      const ingresoToDelete = ingresos.find((i) => i.id === deleteId)
+    if (type === "ingreso") {
+      const ingresoToDelete = ingresos.find((i) => i.id === id)
       if (ingresoToDelete?.destino_caja_id) {
         const montoRevertir = Number(ingresoToDelete.monto)
         const { data: cajaData } = await supabase
@@ -242,8 +248,8 @@ export default function PersonalHistorialPage() {
     }
 
     // Si es un egreso con origen, revertir el descuento
-    if (deleteType === "egreso") {
-      const egresoToDelete = egresos.find((e) => e.id === deleteId)
+    if (type === "egreso") {
+      const egresoToDelete = egresos.find((e) => e.id === id)
       if (egresoToDelete?.origen_tipo && egresoToDelete?.origen_id) {
         const montoRevertir = Number(egresoToDelete.monto)
 
@@ -330,14 +336,47 @@ export default function PersonalHistorialPage() {
       }
     }
 
-    const { error } = await supabase.from(table).delete().eq("id", deleteId)
+    const { error } = await supabase.from(table).delete().eq("id", id)
+    if (error) throw error
+  }
 
-    if (!error) {
-      loadData()
+  // Borrado individual (desde el icono de tacho de cada tarjeta).
+  const handleDelete = async () => {
+    if (!deleteId || !deleteType) return
+    try {
+      await applyDeletion(deleteId, deleteType)
+      await loadData()
+    } catch (err) {
+      console.error("[v0] Error al eliminar:", err)
+      alert("No se pudo eliminar el movimiento. Intentá nuevamente.")
+    } finally {
+      setDeleteId(null)
+      setDeleteType(null)
     }
+  }
 
-    setDeleteId(null)
-    setDeleteType(null)
+  // Borrado en lote de todos los items seleccionados.
+  const handleBulkDelete = async () => {
+    const entries = Object.entries(selected) as [string, "ingreso" | "egreso"][]
+    if (entries.length === 0) return
+    setIsDeleting(true)
+    let errores = 0
+    // Secuencial para que las reversiones de saldos no compitan entre sí.
+    for (const [id, type] of entries) {
+      try {
+        await applyDeletion(id, type)
+      } catch (err) {
+        errores++
+        console.error("[v0] Error al eliminar en lote:", id, err)
+      }
+    }
+    await loadData()
+    setSelected({})
+    setBulkConfirmOpen(false)
+    setIsDeleting(false)
+    if (errores > 0) {
+      alert(`Se eliminaron los movimientos, pero ${errores} no se pudieron borrar. Revisá e intentá de nuevo.`)
+    }
   }
 
   const handleEdit = (item: Ingreso | Egreso, type: "ingreso" | "egreso") => {
@@ -494,6 +533,46 @@ export default function PersonalHistorialPage() {
     () => egresos.filter((e) => matchesMonth(e.fecha)),
     [egresos, selectedMonth],
   )
+
+  // Items visibles en la pestaña activa (para "seleccionar todo" contextual).
+  const currentItems = useMemo<{ id: string; type: "ingreso" | "egreso" }[]>(() => {
+    if (activeTab === "ingresos") return filteredIngresos.map((i) => ({ id: i.id, type: "ingreso" as const }))
+    if (activeTab === "egresos") return filteredEgresos.map((e) => ({ id: e.id, type: "egreso" as const }))
+    return [
+      ...filteredIngresos.map((i) => ({ id: i.id, type: "ingreso" as const })),
+      ...filteredEgresos.map((e) => ({ id: e.id, type: "egreso" as const })),
+    ]
+  }, [activeTab, filteredIngresos, filteredEgresos])
+
+  const selectedCount = Object.keys(selected).length
+  const allCurrentSelected = currentItems.length > 0 && currentItems.every((it) => selected[it.id])
+
+  const toggleOne = (id: string, type: "ingreso" | "egreso") => {
+    setSelected((prev) => {
+      const next = { ...prev }
+      if (next[id]) delete next[id]
+      else next[id] = type
+      return next
+    })
+  }
+
+  const toggleAllCurrent = () => {
+    setSelected((prev) => {
+      if (allCurrentSelected) {
+        // Deseleccionar solo los de la pestaña actual
+        const next = { ...prev }
+        currentItems.forEach((it) => delete next[it.id])
+        return next
+      }
+      const next = { ...prev }
+      currentItems.forEach((it) => {
+        next[it.id] = it.type
+      })
+      return next
+    })
+  }
+
+  const clearSelection = () => setSelected({})
 
   // Descarga un archivo Excel (.xlsx) profesional con 3 hojas: Ingresos, Egresos
   // y Presupuesto. Exporta SIEMPRE la información completa del perfil, sin
@@ -695,12 +774,55 @@ export default function PersonalHistorialPage() {
           </Button>
         </div>
 
-        <Tabs defaultValue="todos" className="w-full">
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => {
+            setActiveTab(v as "todos" | "ingresos" | "egresos")
+            clearSelection()
+          }}
+          className="w-full"
+        >
           <TabsList className="glass-effect w-full grid grid-cols-3">
             <TabsTrigger value="todos" className="text-xs sm:text-sm">Todos</TabsTrigger>
             <TabsTrigger value="ingresos" className="text-xs sm:text-sm">Ingresos</TabsTrigger>
             <TabsTrigger value="egresos" className="text-xs sm:text-sm">Egresos</TabsTrigger>
           </TabsList>
+
+          {/* Barra de selección múltiple para borrado en lote */}
+          {!isLoading && currentItems.length > 0 && (
+            <div className="mt-4 flex flex-col gap-3 rounded-lg border border-border/50 glass-effect p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2.5">
+                <Checkbox
+                  id="select-all"
+                  checked={allCurrentSelected}
+                  onCheckedChange={toggleAllCurrent}
+                  aria-label="Seleccionar todo"
+                />
+                <label htmlFor="select-all" className="cursor-pointer text-sm font-medium">
+                  {allCurrentSelected ? "Quitar selección" : "Seleccionar todo"}
+                </label>
+                {selectedCount > 0 && (
+                  <Badge variant="secondary" className="text-xs">
+                    {selectedCount} seleccionado{selectedCount !== 1 ? "s" : ""}
+                  </Badge>
+                )}
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={selectedCount === 0 || isDeleting}
+                onClick={() => setBulkConfirmOpen(true)}
+                className="gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                {isDeleting
+                  ? "Eliminando..."
+                  : selectedCount > 0
+                    ? `Eliminar (${selectedCount})`
+                    : "Eliminar seleccionados"}
+              </Button>
+            </div>
+          )}
 
           <div className="mt-6">
             <TabsContent value="todos">
@@ -724,6 +846,12 @@ export default function PersonalHistorialPage() {
                             <CardContent className="p-3 sm:p-6">
                               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                 <div className="flex items-center gap-3 sm:gap-4">
+                                  <Checkbox
+                                    checked={!!selected[item.id]}
+                                    onCheckedChange={() => toggleOne(item.id, isIngreso ? "ingreso" : "egreso")}
+                                    aria-label="Seleccionar movimiento"
+                                    className="flex-shrink-0"
+                                  />
                                   <div
                                     className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                                     style={{
@@ -875,6 +1003,12 @@ export default function PersonalHistorialPage() {
                       <CardContent className="p-3 sm:p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="flex items-center gap-3 sm:gap-4">
+                            <Checkbox
+                              checked={!!selected[ingreso.id]}
+                              onCheckedChange={() => toggleOne(ingreso.id, "ingreso")}
+                              aria-label="Seleccionar ingreso"
+                              className="flex-shrink-0"
+                            />
                             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
                               <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
                             </div>
@@ -963,6 +1097,12 @@ export default function PersonalHistorialPage() {
                       <CardContent className="p-3 sm:p-6">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                           <div className="flex items-center gap-3 sm:gap-4">
+                            <Checkbox
+                              checked={!!selected[egreso.id]}
+                              onCheckedChange={() => toggleOne(egreso.id, "egreso")}
+                              aria-label="Seleccionar egreso"
+                              className="flex-shrink-0"
+                            />
                             <div
                               className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center flex-shrink-0"
                               style={{
@@ -1166,6 +1306,33 @@ export default function PersonalHistorialPage() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
               Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkConfirmOpen} onOpenChange={(open) => !isDeleting && setBulkConfirmOpen(open)}>
+        <AlertDialogContent className="glass-effect">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-destructive" />
+              Eliminar {selectedCount} movimiento{selectedCount !== 1 ? "s" : ""}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {`Vas a eliminar ${selectedCount} movimiento${selectedCount !== 1 ? "s" : ""} seleccionado${selectedCount !== 1 ? "s" : ""}. Se revertirán los saldos de cajas, tarjetas y deudas asociados. Esta acción no se puede deshacer.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault()
+                handleBulkDelete()
+              }}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeleting ? "Eliminando..." : `Eliminar ${selectedCount}`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

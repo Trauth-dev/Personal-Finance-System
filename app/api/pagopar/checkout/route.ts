@@ -11,19 +11,15 @@ import { getPagoparCredentials, iniciarTransaccion } from "@/lib/pagopar"
  * en la que el usuario ve la app.
  */
 
-// Precios de referencia EN GUARANÍES. Fuente de verdad del monto (server-side).
-const PRECIOS: Record<string, { monto: number; nombre: string }> = {
-  basico: { monto: 89000, nombre: "Plan Básico" },
-  completo: { monto: 150000, nombre: "Plan Completo" },
-}
+// Plan unico Prospera+. Monto EN GUARANÍES y fuente de verdad server-side.
+// PagoPar liquida SIEMPRE en guaraníes (PYG).
+const PLAN_PROSPERA = { id: "prospera", monto: 100000, nombre: "Prospera+" }
 
 export async function POST(request: Request) {
   try {
-    const { planId } = (await request.json()) as { planId?: string }
-
-    if (!planId || !(planId in PRECIOS)) {
-      return NextResponse.json({ error: "plan_invalido" }, { status: 400 })
-    }
+    // Plan unico: ignoramos cualquier planId entrante y usamos siempre Prospera+.
+    const plan = PLAN_PROSPERA
+    const planId = plan.id
 
     // La integración solo funciona con credenciales cargadas.
     if (!getPagoparCredentials().configured) {
@@ -54,7 +50,6 @@ export async function POST(request: Request) {
       .eq("id", user.id)
       .maybeSingle()
 
-    const plan = PRECIOS[planId]
     const monto = plan.monto // SIEMPRE guaraníes
     const idPedidoComercio = `${planId}-${user.id.slice(0, 8)}-${Date.now()}`
 
