@@ -1,101 +1,72 @@
 "use client"
 
-import type React from "react"
-
-import { useRouter, useSearchParams } from "next/navigation"
+import type { ReactNode } from "react"
+import { useTransition } from "react"
+import { useRouter } from "next/navigation"
 import { MonthSelector } from "@/components/personal/month-selector"
-import { useEffect, useState } from "react"
-import { PiggyBank, LayoutGrid } from "lucide-react"
-import { formatGuaranies } from "@/lib/utils"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { formatMoney } from "@/lib/currency"
+import type { Cuenta } from "@/lib/dashboard/fuentes/cajas"
+import { cn } from "@/lib/utils"
 
-interface CajaAhorro {
-  id: string
-  nombre: string
-  tipo: string
-  banco: string | null
-  monto_actual: number
-  color: string | null
-  icono: string | null
-}
+const TODAS = "todas"
 
 interface DashboardPersonalClientProps {
-  children: React.ReactNode
-  initialMonth: string
-  cajas?: CajaAhorro[]
+  children: ReactNode
+  mes: string
+  cajaId: string | null
+  moneda: string
+  cuentas: Cuenta[]
 }
 
-export function DashboardPersonalClient({ children, initialMonth, cajas = [] }: DashboardPersonalClientProps) {
+export function DashboardPersonalClient({ children, mes, cajaId, cuentas }: DashboardPersonalClientProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const currentMonth = searchParams.get("month") || initialMonth
-  const currentCaja = searchParams.get("caja") || null
-  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+  const [pendiente, startTransition] = useTransition()
 
-  useEffect(() => {
-    setSelectedMonth(currentMonth)
-  }, [currentMonth])
-
-  const buildUrl = (month: string, caja: string | null) => {
-    const params = new URLSearchParams()
-    params.set("month", month)
-    if (caja) params.set("caja", caja)
-    return `/dashboard/personal?${params.toString()}`
-  }
-
-  const handleMonthChange = (newMonth: string) => {
-    setSelectedMonth(newMonth)
-    router.push(buildUrl(newMonth, currentCaja))
-  }
-
-  const handleCajaChange = (cajaId: string | null) => {
-    router.push(buildUrl(currentMonth, cajaId))
+  const navegar = (nuevoMes: string, nuevaCaja: string | null) => {
+    const params = new URLSearchParams({ month: nuevoMes })
+    if (nuevaCaja) params.set("caja", nuevaCaja)
+    startTransition(() => router.push(`/dashboard/personal?${params.toString()}`, { scroll: false }))
   }
 
   return (
     <div>
-      <div className="p-4 md:p-6 pb-0 space-y-3">
-        <MonthSelector value={selectedMonth} onChange={handleMonthChange} />
+      <div className="flex flex-col gap-3 px-4 pt-4 md:flex-row md:items-end md:justify-between md:px-6 md:pt-6">
+        <MonthSelector value={mes} onChange={(nuevoMes) => navegar(nuevoMes, cajaId)} />
 
-        {/* Filtro de Cajas de Ahorro */}
-        {cajas.length > 0 && (
-          <div>
-            <p className="text-xs text-muted-foreground font-medium mb-2">Filtrar por cuenta:</p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => handleCajaChange(null)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold border-2 transition-all ${
-                  !currentCaja
-                    ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                    : "bg-card text-muted-foreground border-border/50 hover:border-border hover:text-foreground"
-                }`}
-              >
-                <LayoutGrid className="w-3.5 h-3.5" />
-                Total General
-              </button>
-              {cajas.map((caja) => (
-                <button
-                  key={caja.id}
-                  onClick={() => handleCajaChange(caja.id)}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold border-2 transition-all ${
-                    currentCaja === caja.id
-                      ? "border-cyan-500 bg-cyan-500/15 text-cyan-400 shadow-sm"
-                      : "bg-card text-muted-foreground border-border/50 hover:border-border hover:text-foreground"
-                  }`}
-                >
-                  <PiggyBank className="w-3.5 h-3.5" />
-                  <div className="flex flex-col items-start">
-                    <span>{caja.nombre}</span>
-                    <span className={`text-[10px] font-normal ${currentCaja === caja.id ? "text-cyan-400/70" : "text-muted-foreground/60"}`}>
-                      {formatGuaranies(caja.monto_actual)}
+        {cuentas.length > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="filtro-cuenta" className="text-xs font-medium text-muted-foreground">
+              Cuentas y cajas
+            </label>
+            <Select value={cajaId ?? TODAS} onValueChange={(v) => navegar(mes, v === TODAS ? null : v)}>
+              <SelectTrigger id="filtro-cuenta" className="w-full md:w-64">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={TODAS}>Todas las cuentas</SelectItem>
+                {cuentas.map((cuenta) => (
+                  <SelectItem key={cuenta.id} value={cuenta.id}>
+                    <span className="flex w-full items-center justify-between gap-3">
+                      <span className="truncate">{cuenta.nombre}</span>
+                      <span className="tabular-nums text-muted-foreground">
+                        {formatMoney(cuenta.saldo, cuenta.moneda)}
+                      </span>
                     </span>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
       </div>
-      <div key={`${currentMonth}-${currentCaja || "all"}`}>{children}</div>
+
+      <div
+        aria-busy={pendiente}
+        className={cn("transition-opacity duration-200", pendiente && "pointer-events-none opacity-60")}
+      >
+        {children}
+      </div>
     </div>
   )
 }
