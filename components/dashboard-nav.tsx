@@ -72,11 +72,6 @@ const navItemsPersonal = [
   //   icon: Activity,
   // },
   {
-    title: "Diagnostico inteligente",
-    href: "/dashboard/personal/terciario",
-    icon: BarChart3,
-  },
-  {
     title: "Carga de Ingreso y Egreso",
     href: "/dashboard/carga",
     icon: PlusCircle,
