@@ -10,6 +10,8 @@ export const EMAILS_ACCESO_LIBRE = new Set<string>([
   "luccianaramos007@gmail.com", // Luciana Ramos
   "davidblancobazan@gmail.com", // David Blanco
   "info@logrosconsultora.com", // Sebastián García
+  "profeluciana@gmail.com", // Cuenta profe Luciana
+  "profenicolas@gmail.com", // Cuenta profe Nicolás
 ])
 
 /** Devuelve true si el email pertenece a un usuario con acceso libre. */
