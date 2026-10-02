@@ -94,7 +94,9 @@ export default function LoginPage() {
       if (error) throw error
 
       if (data.session) {
-        router.push("/dashboard")
+        const next = new URLSearchParams(window.location.search).get("next")
+        const destino = next && next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard"
+        router.push(destino)
         router.refresh()
       }
     } catch (error: unknown) {
@@ -102,6 +104,8 @@ export default function LoginPage() {
       if (error instanceof Error) {
         if (error.message.includes("Invalid login credentials")) {
           setError("Correo o contraseña incorrectos. Por favor, verifica tus datos.")
+        } else if (/banned/i.test(error.message)) {
+          setError("Tu cuenta está pausada o suspendida. Comunicate con el equipo de Prospera+.")
         } else if (error.message.includes("Email not confirmed")) {
           setError("Por favor, confirma tu correo electrónico antes de iniciar sesión.")
         } else {
