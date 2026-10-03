@@ -40,9 +40,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         try {
           const { data: profile, error: profileError } = await supabase
             .from("profiles")
-            .select("nombre_completo")
+            .select("nombre_completo, estado_cuenta")
             .eq("id", user.id)
             .maybeSingle()
+
+          if (profile?.estado_cuenta && profile.estado_cuenta !== "activo") {
+            router.replace("/auth/cuenta-restringida")
+            return
+          }
 
           if (!profile && !profileError) {
             await supabase.from("profiles").insert({

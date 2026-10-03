@@ -22,6 +22,7 @@ import {
   margenDelMes,
   principalesGastos,
   resumirPeriodo,
+  SIN_CATEGORIA,
   variacionPorcentual,
   type CategoriaGasto,
   type Egreso,
@@ -49,15 +50,30 @@ export interface PuntoEvolucion {
   sinActividad: boolean
 }
 
+export interface GrupoCategoria {
+  categoria: string
+  total: number
+  gastos: Egreso[]
+}
+
 export interface Movimientos {
   resumen: ResumenPeriodo
   /** Null = sin datos comparables del mes anterior. */
   variacionIngresos: number | null
+  variacionGastos: number | null
+  variacionResultado: number | null
   comparacionParcial: boolean
   margen: number | null
   distribucion: CategoriaGasto[]
   principales: Egreso[]
+  gastosPorCategoria: GrupoCategoria[]
   evolucion: PuntoEvolucion[]
+}
+
+export interface Historico {
+  ingresos: number
+  gastos: number
+  patrimonio: number
 }
 
 export type Aviso =
@@ -83,6 +99,7 @@ export interface PersonalDashboardData {
   cuentas: Seccion<Cuenta[]>
   disponible: Seccion<SaldoPorMoneda[]>
   movimientos: Seccion<Movimientos>
+  historico: Seccion<Historico>
   deuda: Seccion<{ total: number; activas: number }>
   presupuesto: Seccion<PresupuestoMes>
   avisos: Aviso[]
@@ -109,6 +126,24 @@ const unico = <T,>(valor: T | T[] | null | undefined): T | null =>
 const aNumero = (valor: unknown) => {
   const n = Number(valor)
   return Number.isFinite(n) ? n : 0
+}
+
+/** Variación sobre el valor absoluto de la base: el resultado puede ser negativo en ambos meses. */
+const variacionSobreBase = (actual: number, anterior: number): number | null =>
+  anterior === 0 ? null : ((actual - anterior) / Math.abs(anterior)) * 100
+
+function agruparPorCategoria(gastos: Egreso[]): GrupoCategoria[] {
+  const grupos = new Map<string, GrupoCategoria>()
+  for (const gasto of gastos) {
+    const categoria = gasto.categoria || SIN_CATEGORIA
+    const grupo = grupos.get(categoria) ?? { categoria, total: 0, gastos: [] }
+    grupo.total += gasto.monto
+    grupo.gastos.push(gasto)
+    grupos.set(categoria, grupo)
+  }
+  return Array.from(grupos.values())
+    .map((g) => ({ ...g, gastos: g.gastos.sort((a, b) => b.fecha.localeCompare(a.fecha) || b.monto - a.monto) }))
+    .sort((a, b) => b.total - a.total)
 }
 
 export async function getPersonalDashboardData({
@@ -141,8 +176,18 @@ export async function getPersonalDashboardData({
   const ventana = { start: rangoMes(mesesEvolucion[0]).start, end: rangoSeleccionado.end }
   const rangoActual = rangoMes(mesActual)
 
-  const [cajasRes, ingresosRes, egresosRes, egresosHoyRes, deudasRes, presupuestoRes, categoriasRes, logrosRes] =
-    await Promise.all([
+  const [
+    cajasRes,
+    ingresosRes,
+    egresosRes,
+    egresosHoyRes,
+    deudasRes,
+    presupuestoRes,
+    categoriasRes,
+    logrosRes,
+    ingresosHistRes,
+    egresosHistRes,
+  ] = await Promise.all([
       supabase
         .from("cajas_ahorro")
         .select("id, nombre, banco, monto_actual, moneda")
@@ -207,6 +252,17 @@ export async function getPersonalDashboardData({
         .eq("perfil_id", perfilId)
         .order("fecha_obtenido", { ascending: false })
         .limit(3),
+      leerTodo((desde, hasta) =>
+        supabase.from("ingresos").select("id, monto").eq("perfil_id", perfilId).order("id").range(desde, hasta),
+      ),
+      leerTodo((desde, hasta) =>
+        supabase
+          .from("egresos")
+          .select("id, monto, deuda_id")
+          .eq("perfil_id", perfilId)
+          .order("id")
+          .range(desde, hasta),
+      ),
     ])
 
   for (const [nombre, res] of Object.entries({
@@ -217,6 +273,8 @@ export async function getPersonalDashboardData({
     presupuesto: presupuestoRes,
     categorias: categoriasRes,
     logros: logrosRes,
+    ingresosHistoricos: ingresosHistRes,
+    egresosHistoricos: egresosHistRes,
   })) {
     if (res.error) console.error(`[dashboard-personal] Error leyendo ${nombre}:`, res.error)
   }
@@ -261,17 +319,21 @@ export async function getPersonalDashboardData({
     // Mes en curso: se compara del 1 al día de hoy contra el mismo tramo del mes anterior.
     const rangoComparable = esMesActual ? rangoHastaDia(mes, hoy.day) : rangoSeleccionado
     const rangoAnterior = esMesActual ? rangoHastaDia(mesAnterior, hoy.day) : rangoMes(mesAnterior)
-    const ingresosComparables = resumirPeriodo(ingresos, [], rangoComparable, cajaId).ingresos
-    const ingresosAnteriores = resumirPeriodo(ingresos, [], rangoAnterior, cajaId).ingresos
+    const comparable = resumirPeriodo(ingresos, egresos, rangoComparable, cajaId)
+    const anterior = resumirPeriodo(ingresos, egresos, rangoAnterior, cajaId)
     const gastos = gastosDelPeriodo(egresos, rangoSeleccionado, cajaId)
+    const hayBaseAnterior = anterior.cantidadIngresos > 0 || anterior.cantidadGastos > 0
 
     movimientos = ok({
       resumen,
-      variacionIngresos: variacionPorcentual(ingresosComparables, ingresosAnteriores),
+      variacionIngresos: variacionPorcentual(comparable.ingresos, anterior.ingresos),
+      variacionGastos: variacionPorcentual(comparable.gastos, anterior.gastos),
+      variacionResultado: hayBaseAnterior ? variacionSobreBase(comparable.resultado, anterior.resultado) : null,
       comparacionParcial: esMesActual,
       margen: margenDelMes(resumen),
       distribucion: distribuirGastos(gastos),
       principales: principalesGastos(gastos, 5),
+      gastosPorCategoria: agruparPorCategoria(gastos),
       evolucion: mesesEvolucion.map((m) => {
         const r = resumirPeriodo(ingresos, egresos, rangoMes(m), cajaId)
         return {
@@ -284,6 +346,14 @@ export async function getPersonalDashboardData({
         }
       }),
     })
+  }
+
+  // Patrimonio = ingresos - gastos reales. Los pagos de deuda no restan: la compra ya se contó como gasto.
+  let historico: Seccion<Historico> = fallo
+  if (!ingresosHistRes.error && !egresosHistRes.error) {
+    const totalIngresos = ingresosHistRes.data.reduce((s, i) => s + aNumero(i.monto), 0)
+    const totalGastos = egresosHistRes.data.reduce((s, e) => (e.deuda_id ? s : s + aNumero(e.monto)), 0)
+    historico = ok({ ingresos: totalIngresos, gastos: totalGastos, patrimonio: totalIngresos - totalGastos })
   }
 
   const deudas: Deuda[] | null = deudasRes.error
@@ -357,6 +427,7 @@ export async function getPersonalDashboardData({
     cuentas: cuentas ? ok(cuentas) : fallo,
     disponible: cuentas ? ok(disponibleHoy(cuentas, cajaId, moneda)) : fallo,
     movimientos,
+    historico,
     deuda: deudas ? ok(calcularDeudaPendiente(deudas)) : fallo,
     presupuesto,
     avisos: avisos.slice(0, 4),

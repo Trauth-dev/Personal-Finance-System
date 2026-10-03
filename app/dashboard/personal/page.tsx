@@ -1,14 +1,21 @@
 import { redirect } from "next/navigation"
+import { PiggyBank } from "lucide-react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { createClient } from "@/lib/supabase/server"
 import { getPersonalDashboardData } from "@/lib/dashboard/personal-dashboard"
 import { nombreMes } from "@/lib/dashboard/fechas"
-import { IndicadoresPrincipales } from "@/components/personal/dashboard/indicadores-principales"
-import { PresupuestoCategorias } from "@/components/personal/dashboard/presupuesto-categorias"
-import { EvolucionMensual } from "@/components/personal/dashboard/evolucion-mensual"
-import { DistribucionGastos, PrincipalesGastos } from "@/components/personal/dashboard/analisis-gastos"
-import { AvisosYLogros } from "@/components/personal/dashboard/avisos-logros"
-import { ErrorDeCarga, Panel } from "@/components/personal/dashboard/indicador"
+import { Panel } from "@/components/personal/dashboard/indicador"
+import { BannerPatrimonio } from "@/components/personal/dashboard-clasico/banner-patrimonio"
+import { TarjetasMes } from "@/components/personal/dashboard-clasico/tarjetas-mes"
+import { PresupuestoCategoriasClasico } from "@/components/personal/dashboard-clasico/presupuesto-categorias-clasico"
+import {
+  GastosCategoriaClasico,
+  SuperavitClasico,
+  TasaAhorroTarjeta,
+} from "@/components/personal/dashboard-clasico/analisis-clasico"
+import { ReportesClasico } from "@/components/personal/dashboard-clasico/reportes-clasico"
+import { AlertasFlotantes } from "@/components/personal/dashboard-clasico/alertas-flotantes"
+import { LogrosFinancieros } from "@/components/personal/logros-financieros"
 import { DashboardPersonalClient } from "./page-client"
 
 export const dynamic = "force-dynamic"
@@ -58,38 +65,35 @@ export default async function DashboardPersonalPage({
 
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader title="Dashboard Personal" description={`Tus finanzas de ${nombreMes(data.mes)}`} />
+      <DashboardHeader title="Dashboard Personal" description={`Resumen de tus finanzas · ${nombreMes(data.mes)}`} />
 
-      <DashboardPersonalClient
-        mes={data.claveMes}
-        cajaId={data.cajaId}
-        moneda={data.moneda}
-        cuentas={data.cuentas.ok ? data.cuentas.data : []}
-      >
-        <div className="flex flex-col gap-4 p-4 md:gap-5 md:p-6">
-          <IndicadoresPrincipales data={data} />
-
-          <PresupuestoCategorias data={data} />
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <Panel titulo="Evolución de los últimos 6 meses" className="lg:col-span-2">
-              {data.movimientos.ok ? (
-                <EvolucionMensual puntos={data.movimientos.data.evolucion} moneda={data.moneda} />
-              ) : (
-                <ErrorDeCarga />
-              )}
-            </Panel>
-            <DistribucionGastos data={data} />
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <PrincipalesGastos data={data} />
-            <div className="lg:col-span-2">
-              <AvisosYLogros data={data} />
+      <DashboardPersonalClient mes={data.claveMes} cajaId={data.cajaId} cuentas={data.cuentas.ok ? data.cuentas.data : []}>
+        <div className="flex flex-col gap-4 p-4 md:gap-6 md:p-6">
+          {data.cajaNombre && (
+            <div className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
+              <PiggyBank className="h-4 w-4 text-cyan-500" aria-hidden="true" />
+              <p className="text-sm font-medium text-cyan-400">
+                Mostrando datos filtrados por: <span className="font-bold">{data.cajaNombre}</span>
+              </p>
             </div>
+          )}
+
+          <BannerPatrimonio data={data} />
+          <TarjetasMes data={data} />
+          <PresupuestoCategoriasClasico data={data} />
+
+          <div className="grid grid-cols-1 gap-4 md:gap-6 lg:grid-cols-3">
+            <SuperavitClasico data={data} />
+            <TasaAhorroTarjeta data={data} />
+            <GastosCategoriaClasico data={data} />
           </div>
+
+          <ReportesClasico data={data} />
+          <LogrosFinancieros />
         </div>
       </DashboardPersonalClient>
+
+      <AlertasFlotantes avisos={data.avisos} moneda={data.moneda} />
     </div>
   )
 }
