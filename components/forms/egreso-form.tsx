@@ -7,14 +7,6 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import {
@@ -52,6 +44,7 @@ import { usePerfil } from "@/lib/contexts/perfil-context"
 import { getCache, setCache, invalidateCache } from "@/lib/cache/carga-cache"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
+import { NuevaDeudaDialog, DEUDAS_ACTUALIZADAS_EVENT, type DeudaCreada } from "@/components/forms/nueva-deuda-dialog"
 
 // Nombres de meses (índice 0 = Enero) para el selector de "Mes del egreso".
 const MESES = [
@@ -184,22 +177,6 @@ export function EgresoForm() {
   const [newCategoriaNombre, setNewCategoriaNombre] = useState("")
 
   const [showAddDeudaModal, setShowAddDeudaModal] = useState(false)
-  const [tipoNuevaDeuda, setTipoNuevaDeuda] = useState<"prestamo" | "tarjeta_credito">("prestamo")
-  const [nuevaDeudaForm, setNuevaDeudaForm] = useState({
-    nombre: "",
-    acreedor: "",
-    monto_total: "",
-    cuotas_totales: "",
-    monto_cuota: "",
-    tasa_interes: "",
-    fecha_inicio: getTodayDate(),
-    fecha_vencimiento: "",
-    limite_credito: "",
-    fecha_corte: "",
-    fecha_pago: "",
-    notas: "",
-  })
-  const [isAddingDeuda, setIsAddingDeuda] = useState(false)
 
   const router = useRouter()
 
@@ -279,6 +256,17 @@ export function EgresoForm() {
       setEsPagoDeudas(false)
     }
   }, [selectedTipo, tiposCategorias])
+
+  // Si se registra una deuda desde otra sección (p. ej. el presupuesto), se
+  // refrescan la lista de deudas y las tarjetas usadas como origen de fondos.
+  useEffect(() => {
+    const refrescar = () => {
+      if (esPagoDeudas) loadDeudas()
+      loadOrigenFondos()
+    }
+    window.addEventListener(DEUDAS_ACTUALIZADAS_EVENT, refrescar)
+    return () => window.removeEventListener(DEUDAS_ACTUALIZADAS_EVENT, refrescar)
+  }, [esPagoDeudas, perfilActual?.id])
 
   // Si la precarga de descripciones termina después de haber seleccionado un
   // tipo, re-filtramos para que la lista aparezca sin retardo ni parpadeo.
@@ -669,92 +657,12 @@ export function EgresoForm() {
     }
   }
 
-  const handleAddDeuda = async () => {
-    if (!perfilActual?.id || !nuevaDeudaForm.nombre || !nuevaDeudaForm.monto_total || !nuevaDeudaForm.acreedor) {
-      toast.error("Completa los campos obligatorios: Nombre, Acreedor y Monto Total")
-      return
-    }
-
-    setIsAddingDeuda(true)
-
-    try {
-      const supabase = createClient()
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return
-
-      const deudaData: any = {
-        user_id: user.id,
-        perfil_id: perfilActual.id,
-        nombre: nuevaDeudaForm.nombre,
-        acreedor: nuevaDeudaForm.acreedor,
-        monto_total: Number.parseFloat(nuevaDeudaForm.monto_total),
-        monto_pagado: 0,
-        cuotas_pagadas: 0,
-        tipo_deuda: tipoNuevaDeuda,
-        tasa_interes: nuevaDeudaForm.tasa_interes ? Number.parseFloat(nuevaDeudaForm.tasa_interes) : 0,
-        fecha_inicio: nuevaDeudaForm.fecha_inicio,
-        fecha_vencimiento: nuevaDeudaForm.fecha_vencimiento || null,
-        estado: "activa",
-        prioridad: "media",
-        frecuencia_pago: "mensual",
-        notas: nuevaDeudaForm.notas || null,
-      }
-
-      if (tipoNuevaDeuda === "prestamo") {
-        deudaData.cuotas_totales = nuevaDeudaForm.cuotas_totales ? Number.parseInt(nuevaDeudaForm.cuotas_totales) : null
-        deudaData.monto_cuota = nuevaDeudaForm.monto_cuota ? Number.parseFloat(nuevaDeudaForm.monto_cuota) : null
-      } else {
-        deudaData.limite_credito = nuevaDeudaForm.limite_credito
-          ? Number.parseFloat(nuevaDeudaForm.limite_credito)
-          : null
-        deudaData.fecha_corte = nuevaDeudaForm.fecha_corte ? Number.parseInt(nuevaDeudaForm.fecha_corte) : null
-        deudaData.fecha_pago = nuevaDeudaForm.fecha_pago ? Number.parseInt(nuevaDeudaForm.fecha_pago) : null
-      }
-
-      const { data, error: insertError } = await supabase.from("deudas").insert(deudaData).select()
-
-      if (insertError) throw insertError
-
-      toast.success("Deuda registrada exitosamente")
-
-      // Resetear formulario
-      setNuevaDeudaForm({
-        nombre: "",
-        acreedor: "",
-        monto_total: "",
-        cuotas_totales: "",
-        monto_cuota: "",
-        tasa_interes: "",
-        fecha_inicio: getTodayDate(),
-        fecha_vencimiento: "",
-        limite_credito: "",
-        fecha_corte: "",
-        fecha_pago: "",
-        notas: "",
-      })
-      setTipoNuevaDeuda("prestamo")
-      setShowAddDeudaModal(false)
-
-      // Recargar deudas y seleccionar la nueva
-      await loadDeudas()
-      if (data && data[0]) {
-        setSelectedDeuda(data[0].id)
-        if (data[0].monto_cuota) {
-          setMonto(String(data[0].monto_cuota))
-        }
-        if (data[0].cuotas_totales) {
-          setNumeroCuota("1")
-        }
-        preseleccionarCategoriaPorDeuda(data[0].nombre)
-      }
-    } catch (error) {
-      console.error("Error creating deuda:", error)
-      toast.error("Error al registrar la deuda")
-    } finally {
-      setIsAddingDeuda(false)
-    }
+  const handleDeudaCreada = async (deuda: DeudaCreada) => {
+    await loadDeudas()
+    setSelectedDeuda(deuda.id)
+    if (deuda.monto_cuota) setMonto(String(deuda.monto_cuota))
+    if (deuda.cuotas_totales) setNumeroCuota("1")
+    preseleccionarCategoriaPorDeuda(deuda.nombre)
   }
 
   // Preselecciona la descripción (subcategoría) cuyo nombre coincida con el de la
@@ -1182,288 +1090,22 @@ export function EgresoForm() {
                 </div>
 
                 {/* Modal para agregar nueva deuda */}
-                <Dialog open={showAddDeudaModal} onOpenChange={setShowAddDeudaModal}>
-                  <DialogTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1 text-xs bg-transparent border-green-500/30 hover:bg-green-500/10 text-green-400"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Nueva Deuda
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <CreditCard className="w-5 h-5" />
-                        Registrar Nueva Deuda
-                      </DialogTitle>
-                      <DialogDescription>
-                        Agrega un nuevo préstamo o tarjeta de crédito para hacer seguimiento de tus pagos
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-6 pt-4">
-                      {/* Tipo de deuda */}
-                      <div className="space-y-3">
-                        <Label>Tipo de Deuda</Label>
-                        <div className="grid grid-cols-2 gap-4">
-                          <button
-                            type="button"
-                            onClick={() => setTipoNuevaDeuda("prestamo")}
-                            className={`p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
-                              tipoNuevaDeuda === "prestamo"
-                                ? "border-blue-400 bg-blue-500/20"
-                                : "border-border/30 hover:border-blue-400/50"
-                            }`}
-                          >
-                            <div className="p-3 rounded-full bg-blue-500/20">
-                              <Landmark className="w-6 h-6 text-blue-400" />
-                            </div>
-                            <div className="text-left">
-                              <p className="font-semibold">Préstamo</p>
-                              <p className="text-xs text-muted-foreground">Préstamos bancarios, personales</p>
-                            </div>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setTipoNuevaDeuda("tarjeta_credito")}
-                            className={`p-4 rounded-lg border-2 transition-all flex items-center gap-3 ${
-                              tipoNuevaDeuda === "tarjeta_credito"
-                                ? "border-purple-400 bg-purple-500/20"
-                                : "border-border/30 hover:border-purple-400/50"
-                            }`}
-                          >
-                            <div className="p-3 rounded-full bg-purple-500/20">
-                              <CreditCard className="w-6 h-6 text-purple-400" />
-                            </div>
-                            <div className="text-left">
-                              <p className="font-semibold">Tarjeta de Crédito</p>
-                              <p className="text-xs text-muted-foreground">Tarjetas de crédito bancarias</p>
-                            </div>
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Campos comunes */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="deuda-nombre">Nombre *</Label>
-                          <Input
-                            id="deuda-nombre"
-                            placeholder={tipoNuevaDeuda === "tarjeta_credito" ? "Visa Oro" : "Préstamo Personal"}
-                            value={nuevaDeudaForm.nombre}
-                            onChange={(e) => setNuevaDeudaForm({ ...nuevaDeudaForm, nombre: e.target.value })}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="deuda-acreedor">Acreedor/Banco *</Label>
-                          <Input
-                            id="deuda-acreedor"
-                            placeholder="Banco Itaú"
-                            value={nuevaDeudaForm.acreedor}
-                            onChange={(e) => setNuevaDeudaForm({ ...nuevaDeudaForm, acreedor: e.target.value })}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="deuda-monto">
-                            {tipoNuevaDeuda === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}
-                          </Label>
-                          <Input
-                            id="deuda-monto"
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="5.000.000"
-                            value={formatNumberWithSeparators(nuevaDeudaForm.monto_total)}
-                            onChange={(e) => {
-                              const value = parseFormattedNumber(e.target.value)
-                              setNuevaDeudaForm({ ...nuevaDeudaForm, monto_total: value })
-                            }}
-                          />
-                          {nuevaDeudaForm.monto_total && (
-                            <p className="text-xs text-muted-foreground">
-                              {formatGuaranies(Number(nuevaDeudaForm.monto_total))}
-                            </p>
-                          )}
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="deuda-interes">Tasa de Interés (%)</Label>
-                          <Input
-                            id="deuda-interes"
-                            type="number"
-                            step="0.01"
-                            placeholder="12.5"
-                            value={nuevaDeudaForm.tasa_interes}
-                            onChange={(e) => setNuevaDeudaForm({ ...nuevaDeudaForm, tasa_interes: e.target.value })}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Campos específicos para préstamo */}
-                      {tipoNuevaDeuda === "prestamo" && (
-                        <div className="space-y-4 p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
-                          <div className="flex items-center gap-2 text-blue-400">
-                            <Landmark className="w-4 h-4" />
-                            <span className="font-medium text-sm">Datos del Préstamo</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="deuda-cuotas">Cantidad de Cuotas</Label>
-                              <Input
-                                id="deuda-cuotas"
-                                type="number"
-                                placeholder="12"
-                                value={nuevaDeudaForm.cuotas_totales}
-                                onChange={(e) =>
-                                  setNuevaDeudaForm({ ...nuevaDeudaForm, cuotas_totales: e.target.value })
-                                }
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="deuda-monto-cuota">Monto por Cuota</Label>
-                              <Input
-                                id="deuda-monto-cuota"
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="450.000"
-                                value={formatNumberWithSeparators(nuevaDeudaForm.monto_cuota)}
-                                onChange={(e) => {
-                                  const value = parseFormattedNumber(e.target.value)
-                                  setNuevaDeudaForm({ ...nuevaDeudaForm, monto_cuota: value })
-                                }}
-                              />
-                              {nuevaDeudaForm.monto_cuota && (
-                                <p className="text-xs text-muted-foreground">
-                                  {formatGuaranies(Number(nuevaDeudaForm.monto_cuota))}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="deuda-fecha-inicio">Fecha de Inicio</Label>
-                              <Input
-                                id="deuda-fecha-inicio"
-                                type="date"
-                                value={nuevaDeudaForm.fecha_inicio}
-                                onChange={(e) => setNuevaDeudaForm({ ...nuevaDeudaForm, fecha_inicio: e.target.value })}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="deuda-fecha-vencimiento">Fecha de Vencimiento</Label>
-                              <Input
-                                id="deuda-fecha-vencimiento"
-                                type="date"
-                                value={nuevaDeudaForm.fecha_vencimiento}
-                                onChange={(e) =>
-                                  setNuevaDeudaForm({ ...nuevaDeudaForm, fecha_vencimiento: e.target.value })
-                                }
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Campos específicos para tarjeta de crédito */}
-                      {tipoNuevaDeuda === "tarjeta_credito" && (
-                        <div className="space-y-4 p-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
-                          <div className="flex items-center gap-2 text-purple-400">
-                            <CreditCard className="w-4 h-4" />
-                            <span className="font-medium text-sm">Datos de la Tarjeta</span>
-                          </div>
-                          <div className="grid grid-cols-3 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="deuda-limite">Límite de Crédito</Label>
-                              <Input
-                                id="deuda-limite"
-                                type="text"
-                                inputMode="numeric"
-                                placeholder="10000000"
-                                value={nuevaDeudaForm.limite_credito}
-                                onChange={(e) => {
-                                  const value = e.target.value.replace(/[^0-9]/g, "")
-                                  setNuevaDeudaForm({ ...nuevaDeudaForm, limite_credito: value })
-                                }}
-                              />
-                              {nuevaDeudaForm.limite_credito && (
-                                <p className="text-xs text-muted-foreground">
-                                  {formatGuaranies(Number(nuevaDeudaForm.limite_credito))}
-                                </p>
-                              )}
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="deuda-corte">Día de Corte</Label>
-                              <Input
-                                id="deuda-corte"
-                                type="number"
-                                min="1"
-                                max="31"
-                                placeholder="15"
-                                value={nuevaDeudaForm.fecha_corte}
-                                onChange={(e) => setNuevaDeudaForm({ ...nuevaDeudaForm, fecha_corte: e.target.value })}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="deuda-pago">Día de Pago</Label>
-                              <Input
-                                id="deuda-pago"
-                                type="number"
-                                min="1"
-                                max="31"
-                                placeholder="25"
-                                value={nuevaDeudaForm.fecha_pago}
-                                onChange={(e) => setNuevaDeudaForm({ ...nuevaDeudaForm, fecha_pago: e.target.value })}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Notas */}
-                      <div className="space-y-2">
-                        <Label htmlFor="deuda-notas">Notas (Opcional)</Label>
-                        <Textarea
-                          id="deuda-notas"
-                          placeholder="Información adicional sobre la deuda..."
-                          value={nuevaDeudaForm.notas}
-                          onChange={(e) => setNuevaDeudaForm({ ...nuevaDeudaForm, notas: e.target.value })}
-                          rows={2}
-                        />
-                      </div>
-
-                      {/* Botones */}
-                      <div className="flex gap-3 pt-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setShowAddDeudaModal(false)}
-                          className="flex-1"
-                        >
-                          Cancelar
-                        </Button>
-                        <Button
-                          type="button"
-                          onClick={handleAddDeuda}
-                          disabled={
-                            isAddingDeuda ||
-                            !nuevaDeudaForm.nombre ||
-                            !nuevaDeudaForm.monto_total ||
-                            !nuevaDeudaForm.acreedor
-                          }
-                          className={`flex-1 ${tipoNuevaDeuda === "prestamo" ? "bg-blue-600 hover:bg-blue-700" : "bg-purple-600 hover:bg-purple-700"}`}
-                        >
-                          {isAddingDeuda ? "Registrando..." : "Registrar Deuda"}
-                        </Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowAddDeudaModal(true)}
+                  className="gap-1 text-xs bg-transparent border-green-500/30 hover:bg-green-500/10 text-green-400"
+                >
+                  <Plus className="w-3 h-3" />
+                  Nueva Deuda
+                </Button>
+                <NuevaDeudaDialog
+                  open={showAddDeudaModal}
+                  onOpenChange={setShowAddDeudaModal}
+                  perfilId={perfilActual?.id}
+                  onCreated={handleDeudaCreada}
+                />
               </div>
 
               {deudas.length > 0 ? (
