@@ -526,6 +526,7 @@ export function EgresoForm() {
         categoriaId = newCat[0].id
       }
 
+      if (!tipoId || !categoriaId) return null
       return { tipoId, categoriaId }
     } catch (error) {
       console.error("Error get-or-create Gastos del Negocio:", error)

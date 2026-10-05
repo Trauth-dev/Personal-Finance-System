@@ -11,6 +11,16 @@ import { useEffect, useState, useMemo } from "react"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { formatDateWithoutTimezone, formatMoney } from "@/lib/utils"
 import {
+  actualizarGasto,
+  actualizarIngreso,
+  actualizarPagoDeuda,
+  eliminarEgreso,
+  eliminarIngreso,
+  notificarCambioFinanciero,
+  OperacionFinancieraError,
+  type OrigenTipo,
+} from "@/lib/finanzas/operaciones"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -207,137 +217,11 @@ export default function PersonalHistorialPage() {
     setIsLoading(false)
   }
 
-  // Ejecuta el borrado de UN item (con todas sus reversiones de caja/tarjeta/deuda),
-  // sin tocar el estado de UI ni recargar. Reutilizable para borrado individual y en lote.
+  // Elimina UN movimiento revirtiendo en la base, dentro de una transacción, todos sus
+  // efectos sobre cajas, tarjetas, préstamos, cuotas y extractos.
   const applyDeletion = async (id: string, type: "ingreso" | "egreso") => {
-    const supabase = createClient()
-    const table = type === "ingreso" ? "ingresos" : "egresos"
-
-    // Si es un ingreso con destino caja, revertir el deposito
-    if (type === "ingreso") {
-      const ingresoToDelete = ingresos.find((i) => i.id === id)
-      if (ingresoToDelete?.destino_caja_id) {
-        const montoRevertir = Number(ingresoToDelete.monto)
-        const { data: cajaData } = await supabase
-          .from("cajas_ahorro")
-          .select("monto_actual")
-          .eq("id", ingresoToDelete.destino_caja_id)
-          .single()
-
-        if (cajaData) {
-          const nuevoMonto = Math.max(0, Number(cajaData.monto_actual) - montoRevertir)
-          await supabase
-            .from("cajas_ahorro")
-            .update({ monto_actual: nuevoMonto })
-            .eq("id", ingresoToDelete.destino_caja_id)
-
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            await supabase.from("movimientos_caja").insert({
-              caja_id: ingresoToDelete.destino_caja_id,
-              perfil_id: perfilActual?.id,
-              user_id: user.id,
-              tipo: "retiro",
-              monto: montoRevertir,
-              descripcion: `Reversion: eliminacion de ingreso "${ingresoToDelete.tipo_ingreso}"`,
-              fecha: new Date().toISOString().split("T")[0],
-            })
-          }
-        }
-      }
-    }
-
-    // Si es un egreso con origen, revertir el descuento
-    if (type === "egreso") {
-      const egresoToDelete = egresos.find((e) => e.id === id)
-      if (egresoToDelete?.origen_tipo && egresoToDelete?.origen_id) {
-        const montoRevertir = Number(egresoToDelete.monto)
-
-        if (egresoToDelete.origen_tipo === "caja_ahorro") {
-          // Devolver dinero a la caja de ahorro
-          const { data: cajaData } = await supabase
-            .from("cajas_ahorro")
-            .select("monto_actual")
-            .eq("id", egresoToDelete.origen_id)
-            .single()
-
-          if (cajaData) {
-            await supabase
-              .from("cajas_ahorro")
-              .update({ monto_actual: Number(cajaData.monto_actual) + montoRevertir })
-              .eq("id", egresoToDelete.origen_id)
-
-            // Registrar movimiento de deposito (reversion)
-            const { data: { user } } = await supabase.auth.getUser()
-            if (user) {
-              await supabase.from("movimientos_caja").insert({
-                caja_id: egresoToDelete.origen_id,
-                perfil_id: perfilActual?.id,
-                user_id: user.id,
-                tipo: "deposito",
-                monto: montoRevertir,
-                descripcion: `Reversion por eliminacion de egreso`,
-                fecha: new Date().toISOString().split("T")[0],
-              })
-            }
-          }
-        } else if (egresoToDelete.origen_tipo === "tarjeta_credito") {
-          // Devolver credito disponible a la tarjeta
-          const { data: tarjetaData } = await supabase
-            .from("deudas")
-            .select("monto_total")
-            .eq("id", egresoToDelete.origen_id)
-            .single()
-
-          if (tarjetaData) {
-            await supabase
-              .from("deudas")
-              .update({ monto_total: Number(tarjetaData.monto_total) + montoRevertir })
-              .eq("id", egresoToDelete.origen_id)
-          }
-        }
-      }
-
-      // Si el egreso es un pago de deuda (prestamo o tarjeta), revertir monto_pagado
-      if (egresoToDelete?.deuda_id) {
-        const montoRevertir = Number(egresoToDelete.monto)
-        const { data: deudaData } = await supabase
-          .from("deudas")
-          .select("monto_pagado, cuotas_pagadas, monto_total, tipo_deuda, limite_credito")
-          .eq("id", egresoToDelete.deuda_id)
-          .single()
-
-        if (deudaData) {
-          const nuevoMontoPagado = Math.max(0, Number(deudaData.monto_pagado) - montoRevertir)
-          const nuevasCuotas = egresoToDelete.numero_cuota
-            ? Math.max(0, Number(deudaData.cuotas_pagadas) - 1)
-            : Number(deudaData.cuotas_pagadas)
-
-          let nuevoMontoTotal = Number(deudaData.monto_total)
-          if (deudaData.tipo_deuda === "tarjeta_credito") {
-            // Para tarjetas: al revertir un pago, se reduce el disponible
-            nuevoMontoTotal = Math.max(0, Number(deudaData.monto_total) - montoRevertir)
-          }
-
-          const estaPagada = deudaData.tipo_deuda === "tarjeta_credito"
-            ? nuevoMontoTotal >= (Number(deudaData.limite_credito) || 0)
-            : nuevoMontoPagado >= nuevoMontoTotal
-
-          await supabase
-            .from("deudas")
-            .update({
-              monto_total: nuevoMontoTotal,
-              monto_pagado: nuevoMontoPagado,
-              cuotas_pagadas: nuevasCuotas,
-              estado: estaPagada ? "pagada" : "activa",
-            })
-            .eq("id", egresoToDelete.deuda_id)
-        }
-      }
-    }
-
-    const { error } = await supabase.from(table).delete().eq("id", id)
-    if (error) throw error
+    if (type === "ingreso") await eliminarIngreso(id)
+    else await eliminarEgreso(id)
   }
 
   // Borrado individual (desde el icono de tacho de cada tarjeta).
@@ -345,10 +229,10 @@ export default function PersonalHistorialPage() {
     if (!deleteId || !deleteType) return
     try {
       await applyDeletion(deleteId, deleteType)
+      notificarCambioFinanciero()
       await loadData()
     } catch (err) {
-      console.error("[v0] Error al eliminar:", err)
-      alert("No se pudo eliminar el movimiento. Intentá nuevamente.")
+      alert(err instanceof OperacionFinancieraError ? err.message : "No se pudo eliminar el movimiento. Intentá nuevamente.")
     } finally {
       setDeleteId(null)
       setDeleteType(null)
@@ -367,9 +251,9 @@ export default function PersonalHistorialPage() {
         await applyDeletion(id, type)
       } catch (err) {
         errores++
-        console.error("[v0] Error al eliminar en lote:", id, err)
       }
     }
+    notificarCambioFinanciero()
     await loadData()
     setSelected({})
     setBulkConfirmOpen(false)
@@ -387,125 +271,44 @@ export default function PersonalHistorialPage() {
 
   const handleSaveEdit = async () => {
     if (!editId || !editType || !editData) return
-
-    const supabase = createClient()
-    const table = editType === "ingreso" ? "ingresos" : "egresos"
-
-    let updateData: any
-    if (editType === "ingreso") {
-      updateData = {
-        tipo_ingreso: editData.tipo_ingreso,
-        monto: editData.monto,
-        fecha: editData.fecha,
-      }
-    } else {
-      updateData = {
-        monto: editData.monto,
-        fecha: editData.fecha,
-        concepto: editData.concepto,
-      }
-    }
-
-    // Si es un egreso vinculado a una deuda y cambio el monto, ajustar la deuda
-    if (editType === "egreso") {
-      const egresoOriginal = egresos.find((e) => e.id === editId)
-      if (egresoOriginal?.deuda_id && Number(editData.monto) !== Number(egresoOriginal.monto)) {
-        const diferencia = Number(editData.monto) - Number(egresoOriginal.monto)
-
-        const { data: deudaData } = await supabase
-          .from("deudas")
-          .select("monto_pagado, monto_total, tipo_deuda, limite_credito")
-          .eq("id", egresoOriginal.deuda_id)
-          .single()
-
-        if (deudaData) {
-          const nuevoMontoPagado = Math.max(0, Number(deudaData.monto_pagado) + diferencia)
-          let nuevoMontoTotal = Number(deudaData.monto_total)
-
-          if (deudaData.tipo_deuda === "tarjeta_credito") {
-            nuevoMontoTotal = Math.max(0, Number(deudaData.monto_total) + diferencia)
-          }
-
-          const estaPagada = deudaData.tipo_deuda === "tarjeta_credito"
-            ? nuevoMontoTotal >= (Number(deudaData.limite_credito) || 0)
-            : nuevoMontoPagado >= nuevoMontoTotal
-
-          await supabase
-            .from("deudas")
-            .update({
-              monto_total: nuevoMontoTotal,
-              monto_pagado: nuevoMontoPagado,
-              estado: estaPagada ? "pagada" : "activa",
-            })
-            .eq("id", egresoOriginal.deuda_id)
+    try {
+      if (editType === "ingreso") {
+        const original = ingresos.find((i) => i.id === editId)
+        await actualizarIngreso(editId, {
+          tipoIngreso: editData.tipo_ingreso,
+          monto: Number(editData.monto),
+          fecha: editData.fecha,
+          destinoCajaId: original?.destino_caja_id ?? null,
+        })
+      } else {
+        const original = egresos.find((e) => e.id === editId)
+        if (original?.deuda_id) {
+          await actualizarPagoDeuda(editId, {
+            monto: Number(editData.monto),
+            fecha: editData.fecha,
+            concepto: editData.concepto,
+            origenCajaId: original.origen_tipo === "caja_ahorro" ? original.origen_id : null,
+            numeroCuota: original.numero_cuota,
+          })
+        } else {
+          await actualizarGasto(editId, {
+            monto: Number(editData.monto),
+            fecha: editData.fecha,
+            concepto: editData.concepto,
+            tipoCategoriaId: original?.tipo_categoria_id ?? null,
+            categoriaId: original?.categoria_id ?? null,
+            origenTipo: (original?.origen_tipo as OrigenTipo | null) ?? null,
+            origenId: original?.origen_id ?? null,
+          })
         }
       }
-
-      // Si el egreso tenia origen (caja/tarjeta) y cambio el monto, ajustar el origen
-      if (egresoOriginal?.origen_tipo && egresoOriginal?.origen_id && Number(editData.monto) !== Number(egresoOriginal.monto)) {
-        const diferencia = Number(editData.monto) - Number(egresoOriginal.monto)
-
-        if (egresoOriginal.origen_tipo === "caja_ahorro") {
-          const { data: cajaData } = await supabase
-            .from("cajas_ahorro")
-            .select("monto_actual")
-            .eq("id", egresoOriginal.origen_id)
-            .single()
-
-          if (cajaData) {
-            await supabase
-              .from("cajas_ahorro")
-              .update({ monto_actual: Math.max(0, Number(cajaData.monto_actual) - diferencia) })
-              .eq("id", egresoOriginal.origen_id)
-          }
-        } else if (egresoOriginal.origen_tipo === "tarjeta_credito") {
-          const { data: tarjetaData } = await supabase
-            .from("deudas")
-            .select("monto_total")
-            .eq("id", egresoOriginal.origen_id)
-            .single()
-
-          if (tarjetaData) {
-            await supabase
-              .from("deudas")
-              .update({ monto_total: Math.max(0, Number(tarjetaData.monto_total) - diferencia) })
-              .eq("id", egresoOriginal.origen_id)
-          }
-        }
-      }
-    }
-
-    // Si es un ingreso con destino caja y cambio el monto, ajustar la caja
-    if (editType === "ingreso") {
-      const ingresoOriginal = ingresos.find((i) => i.id === editId)
-      if (ingresoOriginal?.destino_caja_id && Number(editData.monto) !== Number(ingresoOriginal.monto)) {
-        const diferencia = Number(editData.monto) - Number(ingresoOriginal.monto)
-
-        const { data: cajaData } = await supabase
-          .from("cajas_ahorro")
-          .select("monto_actual")
-          .eq("id", ingresoOriginal.destino_caja_id)
-          .single()
-
-        if (cajaData) {
-          await supabase
-            .from("cajas_ahorro")
-            .update({ monto_actual: Math.max(0, Number(cajaData.monto_actual) + diferencia) })
-            .eq("id", ingresoOriginal.destino_caja_id)
-        }
-      }
-    }
-
-    const { error } = await supabase.from(table).update(updateData).eq("id", editId)
-
-    if (!error) {
-      loadData()
+      notificarCambioFinanciero()
+      await loadData()
       setEditId(null)
       setEditType(null)
       setEditData(null)
-    } else {
-      console.error("[v0] Error al guardar edicion:", error)
-      alert("Error al guardar los cambios. Por favor intenta nuevamente.")
+    } catch (err) {
+      alert(err instanceof OperacionFinancieraError ? err.message : "Error al guardar los cambios. Intentá nuevamente.")
     }
   }
 

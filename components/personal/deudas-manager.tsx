@@ -40,6 +40,17 @@ import {
 import { createBrowserClient } from "@supabase/ssr"
 import { formatGuaranies, formatMoneyNumber } from "@/lib/utils"
 import { toast } from "sonner"
+import {
+  actualizarDeuda,
+  actualizarPagoDeuda,
+  crearPrestamo,
+  crearTarjeta,
+  eliminarDeuda,
+  eliminarEgreso,
+  notificarCambioFinanciero,
+} from "@/lib/finanzas/operaciones"
+import { disponibleTarjeta, saldoPendienteDeuda } from "@/lib/finanzas/saldos"
+import { generarFechasCuotas, type FrecuenciaPago } from "@/lib/finanzas/amortizacion"
 
 interface Deuda {
   id: string
@@ -62,6 +73,7 @@ interface Deuda {
   notas: string | null
   tipo_deuda: string
   limite_credito: number | null
+  saldo_utilizado?: number | null
   fecha_corte: number | null
   fecha_pago: number | null
 }
@@ -73,6 +85,8 @@ interface PagoDeuda {
   fecha: string
   numero_cuota: number | null
   concepto: string | null
+  origen_tipo?: string | null
+  origen_id?: string | null
 }
 
 interface DeudasManagerProps {
@@ -158,7 +172,7 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
           calcula automáticamente como la suma de las cuotas. */}
       {tipoDeuda === "tarjeta_credito" && (
         <div className="space-y-2">
-          <Label htmlFor="monto_total">Monto Disponible *</Label>
+          <Label htmlFor="monto_total">Saldo utilizado actual *</Label>
           <Input
             id="monto_total"
             type="text"
@@ -498,7 +512,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     try {
       const { data, error } = await supabase
         .from("egresos")
-        .select("id, deuda_id, monto, fecha, numero_cuota, concepto")
+        .select("id, deuda_id, monto, fecha, numero_cuota, concepto, origen_tipo, origen_id")
         .eq("perfil_id", perfilId)
         .not("deuda_id", "is", null)
         .order("fecha", { ascending: false })
@@ -514,63 +528,72 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     e.preventDefault()
 
     try {
-      const deudaData: any = {
-        user_id: userId,
-        perfil_id: perfilId,
-        nombre: formData.nombre,
-        descripcion: formData.descripcion || null,
-        tasa_interes: Number.parseFloat(formData.tasa_interes) || 0,
-        fecha_inicio: formData.fecha_inicio || null,
-        frecuencia_pago: formData.frecuencia_pago,
-        acreedor: formData.acreedor,
-        prioridad: formData.prioridad,
-        notas: formData.notas || null,
-        tipo_deuda: tipoDeuda,
-      }
+      const numero = (v: string) => (v ? Number.parseFloat(parseFormattedNumber(v)) || 0 : 0)
+      const entero = (v: string) => (v ? Number.parseInt(v) || null : null)
 
-      if (tipoDeuda === "prestamo") {
-        const numCuotas = formData.cuotas_totales ? Number.parseInt(formData.cuotas_totales) : 0
-        deudaData.cuotas_totales = numCuotas || null
-        // En préstamos el vencimiento es un día del mes (1-31), no una fecha completa
-        deudaData.dia_vencimiento = formData.dia_vencimiento ? Number.parseInt(formData.dia_vencimiento) : null
-        deudaData.fecha_vencimiento = null
-
-        if (formData.cuota_igual === "no" && numCuotas > 0) {
-          const montos = Array.from({ length: numCuotas }).map((_, i) => Number(formData.montos_cuotas[i]) || 0)
-          deudaData.montos_cuotas = montos
-          // monto_cuota queda como valor representativo (próxima cuota a pagar) para resúmenes y calendario
-          deudaData.monto_cuota = montos[0] || null
-          // El monto total del préstamo es la suma de todas las cuotas
-          deudaData.monto_total = montos.reduce((sum, m) => sum + m, 0)
-        } else {
-          deudaData.montos_cuotas = null
-          const cuota = formData.monto_cuota ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota)) : 0
-          deudaData.monto_cuota = cuota || null
-          // Monto total = cuota * cantidad de cuotas
-          deudaData.monto_total = numCuotas > 0 ? cuota * numCuotas : cuota
-        }
+      if (tipoDeuda === "tarjeta_credito") {
+        await crearTarjeta({
+          perfilId,
+          nombre: formData.nombre,
+          acreedor: formData.acreedor,
+          limiteCredito: formData.limite_credito ? numero(formData.limite_credito) : null,
+          saldoInicial: numero(formData.monto_total),
+          fechaCorte: entero(formData.fecha_corte),
+          diaVencimiento: entero(formData.fecha_pago),
+          tasaInteres: Number.parseFloat(formData.tasa_interes) || null,
+          notas: formData.notas || null,
+        })
       } else {
-        deudaData.monto_total = Number.parseFloat(parseFormattedNumber(formData.monto_total)) || 0
-        deudaData.fecha_vencimiento = formData.fecha_vencimiento || null
-        deudaData.dia_vencimiento = null
-        deudaData.limite_credito = formData.limite_credito
-          ? Number.parseFloat(parseFormattedNumber(formData.limite_credito))
-          : null
-        deudaData.fecha_corte = formData.fecha_corte ? Number.parseInt(formData.fecha_corte) : null
-        deudaData.fecha_pago = formData.fecha_pago ? Number.parseInt(formData.fecha_pago) : null
+        const numCuotas = Math.max(1, Number.parseInt(formData.cuotas_totales) || 1)
+        const frecuencia = (["semanal", "quincenal", "mensual", "trimestral", "anual"].includes(formData.frecuencia_pago)
+          ? formData.frecuencia_pago
+          : "mensual") as FrecuenciaPago
+        const inicio = formData.fecha_inicio || new Date().toISOString().split("T")[0]
+        let primera: string
+        const dia = entero(formData.dia_vencimiento)
+        if (dia && frecuencia === "mensual") {
+          const [y, m] = inicio.split("-").map(Number)
+          const ref = new Date(Date.UTC(y, m, 1))
+          const ultimo = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() + 1, 0)).getUTCDate()
+          ref.setUTCDate(Math.min(dia, ultimo))
+          primera = ref.toISOString().split("T")[0]
+        } else {
+          primera = generarFechasCuotas(inicio, 2, frecuencia)[1]
+        }
+        const fechas = generarFechasCuotas(primera, numCuotas, frecuencia)
+        const montos =
+          formData.cuota_igual === "no"
+            ? fechas.map((_, i) => Number(formData.montos_cuotas[i]) || 0)
+            : fechas.map(() => numero(formData.monto_cuota))
+        if (montos.some((m) => m <= 0)) {
+          toast.error("Todas las cuotas deben tener un monto mayor a 0")
+          return
+        }
+        await crearPrestamo({
+          perfilId,
+          nombre: formData.nombre,
+          acreedor: formData.acreedor,
+          metodo: "manual",
+          capitalInicial: null,
+          tasaInteres: Number.parseFloat(formData.tasa_interes) || 0,
+          tasaTipo: "anual",
+          frecuencia,
+          cargosPorCuota: 0,
+          fechaInicio: inicio,
+          desgloseInformado: false,
+          cuotas: fechas.map((fecha, i) => ({ numero: i + 1, fecha, total: montos[i] })),
+          notas: formData.notas || null,
+        })
       }
 
-      const { error } = await supabase.from("deudas").insert(deudaData)
-
-      if (error) throw error
-
+      notificarCambioFinanciero()
       toast.success("Deuda registrada exitosamente")
       setShowForm(false)
       resetForm()
       fetchDeudas()
     } catch (error) {
       console.error("Error creating deuda:", error)
-      toast.error("Error al registrar la deuda")
+      toast.error(error instanceof Error ? error.message : "Error al registrar la deuda")
     }
   }
 
@@ -579,57 +602,24 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     if (!editingDeuda) return
 
     try {
-      const deudaData: any = {
+      const esTarjetaEdit = editingDeuda.tipo_deuda === "tarjeta_credito"
+      await actualizarDeuda(editingDeuda.id, {
         nombre: formData.nombre,
-        descripcion: formData.descripcion || null,
-        tasa_interes: Number.parseFloat(formData.tasa_interes) || 0,
-        fecha_inicio: formData.fecha_inicio || null,
-        frecuencia_pago: formData.frecuencia_pago,
         acreedor: formData.acreedor,
         prioridad: formData.prioridad,
         notas: formData.notas || null,
-        tipo_deuda: tipoDeuda,
-      }
-
-      if (tipoDeuda === "prestamo") {
-        const numCuotas = formData.cuotas_totales ? Number.parseInt(formData.cuotas_totales) : 0
-        deudaData.cuotas_totales = numCuotas || null
-        deudaData.dia_vencimiento = formData.dia_vencimiento ? Number.parseInt(formData.dia_vencimiento) : null
-        deudaData.fecha_vencimiento = null
-
-        if (formData.cuota_igual === "no" && numCuotas > 0) {
-          const montos = Array.from({ length: numCuotas }).map((_, i) => Number(formData.montos_cuotas[i]) || 0)
-          deudaData.montos_cuotas = montos
-          // Valor representativo: próxima cuota pendiente según cuotas ya pagadas
-          const idx = Math.min(editingDeuda.cuotas_pagadas || 0, montos.length - 1)
-          deudaData.monto_cuota = montos[idx] || montos[0] || null
-          deudaData.monto_total = montos.reduce((sum, m) => sum + m, 0)
-        } else {
-          deudaData.montos_cuotas = null
-          const cuota = formData.monto_cuota ? Number.parseFloat(parseFormattedNumber(formData.monto_cuota)) : 0
-          deudaData.monto_cuota = cuota || null
-          deudaData.monto_total = numCuotas > 0 ? cuota * numCuotas : cuota
-        }
-        deudaData.limite_credito = null
-        deudaData.fecha_corte = null
-        deudaData.fecha_pago = null
-      } else {
-        deudaData.monto_total = Number.parseFloat(parseFormattedNumber(formData.monto_total)) || 0
-        deudaData.fecha_vencimiento = formData.fecha_vencimiento || null
-        deudaData.dia_vencimiento = null
-        deudaData.limite_credito = formData.limite_credito
-          ? Number.parseFloat(parseFormattedNumber(formData.limite_credito))
-          : null
-        deudaData.fecha_corte = formData.fecha_corte ? Number.parseInt(formData.fecha_corte) : null
-        deudaData.fecha_pago = formData.fecha_pago ? Number.parseInt(formData.fecha_pago) : null
-        deudaData.cuotas_totales = null
-        deudaData.monto_cuota = null
-        deudaData.montos_cuotas = null
-      }
-
-      const { error } = await supabase.from("deudas").update(deudaData).eq("id", editingDeuda.id)
-
-      if (error) throw error
+        tasaInteres: Number.parseFloat(formData.tasa_interes) || null,
+        ...(esTarjetaEdit
+          ? {
+              limiteCredito: formData.limite_credito
+                ? Number.parseFloat(parseFormattedNumber(formData.limite_credito)) || null
+                : null,
+              fechaCorte: formData.fecha_corte ? Number.parseInt(formData.fecha_corte) || null : null,
+              diaVencimiento: formData.fecha_pago ? Number.parseInt(formData.fecha_pago) || null : null,
+            }
+          : {}),
+      })
+      notificarCambioFinanciero()
 
       toast.success("Deuda actualizada exitosamente")
       setShowEditModal(false)
@@ -638,7 +628,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       fetchDeudas()
     } catch (error) {
       console.error("Error updating deuda:", error)
-      toast.error("Error al actualizar la deuda")
+      toast.error(error instanceof Error ? error.message : "Error al actualizar la deuda")
     }
   }
 
@@ -702,15 +692,15 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     if (!deleteConfirmDeuda) return
 
     try {
-      const { error } = await supabase.from("deudas").delete().eq("id", deleteConfirmDeuda.id)
-      if (error) throw error
+      await eliminarDeuda(deleteConfirmDeuda.id)
+      notificarCambioFinanciero()
       toast.success("Deuda eliminada exitosamente")
       setShowDeleteConfirm(false)
       setDeleteConfirmDeuda(null)
       fetchDeudas()
     } catch (error) {
       console.error("Error deleting deuda:", error)
-      toast.error("Error al eliminar la deuda")
+      toast.error(error instanceof Error ? error.message : "Error al eliminar la deuda")
     }
   }
 
@@ -734,43 +724,19 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       return
     }
 
-    const diferencia = nuevoMonto - Number(pago.monto)
-
-    // Actualizar el egreso
-    const { error: errorEgreso } = await supabase
-      .from("egresos")
-      .update({
+    try {
+      await actualizarPagoDeuda(pago.id, {
         monto: nuevoMonto,
+        fecha: pago.fecha,
         concepto: editPagoConcepto || pago.concepto,
+        origenCajaId: pago.origen_tipo === "caja_ahorro" ? pago.origen_id : null,
+        numeroCuota: pago.numero_cuota ?? null,
       })
-      .eq("id", pago.id)
-
-    if (errorEgreso) {
-      toast.error("Error al actualizar el pago")
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al actualizar el pago")
       return
     }
-
-    // Si cambio el monto, ajustar la deuda
-    if (diferencia !== 0 && pago.deuda_id) {
-      const deuda = deudas.find((d) => d.id === pago.deuda_id)
-      if (deuda) {
-        const nuevoMontoPagado = Math.max(0, Number(deuda.monto_pagado) + diferencia)
-        let nuevoMontoTotal = Number(deuda.monto_total)
-
-        if (deuda.tipo_deuda === "tarjeta_credito") {
-          nuevoMontoTotal = Math.max(0, Number(deuda.monto_total) + diferencia)
-        }
-
-        await supabase
-          .from("deudas")
-          .update({
-            monto_total: nuevoMontoTotal,
-            monto_pagado: nuevoMontoPagado,
-          })
-          .eq("id", pago.deuda_id)
-      }
-    }
-
+    notificarCambioFinanciero()
     toast.success("Pago actualizado exitosamente")
     cancelEditPago()
     fetchDeudas()
@@ -785,42 +751,13 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   const handleDeletePago = async () => {
     if (!deletingPago) return
 
-    const montoRevertir = Number(deletingPago.monto)
-
-    // Revertir en la deuda
-    if (deletingPago.deuda_id) {
-      const deuda = deudas.find((d) => d.id === deletingPago.deuda_id)
-      if (deuda) {
-        const nuevoMontoPagado = Math.max(0, Number(deuda.monto_pagado) - montoRevertir)
-        const nuevasCuotas = deletingPago.numero_cuota
-          ? Math.max(0, Number(deuda.cuotas_pagadas) - 1)
-          : Number(deuda.cuotas_pagadas)
-
-        let nuevoMontoTotal = Number(deuda.monto_total)
-        if (deuda.tipo_deuda === "tarjeta_credito") {
-          nuevoMontoTotal = Math.max(0, Number(deuda.monto_total) - montoRevertir)
-        }
-
-        await supabase
-          .from("deudas")
-          .update({
-            monto_total: nuevoMontoTotal,
-            monto_pagado: nuevoMontoPagado,
-            cuotas_pagadas: nuevasCuotas,
-            estado: nuevoMontoPagado >= nuevoMontoTotal && deuda.tipo_deuda !== "tarjeta_credito" ? "pagada" : "activa",
-          })
-          .eq("id", deletingPago.deuda_id)
-      }
-    }
-
-    // Eliminar el egreso
-    const { error } = await supabase.from("egresos").delete().eq("id", deletingPago.id)
-
-    if (error) {
-      toast.error("Error al eliminar el pago")
+    try {
+      await eliminarEgreso(deletingPago.id)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Error al eliminar el pago")
       return
     }
-
+    notificarCambioFinanciero()
     toast.success("Pago eliminado exitosamente")
     setShowDeletePagoConfirm(false)
     setDeletingPago(null)
@@ -855,19 +792,9 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   // Calcular totales correctamente según tipo de deuda
   // Para tarjetas: Pendiente = Límite de Crédito - Monto Disponible (monto_total)
   // Para préstamos: Pendiente = Monto Total - Monto Pagado
-  const totalDeudas = deudas.reduce((sum, d) => {
-    if (d.tipo_deuda === "tarjeta_credito") {
-      return sum + ((Number(d.limite_credito) || 0) - Number(d.monto_total))
-    }
-    return sum + Number(d.monto_total)
-  }, 0)
-  const totalPagado = deudas.reduce((sum, d) => sum + Number(d.monto_pagado), 0)
-  const totalPendiente = deudas.reduce((sum, d) => {
-    if (d.tipo_deuda === "tarjeta_credito") {
-      return sum + ((Number(d.limite_credito) || 0) - Number(d.monto_total) - Number(d.monto_pagado))
-    }
-    return sum + (Number(d.monto_total) - Number(d.monto_pagado))
-  }, 0)
+  const totalPagado = deudas.reduce((sum, d) => sum + (Number(d.monto_pagado) || 0), 0)
+  const totalPendiente = deudas.reduce((sum, d) => sum + saldoPendienteDeuda(d), 0)
+  const totalDeudas = totalPendiente + totalPagado
   const porcentajePagado = totalDeudas > 0 ? (totalPagado / totalDeudas) * 100 : 0
 
   if (loading) {
@@ -875,16 +802,13 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   }
 
   const DeudaDetailCard = ({ deuda }: { deuda: Deuda }) => {
-    const montoDisponible = Number(deuda.monto_total) || 0 // Para tarjetas: monto_total = monto disponible
+    const esTarjetaDeuda = deuda.tipo_deuda === "tarjeta_credito"
     const montoPagado = Number(deuda.monto_pagado) || 0
     const limiteCredito = Number(deuda.limite_credito) || 0
-    // Para tarjetas: Pendiente = Límite de Crédito - Monto Disponible
-    // Para préstamos: Pendiente = Monto Total - Monto Pagado
-    const pendiente = deuda.tipo_deuda === "tarjeta_credito" 
-      ? limiteCredito - montoDisponible
-      : montoDisponible - montoPagado
-    const porcentaje = deuda.tipo_deuda === "tarjeta_credito"
-      ? (montoPagado / (pendiente || 1)) * 100
+    const pendiente = saldoPendienteDeuda(deuda)
+    const montoDisponible = esTarjetaDeuda ? (disponibleTarjeta(deuda) ?? 0) : Number(deuda.monto_total) || 0
+    const porcentaje = esTarjetaDeuda
+      ? limiteCredito > 0 ? Math.max(0, 100 - (pendiente / limiteCredito) * 100) : 0
       : montoDisponible > 0 ? (montoPagado / montoDisponible) * 100 : 0
     const pagosDeuda = pagos.filter((p) => p.deuda_id === deuda.id)
     const Icon = deuda.tipo_deuda === "tarjeta_credito" ? CreditCard : Landmark
@@ -893,7 +817,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     const cuotasTotales = deuda.cuotas_totales || 0
 
     const montoTotal = deuda.monto_total
-    const creditoDisponible = deuda.limite_credito ? deuda.limite_credito - deuda.monto_total : 0
+    const creditoDisponible = disponibleTarjeta(deuda) ?? 0
 
     return (
       <Card className="border-2 hover:shadow-lg transition-all">
