@@ -16,6 +16,7 @@ import { CheckCircle, AlertCircle, DollarSign, Calendar, Heart, PiggyBank, Shopp
 import { getTodayDate, formatGuaranies, normalizarNombre as normalizarNombreUtil } from "@/lib/utils"
 import { getColorCategoria } from "@/lib/categorias-egreso"
 import { usePerfil } from "@/lib/contexts/perfil-context"
+import { NuevaDeudaDialog, DEUDAS_ACTUALIZADAS_EVENT } from "@/components/forms/nueva-deuda-dialog"
 
 const MESES = [
   { value: "01", label: "Enero" },
@@ -198,6 +199,7 @@ export function PresupuestoForm() {
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null)
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipDraftRestoreRef = useRef(false)
+  const [showNuevaDeuda, setShowNuevaDeuda] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -597,6 +599,36 @@ export function PresupuestoForm() {
   // Firma actual de los valores en pantalla y comparación con lo guardado en BD.
   const currentSnapshot = serializePresupuesto(presupuesto, ingresosCategoria, categoriasData)
   const isDirty = savedSnapshot !== null && currentSnapshot !== savedSnapshot
+
+  const construirBorrador = (): PresupuestoDraft => ({
+    updatedAt: new Date().toISOString(),
+    presupuesto,
+    ingresos: Object.fromEntries(ingresosCategoria.map((i) => [i.id, i.montoPresupuestado || 0])),
+    categorias: Object.fromEntries(
+      Object.entries(categoriasData).flatMap(([catKey, d]) =>
+        d.subcategorias.map((s) => [`${catKey}|${(s.nombre || "").toLowerCase()}`, s.monto || 0]),
+      ),
+    ),
+  })
+
+  // Al registrarse una deuda (desde aquí o desde Egresos) se recarga el
+  // presupuesto para que la nueva deuda aparezca vinculada en "Deudas". Antes se
+  // guarda el borrador al instante para no perder montos editados sin guardar.
+  const refrescarPorDeudaRef = useRef<() => void>(() => {})
+  refrescarPorDeudaRef.current = () => {
+    if (!perfilActual?.id) return
+    if (isDirty) {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current)
+      guardarBorrador(perfilActual.id, anioSeleccionado, mesSeleccionado, construirBorrador())
+    }
+    loadUserData()
+  }
+
+  useEffect(() => {
+    const handler = () => refrescarPorDeudaRef.current()
+    window.addEventListener(DEUDAS_ACTUALIZADAS_EVENT, handler)
+    return () => window.removeEventListener(DEUDAS_ACTUALIZADAS_EVENT, handler)
+  }, [])
 
   // Autoguardado discreto del borrador: cada vez que el usuario modifica un
   // monto (y difiere de lo guardado en la base), se guarda un respaldo local
@@ -1257,15 +1289,15 @@ export function PresupuestoForm() {
 
                         {/* Agregar nueva subcategoría */}
                         {categoria.key === "pct_pago_deudas" ? (
-                          // Las deudas no se crean como texto libre: se gestionan en
-                          // la sección Deudas. El botón redirige allí para cargarlas
-                          // de forma correcta (préstamo o tarjeta, montos, cuotas).
+                          // Las deudas no se crean como texto libre: se registran con el
+                          // mismo formulario de Egresos (préstamo o tarjeta, montos, cuotas)
+                          // y quedan vinculadas a esta categoría automáticamente.
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             className="w-full mt-2 text-muted-foreground hover:text-foreground"
-                            onClick={() => router.push("/dashboard/personal/deudas")}
+                            onClick={() => setShowNuevaDeuda(true)}
                           >
                             <Plus className="w-4 h-4 mr-1" />
                             Agregar deuda
@@ -1409,6 +1441,7 @@ export function PresupuestoForm() {
             </Button>
           </Link>
         </form>
+        <NuevaDeudaDialog open={showNuevaDeuda} onOpenChange={setShowNuevaDeuda} perfilId={perfilActual?.id} />
       </CardContent>
     </Card>
   )
