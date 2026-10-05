@@ -15,6 +15,7 @@ import { usePerfil } from "@/lib/contexts/perfil-context"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { CATEGORIAS_INGRESO_BASICO } from "@/lib/plans/plan-features"
 import { getCache, setCache } from "@/lib/cache/carga-cache"
+import { registrarIngreso, notificarCambioFinanciero } from "@/lib/finanzas/operaciones"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -310,44 +311,15 @@ export function IngresoForm() {
 
       const montoNumerico = Number.parseFloat(monto)
 
-      const ingresoData: any = {
-        user_id: user.id,
-        perfil_id: perfilActual.id,
-        tipo_ingreso: tipoIngreso,
+      // El ingreso y el depósito en la caja destino se aplican en una sola transacción.
+      await registrarIngreso({
+        perfilId: perfilActual.id,
+        tipoIngreso,
         monto: montoNumerico,
-        fecha: fecha,
-        destino_caja_id: destinoCajaId || null,
-      }
-
-      const { error: insertError } = await supabase.from("ingresos").insert(ingresoData).select()
-
-      if (insertError) {
-        throw insertError
-      }
-
-      // Depositar automaticamente en la caja de ahorro destino
-      if (destinoCajaId) {
-        const cajaDestino = cajasDestino.find((c) => c.id === destinoCajaId)
-        if (cajaDestino) {
-          const nuevoMonto = Number(cajaDestino.monto_actual) + montoNumerico
-
-          await supabase
-            .from("cajas_ahorro")
-            .update({ monto_actual: nuevoMonto })
-            .eq("id", destinoCajaId)
-
-          // Registrar movimiento de deposito
-          await supabase.from("movimientos_caja").insert({
-            caja_id: destinoCajaId,
-            perfil_id: perfilActual.id,
-            user_id: user.id,
-            tipo: "deposito",
-            monto: montoNumerico,
-            descripcion: `Ingreso: ${tipoIngreso}`,
-            fecha: fecha,
-          })
-        }
-      }
+        fecha,
+        destinoCajaId: destinoCajaId || null,
+      })
+      notificarCambioFinanciero()
 
       setSuccess(true)
       setMonto("")

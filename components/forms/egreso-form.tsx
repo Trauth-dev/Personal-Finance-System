@@ -45,6 +45,8 @@ import { getCache, setCache, invalidateCache } from "@/lib/cache/carga-cache"
 import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
 import { NuevaDeudaDialog, DEUDAS_ACTUALIZADAS_EVENT, type DeudaCreada } from "@/components/forms/nueva-deuda-dialog"
+import { registrarGasto, registrarPagoDeuda, notificarCambioFinanciero, type OrigenTipo } from "@/lib/finanzas/operaciones"
+import { saldoPendienteDeuda, disponibleTarjeta } from "@/lib/finanzas/saldos"
 
 // Nombres de meses (índice 0 = Enero) para el selector de "Mes del egreso".
 const MESES = [
@@ -83,6 +85,7 @@ interface Deuda {
   tipo_deuda: string
   monto_total: number
   monto_pagado: number
+  saldo_utilizado?: number | null
   cuotas_totales: number | null
   cuotas_pagadas: number
   monto_cuota: number | null
@@ -577,6 +580,7 @@ export function EgresoForm() {
         .eq("user_id", user.id)
         .eq("perfil_id", perfilActual.id)
         .eq("estado", "activa")
+        .eq("archivada", false)
         .order("nombre")
 
       if (!fetchError && data) {
@@ -613,7 +617,8 @@ export function EgresoForm() {
         .select("*")
         .eq("perfil_id", perfilActual.id)
         .eq("tipo_deuda", "tarjeta_credito")
-        .eq("estado", "activa")
+        .eq("estado_tarjeta", "activa")
+        .eq("archivada", false)
         .order("nombre")
 
       if (tarjetasData) setTarjetasCredito(tarjetasData)
@@ -741,126 +746,34 @@ export function EgresoForm() {
 
       const montoNumerico = Number.parseFloat(monto)
 
-      // Validar saldo disponible en el origen seleccionado
-      if (origenTipo && origenId) {
-        if (origenTipo === "caja_ahorro") {
-          const cajaOrigen = cajasAhorro.find((c) => c.id === origenId)
-          if (cajaOrigen && montoNumerico > Number(cajaOrigen.monto_actual)) {
-            throw new Error(`Saldo insuficiente en "${cajaOrigen.nombre}". Disponible: ${formatGuaranies(Number(cajaOrigen.monto_actual))}`)
-          }
-        } else if (origenTipo === "tarjeta_credito") {
-          const tarjetaOrigen = tarjetasCredito.find((t) => t.id === origenId)
-          if (tarjetaOrigen && montoNumerico > Number(tarjetaOrigen.monto_total)) {
-            throw new Error(`Crédito insuficiente en "${tarjetaOrigen.nombre}". Disponible: ${formatGuaranies(Number(tarjetaOrigen.monto_total))}`)
-          }
-        }
-      }
-
-      const egresoData: any = {
-        user_id: user.id,
-        perfil_id: perfilActual.id,
-        tipo_categoria_id: tipoCategoriaId,
-        categoria_id: categoriaId,
-        monto: montoNumerico,
-        fecha: fecha,
-        concepto: concepto || null,
-        origen_tipo: origenTipo || null,
-        origen_id: origenId || null,
-      }
-
+      // Todos los efectos (cuenta, tarjeta, préstamo, cuota, extracto) se aplican
+      // en una única transacción del servidor.
       if (esPagoDeudas && selectedDeuda) {
-        egresoData.deuda_id = selectedDeuda
-        if (numeroCuota) {
-          egresoData.numero_cuota = Number.parseInt(numeroCuota)
+        if (origenTipo === "tarjeta_credito") {
+          throw new Error("No se puede pagar una deuda con una tarjeta. Elegí una cuenta o caja.")
         }
+        await registrarPagoDeuda({
+          perfilId: perfilActual.id,
+          deudaId: selectedDeuda,
+          monto: montoNumerico,
+          fecha,
+          concepto: concepto || null,
+          origenCajaId: origenTipo === "caja_ahorro" ? origenId : null,
+          numeroCuota: numeroCuota ? Number.parseInt(numeroCuota) : null,
+        })
+      } else {
+        await registrarGasto({
+          perfilId: perfilActual.id,
+          monto: montoNumerico,
+          fecha,
+          concepto: concepto || null,
+          tipoCategoriaId: tipoCategoriaId || null,
+          categoriaId: categoriaId || null,
+          origenTipo: (origenTipo || null) as OrigenTipo | null,
+          origenId: origenId || null,
+        })
       }
-
-      const { error: insertError } = await supabase.from("egresos").insert(egresoData).select()
-
-      if (insertError) {
-        throw insertError
-      }
-
-      // Descontar del origen de fondos
-      if (origenTipo && origenId) {
-        if (origenTipo === "caja_ahorro") {
-          // Descontar de la caja de ahorro
-          const cajaOrigen = cajasAhorro.find((c) => c.id === origenId)
-          if (cajaOrigen) {
-            const nuevoMonto = Number(cajaOrigen.monto_actual) - montoNumerico
-
-            await supabase
-              .from("cajas_ahorro")
-              .update({ monto_actual: nuevoMonto })
-              .eq("id", origenId)
-
-            // Registrar movimiento de retiro
-            await supabase.from("movimientos_caja").insert({
-              caja_id: origenId,
-              perfil_id: perfilActual.id,
-              user_id: user.id,
-              tipo: "retiro",
-              monto: montoNumerico,
-              descripcion: `Egreso: ${concepto || getNombreCategoriaDisplay(selectedTipoData?.nombre) || "Gasto"}`,
-              fecha: fecha,
-            })
-          }
-        } else if (origenTipo === "tarjeta_credito") {
-          // Descontar del credito disponible de la tarjeta
-          const tarjetaOrigen = tarjetasCredito.find((t) => t.id === origenId)
-          if (tarjetaOrigen) {
-            const nuevoDisponible = Number(tarjetaOrigen.monto_total) - montoNumerico
-            await supabase
-              .from("deudas")
-              .update({
-                monto_total: nuevoDisponible,
-                updated_at: getParaguayTimestamp(),
-              })
-              .eq("id", origenId)
-          }
-        }
-      }
-
-      if (esPagoDeudas && selectedDeuda) {
-        const deudaSeleccionada = deudas.find((d) => d.id === selectedDeuda)
-        if (deudaSeleccionada) {
-          const montoPago = Number.parseFloat(monto)
-          const nuevoMontoPagado = Number(deudaSeleccionada.monto_pagado) + montoPago
-          const nuevasCuotasPagadas = deudaSeleccionada.cuotas_pagadas + (numeroCuota ? 1 : 0)
-          
-          let estaPagada = false
-          let nuevoMontoTotal = Number(deudaSeleccionada.monto_total)
-
-          if (deudaSeleccionada.tipo_deuda === "tarjeta_credito") {
-            // Para tarjetas: al pagar, aumenta el monto disponible
-            nuevoMontoTotal = Number(deudaSeleccionada.monto_total) + montoPago
-            const limiteCredito = Number(deudaSeleccionada.limite_credito) || 0
-            // La tarjeta está "pagada" solo si el disponible alcanza el límite
-            estaPagada = nuevoMontoTotal >= limiteCredito
-          } else {
-            // Para préstamos: verificar si se pagó todo el monto total
-            estaPagada = nuevoMontoPagado >= Number(deudaSeleccionada.monto_total)
-          }
-
-          const updateData: any = {
-            monto_total: nuevoMontoTotal,
-            monto_pagado: nuevoMontoPagado,
-            cuotas_pagadas: nuevasCuotasPagadas,
-            estado: estaPagada ? "pagada" : "activa",
-            updated_at: getParaguayTimestamp(),
-          }
-
-          // Para préstamos con cuotas de montos diferentes, actualizar el valor
-          // representativo (monto_cuota) a la próxima cuota pendiente.
-          const montosVariables = deudaSeleccionada.montos_cuotas
-          if (montosVariables && montosVariables.length > 0) {
-            const proximaPendiente = montosVariables[nuevasCuotasPagadas]
-            updateData.monto_cuota = proximaPendiente ?? montosVariables[montosVariables.length - 1]
-          }
-
-          await supabase.from("deudas").update(updateData).eq("id", selectedDeuda)
-        }
-      }
+      notificarCambioFinanciero()
 
       setSuccess(true)
       setSelectedTipo("")
@@ -1117,9 +1030,7 @@ export function EgresoForm() {
                       const esTarjeta = deuda.tipo_deuda === "tarjeta_credito"
                       // Para tarjetas: Pendiente = Límite de Crédito - Monto Disponible (monto_total)
                       // Para préstamos: Pendiente = Monto Total - Monto Pagado
-                      const pendiente = esTarjeta
-                        ? (Number(deuda.limite_credito) || 0) - Number(deuda.monto_total)
-                        : Number(deuda.monto_total) - Number(deuda.monto_pagado)
+                          const pendiente = saldoPendienteDeuda(deuda)
                       // Para tarjetas: Porcentaje = (Pagado / (Pendiente + Pagado)) * 100
                       // Para préstamos: Porcentaje = (Pagado / Monto Total) * 100 (igual que en sección Deudas)
                       const totalDeuda = esTarjeta ? pendiente : Number(deuda.monto_total)
@@ -1289,17 +1200,8 @@ export function EgresoForm() {
                           const esTarjeta = selectedDeudaData.tipo_deuda === "tarjeta_credito"
                           const montoPagado = Number(selectedDeudaData.monto_pagado)
                           const limiteCredito = Number(selectedDeudaData.limite_credito) || 0
-                          const montoDisponible = Number(selectedDeudaData.monto_total)
-                          
-                          // Para tarjetas: Total Deuda = Límite de Crédito - Monto Disponible
-                          // Para préstamos: Total Deuda = Monto Total
-                          const totalDeuda = esTarjeta
-                            ? limiteCredito - montoDisponible
-                            : montoDisponible
-                          
-                          // Para tarjetas: Pendiente = Total Deuda (mismo valor, sin restar pagado)
-                          // Para préstamos: Pendiente = Total Deuda - Pagado
-                          const pendienteActual = esTarjeta ? totalDeuda : totalDeuda - montoPagado
+                          const pendienteActual = saldoPendienteDeuda(selectedDeudaData)
+                          const totalDeuda = esTarjeta ? pendienteActual : Number(selectedDeudaData.monto_total)
                           
                           return (
                             <>
@@ -1593,9 +1495,10 @@ export function EgresoForm() {
                     <div className="grid grid-cols-1 gap-2">
                       {tarjetasCredito.map((tarjeta) => {
                         const isSelected = origenId === tarjeta.id
-                        const disponible = Number(tarjeta.monto_total)
-                        const limite = Number(tarjeta.limite_credito) || 0
-                        const creditoInsuficiente = monto && disponible < Number(monto)
+                      const disponibleCalc = disponibleTarjeta(tarjeta)
+                      const disponible = disponibleCalc ?? 0
+                      const limite = Number(tarjeta.limite_credito) || 0
+                      const creditoInsuficiente = disponibleCalc !== null && monto && disponibleCalc < Number(monto)
                         return (
                           <button
                             key={tarjeta.id}

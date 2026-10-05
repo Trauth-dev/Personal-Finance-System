@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase/client"
 import { formatGuaranies, getTodayDate } from "@/lib/utils"
+import { crearTarjeta, notificarCambioFinanciero } from "@/lib/finanzas/operaciones"
 
 // Evento global que se emite cada vez que se registra una deuda desde este
 // diálogo. Egresos y Presupuesto lo escuchan para mantenerse sincronizados.
@@ -122,8 +123,31 @@ export function NuevaDeudaDialog({ open, onOpenChange, perfilId, onCreated }: Nu
         deudaData.fecha_pago = form.fecha_pago ? Number.parseInt(form.fecha_pago) : null
       }
 
-      const { data, error } = await supabase.from("deudas").insert(deudaData).select().single()
-      if (error) throw error
+  let data: Record<string, unknown> & { id: string }
+  if (tipo === "tarjeta_credito") {
+  // Las tarjetas se crean por la capa financiera para que el saldo utilizado
+  // quede calculado igual que en la migración (límite − disponible).
+  const limite = form.limite_credito ? Number(form.limite_credito) : null
+  const deudaId = await crearTarjeta({
+  perfilId,
+  nombre: form.nombre.trim(),
+  acreedor: form.acreedor.trim(),
+  limiteCredito: limite ?? montoTotal,
+  saldoInicial: limite ? Math.max(limite - montoTotal, 0) : 0,
+  fechaCorte: form.fecha_corte ? Number.parseInt(form.fecha_corte) : null,
+  diaVencimiento: form.fecha_pago ? Number.parseInt(form.fecha_pago) : null,
+  tasaInteres: form.tasa_interes ? Number.parseFloat(form.tasa_interes) : null,
+  notas: form.notas.trim() || null,
+  })
+  const { data: creada, error } = await supabase.from("deudas").select("*").eq("id", deudaId).single()
+  if (error) throw error
+  data = creada
+  } else {
+  const { data: creada, error } = await supabase.from("deudas").insert(deudaData).select().single()
+  if (error) throw error
+  data = creada
+  }
+  notificarCambioFinanciero()
 
       toast.success("Deuda registrada exitosamente")
       setForm(formularioVacio())
