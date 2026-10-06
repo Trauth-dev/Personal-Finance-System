@@ -240,7 +240,7 @@ export function NuevaDeudaDialog({ open, onOpenChange, perfilId, onCreated }: Nu
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="deuda-monto">{tipo === "tarjeta_credito" ? "Monto Disponible *" : "Monto Total *"}</Label>
               <Input
@@ -254,18 +254,6 @@ export function NuevaDeudaDialog({ open, onOpenChange, perfilId, onCreated }: Nu
               {form.monto_total && (
                 <p className="text-xs text-muted-foreground">{formatGuaranies(Number(form.monto_total))}</p>
               )}
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="deuda-interes">Tasa de Interés (%)</Label>
-              <Input
-                id="deuda-interes"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="12.5"
-                value={form.tasa_interes}
-                onChange={(e) => actualizar("tasa_interes", e.target.value)}
-              />
             </div>
           </div>
 

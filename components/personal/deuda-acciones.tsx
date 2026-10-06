@@ -365,7 +365,6 @@ const ESTADO_CUOTA: Record<string, string> = {
 
 export function CronogramaCuotas({ cuotas }: { cuotas: Cuota[] }) {
   if (cuotas.length === 0) return null
-  const conDesglose = cuotas.some((c) => c.desglose_informado)
   return (
     <div className="flex flex-col gap-2">
       <p className="text-sm font-semibold text-blue-300">Cronograma de cuotas</p>
@@ -375,8 +374,6 @@ export function CronogramaCuotas({ cuotas }: { cuotas: Cuota[] }) {
             <tr>
               <th scope="col" className="px-2 py-2 text-left font-medium">#</th>
               <th scope="col" className="px-2 py-2 text-left font-medium">Vence</th>
-              {conDesglose && <th scope="col" className="px-2 py-2 text-right font-medium">Capital</th>}
-              {conDesglose && <th scope="col" className="px-2 py-2 text-right font-medium">Interés</th>}
               <th scope="col" className="px-2 py-2 text-right font-medium">Cuota</th>
               <th scope="col" className="px-2 py-2 text-right font-medium">Pagado</th>
             </tr>
@@ -386,12 +383,6 @@ export function CronogramaCuotas({ cuotas }: { cuotas: Cuota[] }) {
               <tr key={c.id} className="border-t border-border/40">
                 <td className="px-2 py-1.5">{c.numero_cuota}</td>
                 <td className="px-2 py-1.5 whitespace-nowrap">{formatFecha(c.fecha_vencimiento)}</td>
-                {conDesglose && (
-                  <td className="px-2 py-1.5 text-right">{formatGuaranies(Number(c.capital_programado) || 0)}</td>
-                )}
-                {conDesglose && (
-                  <td className="px-2 py-1.5 text-right">{formatGuaranies(Number(c.interes_programado) || 0)}</td>
-                )}
                 <td className="px-2 py-1.5 text-right font-medium">{formatGuaranies(Number(c.total_programado))}</td>
                 <td className={`px-2 py-1.5 text-right ${ESTADO_CUOTA[c.estado] ?? "text-muted-foreground"}`}>
                   {Number(c.total_pagado) > 0 ? formatGuaranies(Number(c.total_pagado)) : "—"}
