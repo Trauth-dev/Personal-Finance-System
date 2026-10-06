@@ -42,6 +42,7 @@ import {
 } from "lucide-react"
 import { formatGuaranies, getTodayDate, normalizarNombre, getCurrencySymbol } from "@/lib/utils"
 import { cn } from "@/lib/utils"
+import { notificarCambioFinanciero, registrarGasto, registrarIngreso, type OrigenTipo } from "@/lib/finanzas/operaciones"
 
 interface TipoCategoria {
   id: string
@@ -813,150 +814,31 @@ export function VoiceEntryClient({
     setError(null)
     
     try {
-      const supabase = createClient()
       const montoNumerico = parseFloat(monto)
-      
+
       if (tipoTransaccion === "egreso") {
-        // Validar saldo si es caja de ahorro - obtener saldo actual de la DB
-        if (origenTipo === "caja_ahorro" && origenId) {
-          const { data: cajaOrigen, error: validationError } = await supabase
-            .from("cajas_ahorro")
-            .select("monto_actual, nombre")
-            .eq("id", origenId)
-            .single()
-          
-          if (validationError) throw validationError
-          
-          if (cajaOrigen && montoNumerico > Number(cajaOrigen.monto_actual)) {
-            throw new Error(`Saldo insuficiente en "${cajaOrigen.nombre}". Disponible: ${formatGuaranies(Number(cajaOrigen.monto_actual))}`)
-          }
-        }
-        
-        // Insertar egreso
-        const { error: insertError } = await supabase
-          .from("egresos")
-          .insert({
-            user_id: userId,
-            perfil_id: perfilId,
-            tipo_categoria_id: selectedTipoCategoria,
-            categoria_id: selectedSubcategoria || null,
-            monto: montoNumerico,
-            fecha: fecha,
-            concepto: concepto || null,
-            origen_tipo: origenTipo || null,
-            origen_id: origenId || null,
-          })
-        
-        if (insertError) throw insertError
-        
-        // Descontar del origen - obtener saldo actual de la DB para evitar problemas de concurrencia
-        if (origenTipo === "caja_ahorro" && origenId) {
-          // Obtener el saldo ACTUAL de la base de datos, no del estado local
-          const { data: cajaActual, error: fetchError } = await supabase
-            .from("cajas_ahorro")
-            .select("monto_actual, nombre")
-            .eq("id", origenId)
-            .single()
-          
-          if (fetchError) throw fetchError
-          
-          if (cajaActual) {
-            const saldoActual = Number(cajaActual.monto_actual)
-            const nuevoMonto = saldoActual - montoNumerico
-            
-            const { error: updateError } = await supabase
-              .from("cajas_ahorro")
-              .update({ monto_actual: nuevoMonto })
-              .eq("id", origenId)
-            
-            if (updateError) throw updateError
-            
-            await supabase.from("movimientos_caja").insert({
-              caja_id: origenId,
-              tipo: "retiro",
-              monto: montoNumerico,
-              concepto: `Egreso: ${concepto || "Gasto"}`,
-              fecha: fecha,
-            })
-          }
-          } else if (origenTipo === "tarjeta_credito" && origenId) {
-          // Para tarjetas de credito: restar del credito disponible (monto_total)
-          const { data: tarjetaActual, error: fetchError } = await supabase
-          .from("deudas")
-          .select("monto_total, monto_pagado, limite_credito")
-          .eq("id", origenId)
-          .single()
-          
-          if (fetchError) throw fetchError
-          
-          if (tarjetaActual) {
-          const disponibleActual = Number(tarjetaActual.monto_total)
-          const nuevoDisponible = disponibleActual - montoNumerico
-          
-          if (nuevoDisponible < 0) {
-            throw new Error("Credito insuficiente en la tarjeta seleccionada")
-          }
-          
-          const { error: updateError } = await supabase
-          .from("deudas")
-          .update({ monto_total: nuevoDisponible })
-          .eq("id", origenId)
-          
-          if (updateError) throw updateError
-          }
-          }
-        
+        await registrarGasto({
+          perfilId,
+          monto: montoNumerico,
+          fecha,
+          concepto: concepto || null,
+          tipoCategoriaId: selectedTipoCategoria,
+          categoriaId: selectedSubcategoria || null,
+          origenTipo: (origenTipo || null) as OrigenTipo | null,
+          origenId: origenId || null,
+        })
       } else if (tipoTransaccion === "ingreso") {
-        // Obtener nombre de categoria
         const catIngreso = categoriasIngreso.find(c => c.id === selectedCategoriaIngreso)
-        
-        // Insertar ingreso
-        const { error: insertError } = await supabase
-          .from("ingresos")
-          .insert({
-            user_id: userId,
-            perfil_id: perfilId,
-            tipo_ingreso: catIngreso?.nombre || "",
-            monto: montoNumerico,
-            fecha: fecha,
-            destino_caja_id: destinoCajaId || null,
-          })
-        
-        if (insertError) throw insertError
-        
-        // Depositar en caja destino - obtener saldo actual de la DB
-        if (destinoCajaId) {
-          // Obtener el saldo ACTUAL de la base de datos, no del estado local
-          const { data: cajaActual, error: fetchError } = await supabase
-            .from("cajas_ahorro")
-            .select("monto_actual, nombre")
-            .eq("id", destinoCajaId)
-            .single()
-          
-          if (fetchError) throw fetchError
-          
-          if (cajaActual) {
-            const saldoActual = Number(cajaActual.monto_actual)
-            const nuevoMonto = saldoActual + montoNumerico
-            
-            const { error: updateError } = await supabase
-              .from("cajas_ahorro")
-              .update({ monto_actual: nuevoMonto })
-              .eq("id", destinoCajaId)
-            
-            if (updateError) throw updateError
-            
-            await supabase.from("movimientos_caja").insert({
-              caja_id: destinoCajaId,
-              tipo: "deposito",
-              monto: montoNumerico,
-              concepto: `Ingreso: ${catIngreso?.nombre || "Ingreso"}`,
-              fecha: fecha,
-            })
-          }
-        }
+        await registrarIngreso({
+          perfilId,
+          tipoIngreso: catIngreso?.nombre || "",
+          monto: montoNumerico,
+          fecha,
+          destinoCajaId: destinoCajaId || null,
+        })
       }
-      
+      notificarCambioFinanciero()
+
       setSuccess(true)
       
       // Resetear formulario
