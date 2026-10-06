@@ -189,6 +189,7 @@ export function EgresoForm() {
   const montoRef = useRef<HTMLDivElement>(null)
   const montoInputRef = useRef<HTMLInputElement>(null)
   const initialScrollDone = useRef(false)
+  const pagoDeudasRef = useRef<HTMLDivElement>(null)
 
   // Hace scroll suave a una sección dejando margen para el header sticky
   const scrollToSection = (ref: React.RefObject<HTMLElement | null>, delay = 150) => {
@@ -248,6 +249,7 @@ export function EgresoForm() {
         setEsPagoDeudas(true)
         loadDeudas()
         autoSelectOrCreatePagoDeudaCategoria(selectedTipo)
+        scrollToSection(pagoDeudasRef, 500)
       } else {
         setEsPagoDeudas(false)
         setSelectedDeuda("")
@@ -991,7 +993,7 @@ export function EgresoForm() {
           )}
 
           {!isLoadingPlan && egresoFeatures.seguimientoDeudas && esPagoDeudas && (
-            <div className="space-y-4 p-5 rounded-xl bg-gradient-to-br from-red-500/10 via-orange-500/5 to-transparent border border-red-500/30">
+            <div ref={pagoDeudasRef} className="scroll-mt-20 space-y-4 p-5 rounded-xl bg-gradient-to-br from-red-500/10 via-orange-500/5 to-transparent border border-red-500/30">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="p-2 rounded-full bg-red-500/20">
