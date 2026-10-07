@@ -62,7 +62,7 @@ export function DashboardPersonalClient({ children, mes, cajaId, cuentas }: Dash
                       activa ? "border-cyan-500 bg-cyan-500/15 text-cyan-400 shadow-sm" : chipInactivo,
                     )}
                   >
-                    <PiggyBank className="h-3.5 w-3.5" aria-hidden="true" />
+                    <PiggyBank className="h-6 w-6 shrink-0 text-foreground" aria-hidden="true" />
                     <span className="flex flex-col items-start">
                       <span>{cuenta.nombre}</span>
                       <span className={cn("text-[10px] font-normal", activa ? "text-cyan-400/70" : "text-muted-foreground/60")}>
