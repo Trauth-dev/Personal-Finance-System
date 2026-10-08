@@ -47,6 +47,7 @@ import { toast } from "sonner"
 import { NuevaDeudaDialog, DEUDAS_ACTUALIZADAS_EVENT, type DeudaCreada } from "@/components/forms/nueva-deuda-dialog"
 import { registrarGasto, registrarPagoDeuda, notificarCambioFinanciero, type OrigenTipo } from "@/lib/finanzas/operaciones"
 import { saldoPendienteDeuda, disponibleTarjeta } from "@/lib/finanzas/saldos"
+import { NuevaCajaAhorroDialog, type CajaAhorroCreada } from "@/components/personal/nueva-caja-ahorro-dialog"
 
 // Nombres de meses (índice 0 = Enero) para el selector de "Mes del egreso".
 const MESES = [
@@ -172,6 +173,25 @@ export function EgresoForm() {
 
   // Origen de fondos
   const [cajasAhorro, setCajasAhorro] = useState<CajaAhorro[]>([])
+  const [ultimaCajaUsadaId, setUltimaCajaUsadaId] = useState<string | null>(null)
+  const [nuevaCajaOpen, setNuevaCajaOpen] = useState(false)
+
+  // Caja por defecto al elegir "Caja de Ahorro": la última usada en un egreso
+  // (si sigue activa) o, en su defecto, la primera caja habilitada.
+  const cajaPorDefectoId = (cajas: CajaAhorro[] = cajasAhorro) => {
+    if (ultimaCajaUsadaId && cajas.some((c) => c.id === ultimaCajaUsadaId)) return ultimaCajaUsadaId
+    return cajas[0]?.id ?? ""
+  }
+
+  const handleCajaCreada = (caja: CajaAhorroCreada) => {
+    setCajasAhorro((prev) =>
+      [...prev.filter((c) => c.id !== caja.id), caja as unknown as CajaAhorro].sort((a, b) =>
+        a.nombre.localeCompare(b.nombre),
+      ),
+    )
+    setOrigenTipo("caja_ahorro")
+    setOrigenId(caja.id)
+  }
   const [tarjetasCredito, setTarjetasCredito] = useState<Deuda[]>([])
   const [origenTipo, setOrigenTipo] = useState<string>("")
   const [origenId, setOrigenId] = useState<string>("")
@@ -295,9 +315,9 @@ export function EgresoForm() {
   useEffect(() => {
     if (!selectedTipo) return
     if (origenTipo) return // el usuario (o una preselección previa) ya definió el origen
-    if (cajasAhorro.length === 1) {
+    if (cajasAhorro.length > 0) {
       setOrigenTipo("caja_ahorro")
-      setOrigenId(cajasAhorro[0].id)
+      setOrigenId(cajaPorDefectoId())
     } else if (cajasAhorro.length === 0 && tarjetasCredito.length === 1) {
       setOrigenTipo("tarjeta_credito")
       setOrigenId(tarjetasCredito[0].id)
@@ -614,6 +634,17 @@ export function EgresoForm() {
 
       if (cajasData) setCajasAhorro(cajasData)
 
+      const { data: ultimoEgresoCaja } = await supabase
+        .from("egresos")
+        .select("origen_id")
+        .eq("perfil_id", perfilActual.id)
+        .eq("origen_tipo", "caja_ahorro")
+        .not("origen_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      setUltimaCajaUsadaId(ultimoEgresoCaja?.origen_id ?? null)
+
       // Cargar tarjetas de credito activas (para usar como origen de fondos)
       const { data: tarjetasData } = await supabase
         .from("deudas")
@@ -745,6 +776,14 @@ export function EgresoForm() {
         }
         tipoCategoriaId = negocio.tipoId
         categoriaId = negocio.categoriaId
+      }
+
+      if (origenTipo === "caja_ahorro" && !origenId) {
+        throw new Error(
+          cajasAhorro.length === 0
+            ? "No tenés cajas de ahorro activas. Creá una para continuar o elegí otro origen."
+            : "Seleccioná la caja de ahorro de donde sale el dinero.",
+        )
       }
 
       const montoNumerico = Number.parseFloat(monto)
@@ -1419,7 +1458,12 @@ export function EgresoForm() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setOrigenTipo("caja_ahorro"); setOrigenId("") }}
+                  aria-pressed={origenTipo === "caja_ahorro"}
+                  onClick={() => {
+                    if (origenTipo === "caja_ahorro") return
+                    setOrigenTipo("caja_ahorro")
+                    setOrigenId(cajaPorDefectoId())
+                  }}
                   className={`p-3 rounded-lg border-2 transition-all text-center text-xs ${
                     origenTipo === "caja_ahorro"
                       ? "border-blue-400 bg-blue-500/20"
@@ -1482,12 +1526,42 @@ export function EgresoForm() {
                           </button>
                         )
                       })}
+                      <button
+                        type="button"
+                        onClick={() => setNuevaCajaOpen(true)}
+                        className="p-2.5 rounded-lg border-2 border-dashed border-border/40 hover:border-blue-400/60 hover:bg-blue-500/10 transition-all flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground hover:text-blue-400"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Crear nueva caja de ahorro
+                      </button>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground text-center py-4 bg-background/30 rounded-lg border border-border/50">
-                      No tienes cajas de ahorro activas. Crea una desde la seccion Cajas de Ahorro.
-                    </p>
+                    <div className="flex flex-col items-center gap-3 text-center px-4 py-5 bg-background/30 rounded-lg border border-dashed border-blue-500/40">
+                      <div className="p-2.5 rounded-full bg-blue-500/20">
+                        <Building2 className="w-5 h-5 text-blue-400" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <p className="text-sm font-medium">No tenés cajas de ahorro activas</p>
+                        <p className="text-xs text-muted-foreground text-pretty">
+                          Creá una para registrar de dónde sale el dinero de este egreso.
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setNuevaCajaOpen(true)}
+                        className="w-full sm:w-auto gap-2"
+                      >
+                        <Plus className="w-4 h-4" />
+                        Crear nueva caja de ahorro
+                      </Button>
+                    </div>
                   )}
+                  <NuevaCajaAhorroDialog
+                    open={nuevaCajaOpen}
+                    onOpenChange={setNuevaCajaOpen}
+                    onCreated={handleCajaCreada}
+                  />
                 </div>
               )}
 
