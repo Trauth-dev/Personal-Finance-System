@@ -16,7 +16,13 @@ import {
 import { CheckCircle2, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { formatGuaranies } from "@/lib/utils"
-import { actualizarPagoMinimo, notificarCambioFinanciero, registrarPagoDeuda } from "@/lib/finanzas/operaciones"
+import {
+  actualizarPagoMinimo,
+  ajustarTarjeta,
+  notificarCambioFinanciero,
+  registrarPagoDeuda,
+  type TipoAjusteTarjeta,
+} from "@/lib/finanzas/operaciones"
 
 export interface Extracto {
   id: string
@@ -288,6 +294,183 @@ export function PagarDeudaDialog({
           <Button onClick={pagar} disabled={guardando || montoNum <= 0} className="bg-green-600 hover:bg-green-700 text-white">
             {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             Pagar {montoNum > 0 ? formatGuaranies(montoNum) : ""}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export interface TarjetaAjustable {
+  id: string
+  nombre: string
+  saldo_utilizado: number
+  limite_credito: number | null
+}
+
+const TIPOS_AJUSTE: { id: TipoAjusteTarjeta; label: string; ayuda: string }[] = [
+  {
+    id: "ajuste_saldo",
+    label: "Ajustar saldo",
+    ayuda: "Corregí la deuda para que coincida con tu extracto o tu app del banco.",
+  },
+  {
+    id: "reembolso",
+    label: "Reembolso",
+    ayuda: "Un comercio te devolvió una compra en la tarjeta. Baja la deuda sin tocar tus cuentas.",
+  },
+]
+
+interface AjusteTarjetaDialogProps {
+  tarjeta: TarjetaAjustable | null
+  onOpenChange: (open: boolean) => void
+  onGuardado: () => void
+}
+
+export function AjusteTarjetaDialog({ tarjeta, onOpenChange, onGuardado }: AjusteTarjetaDialogProps) {
+  const [tipo, setTipo] = useState<TipoAjusteTarjeta>("ajuste_saldo")
+  const [monto, setMonto] = useState("")
+  const [concepto, setConcepto] = useState("")
+  const [fecha, setFecha] = useState(hoyLocal())
+  const [guardando, setGuardando] = useState(false)
+
+  useEffect(() => {
+    if (!tarjeta) return
+    setTipo("ajuste_saldo")
+    setMonto(separarMiles(Math.round(tarjeta.saldo_utilizado)))
+    setConcepto("")
+    setFecha(hoyLocal())
+  }, [tarjeta])
+
+  const elegirTipo = (t: TipoAjusteTarjeta) => {
+    setTipo(t)
+    setMonto(t === "ajuste_saldo" && tarjeta ? separarMiles(Math.round(tarjeta.saldo_utilizado)) : "")
+  }
+
+  const actual = tarjeta?.saldo_utilizado ?? 0
+  const montoNum = aNumero(monto)
+  const nuevaDeuda = tipo === "ajuste_saldo" ? montoNum : Math.max(0, actual - montoNum)
+  const diferencia = nuevaDeuda - actual
+  const limite = Number(tarjeta?.limite_credito) || 0
+  const nuevoDisponible = limite > 0 ? Math.max(0, limite - nuevaDeuda) : null
+  const reembolsoExcede = tipo === "reembolso" && montoNum > actual
+  const sinCambios = tipo === "ajuste_saldo" ? diferencia === 0 : montoNum <= 0
+  const ayuda = TIPOS_AJUSTE.find((t) => t.id === tipo)?.ayuda
+
+  const guardar = async () => {
+    if (!tarjeta || sinCambios || reembolsoExcede) return
+    setGuardando(true)
+    try {
+      await ajustarTarjeta({ deudaId: tarjeta.id, tipo, monto: montoNum, fecha, concepto: concepto.trim() || null })
+      notificarCambioFinanciero()
+      toast.success(tipo === "reembolso" ? "Reembolso registrado" : "Saldo ajustado")
+      onGuardado()
+      onOpenChange(false)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo guardar el movimiento")
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!tarjeta} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Movimiento en {tarjeta?.nombre}</DialogTitle>
+          <DialogDescription>{ayuda}</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <div role="radiogroup" aria-label="Tipo de movimiento" className="grid grid-cols-2 gap-2">
+            {TIPOS_AJUSTE.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="radio"
+                aria-checked={tipo === t.id}
+                onClick={() => elegirTipo(t.id)}
+                className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  tipo === t.id ? "border-purple-500 bg-purple-500/15 text-foreground" : "border-border text-muted-foreground hover:bg-muted/40"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="ajuste-monto">
+              {tipo === "ajuste_saldo" ? "Deuda real de la tarjeta" : "Monto reembolsado"}
+            </Label>
+            <Input
+              id="ajuste-monto"
+              inputMode="numeric"
+              value={monto}
+              onChange={(e) => setMonto(separarMiles(e.target.value))}
+              placeholder="0"
+            />
+            {reembolsoExcede && (
+              <p className="text-xs text-amber-400">El reembolso no puede superar la deuda actual.</p>
+            )}
+          </div>
+
+          <dl className="grid grid-cols-2 gap-2 rounded-lg bg-muted/30 p-3 text-sm">
+            <dt className="text-muted-foreground">Deuda actual</dt>
+            <dd className="text-right font-medium">{formatGuaranies(actual)}</dd>
+            <dt className="text-muted-foreground">Deuda nueva</dt>
+            <dd className="text-right font-semibold text-red-400">{formatGuaranies(nuevaDeuda)}</dd>
+            {nuevoDisponible != null && (
+              <>
+                <dt className="text-muted-foreground">Disponible nuevo</dt>
+                <dd className="text-right font-semibold text-green-400">{formatGuaranies(nuevoDisponible)}</dd>
+              </>
+            )}
+            {diferencia !== 0 && (
+              <>
+                <dt className="text-muted-foreground">Diferencia</dt>
+                <dd className={`text-right font-medium ${diferencia > 0 ? "text-red-400" : "text-green-400"}`}>
+                  {diferencia > 0 ? "+" : "−"}
+                  {formatGuaranies(Math.abs(diferencia))}
+                </dd>
+              </>
+            )}
+          </dl>
+          {limite > 0 && nuevaDeuda > limite && (
+            <p className="text-xs text-amber-400">La deuda nueva supera el límite de la tarjeta. Se puede guardar igual.</p>
+          )}
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="ajuste-fecha">Fecha</Label>
+              <Input id="ajuste-fecha" type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="ajuste-concepto">Detalle (opcional)</Label>
+              <Input
+                id="ajuste-concepto"
+                value={concepto}
+                onChange={(e) => setConcepto(e.target.value)}
+                placeholder={tipo === "reembolso" ? "Ej: Devolución tienda" : "Ej: Según extracto"}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            No se registra como gasto ni mueve dinero de tus cuentas.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={guardando}>
+            Cancelar
+          </Button>
+          <Button
+            onClick={guardar}
+            disabled={guardando || sinCambios || reembolsoExcede}
+            className="bg-purple-600 hover:bg-purple-700 text-white"
+          >
+            {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+            Guardar
           </Button>
         </DialogFooter>
       </DialogContent>

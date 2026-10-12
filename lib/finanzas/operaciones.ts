@@ -252,6 +252,32 @@ export function actualizarDeuda(id: string, d: ActualizarDeudaInput) {
   return rpc<string>("fin_actualizar_deuda", { p_id: id, p })
 }
 
+export type TipoAjusteTarjeta = "ajuste_saldo" | "reembolso"
+
+/**
+ * ajuste_saldo: `monto` es la deuda real que debe quedar en la tarjeta.
+ * reembolso: `monto` es lo que el comercio devolvió (reduce la deuda, no toca cuentas).
+ */
+export function ajustarTarjeta(a: {
+  deudaId: string
+  tipo: TipoAjusteTarjeta
+  monto: number
+  fecha: string
+  concepto?: string | null
+  operacionId?: string
+}) {
+  return rpc<string>("fin_ajustar_tarjeta", {
+    p: {
+      deuda_id: a.deudaId,
+      tipo: a.tipo,
+      monto: a.monto,
+      fecha: a.fecha,
+      concepto: a.concepto ?? "",
+      operacion_id: a.operacionId ?? nuevaOperacionId(),
+    },
+  })
+}
+
 export function archivarDeuda(id: string, archivar = true) {
   return rpc<void>("fin_archivar_deuda", { p_id: id, p_archivar: archivar })
 }

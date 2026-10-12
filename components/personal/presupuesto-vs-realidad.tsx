@@ -154,13 +154,28 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
       }
     })
 
-    const { data: egresos } = await supabase
+    const { data: egresosRaw } = await supabase
       .from("egresos")
-      .select("id, monto, fecha, concepto, tipo_categoria_id, tipo_categoria:tipos_categoria_egreso(nombre), categoria_egreso:categorias_egreso(nombre)")
+      .select("id, monto, fecha, concepto, naturaleza, tipo_categoria_id, tipo_categoria:tipos_categoria_egreso(nombre), categoria_egreso:categorias_egreso(nombre), deuda:deudas(nombre)")
       .eq("perfil_id", perfilId)
       .gte("fecha", primerDia)
       .lte("fecha", ultimoDia)
       .order("fecha", { ascending: false })
+
+    // Los ajustes de saldo de tarjeta no son salida de dinero. Los pagos de deuda
+    // registrados desde el modal no traen categoría: se ubican en "Pago Deudas",
+    // en la línea de la propia deuda/tarjeta que se presupuesta por nombre.
+    const egresos = (egresosRaw || [])
+      .filter((e: any) => e.naturaleza !== "ajuste")
+      .map((e: any) =>
+        e.naturaleza === "pago_deuda" && !e.tipo_categoria?.nombre
+          ? {
+              ...e,
+              tipo_categoria: { nombre: "Pago Deudas" },
+              categoria_egreso: { nombre: e.deuda?.nombre || "Pago de Tarjetas" },
+            }
+          : e,
+      )
 
     const presupuesto = presupuestoMensual?.[0]
     const metaSalario = Number(presupuesto?.meta_salario || 0)

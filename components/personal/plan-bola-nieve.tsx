@@ -39,6 +39,7 @@ import {
 } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
 import { formatGuaranies } from "@/lib/utils"
+import { saldoPendienteDeuda, esTarjeta } from "@/lib/finanzas/saldos"
 import { toast } from "sonner"
 import confetti from "canvas-confetti"
 
@@ -47,6 +48,8 @@ interface Deuda {
   nombre: string
   monto_total: number
   monto_pagado: number
+  saldo_utilizado: number | null
+  limite_credito: number | null
   tasa_interes: number
   cuotas_totales: number | null
   cuotas_pagadas: number
@@ -98,7 +101,6 @@ export function PlanBolaNieve({ userId, perfilId }: PlanBolaNieveProps) {
         .eq("user_id", userId)
         .eq("perfil_id", perfilId)
         .neq("estado", "pagada")
-        .order("monto_total", { ascending: true })
 
       if (error) throw error
       setDeudas(data || [])
@@ -164,7 +166,7 @@ export function PlanBolaNieve({ userId, perfilId }: PlanBolaNieveProps) {
 
   // Calcular deuda pendiente de cada deuda
   const getDeudaPendiente = (deuda: Deuda) => {
-    return deuda.monto_total - deuda.monto_pagado
+    return saldoPendienteDeuda(deuda)
   }
 
   // Calcular pago minimo de cada deuda
@@ -456,7 +458,11 @@ export function PlanBolaNieve({ userId, perfilId }: PlanBolaNieveProps) {
           {deudasOrdenadas.map((deuda, index) => {
             const pendiente = getDeudaPendiente(deuda)
             const pagoMinimo = getPagoMinimo(deuda)
-            const progreso = ((deuda.monto_pagado / deuda.monto_total) * 100)
+            const tarjeta = esTarjeta(deuda)
+            const limite = Number(deuda.limite_credito) || 0
+            const progreso = tarjeta
+              ? limite > 0 ? Math.min(100, (pendiente / limite) * 100) : 0
+              : deuda.monto_total > 0 ? (deuda.monto_pagado / deuda.monto_total) * 100 : 0
             const proyeccionDeuda = proyeccion.find(p => p.deuda.id === deuda.id)
             const esObjetivo = index === 0
             const isExpanded = expandedDeuda === deuda.id
@@ -494,10 +500,14 @@ export function PlanBolaNieve({ userId, perfilId }: PlanBolaNieveProps) {
                     <p className="text-sm text-slate-500 dark:text-slate-400">{deuda.acreedor}</p>
                     
                     {/* Barra de progreso */}
-                    <div className="mt-2 flex items-center gap-2">
-                      <Progress value={progreso} className="flex-1 h-2" />
-                      <span className="text-xs text-slate-500">{progreso.toFixed(0)}%</span>
-                    </div>
+                    {(!tarjeta || limite > 0) && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <Progress value={progreso} className="flex-1 h-2" />
+                        <span className="text-xs text-slate-500">
+                          {progreso.toFixed(0)}% {tarjeta ? "usado" : "pagado"}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Monto pendiente */}
@@ -541,14 +551,31 @@ export function PlanBolaNieve({ userId, perfilId }: PlanBolaNieveProps) {
                 {/* Detalles expandidos */}
                 {isExpanded && (
                   <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700 grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <p className="text-xs text-slate-500">Monto Original</p>
-                      <p className="font-medium">{formatGuaranies(deuda.monto_total)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-500">Ya Pagado</p>
-                      <p className="font-medium text-green-600">{formatGuaranies(deuda.monto_pagado)}</p>
-                    </div>
+                    {tarjeta ? (
+                      <>
+                        <div>
+                          <p className="text-xs text-slate-500">Límite de crédito</p>
+                          <p className="font-medium">{limite > 0 ? formatGuaranies(limite) : "Sin límite cargado"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Monto disponible</p>
+                          <p className="font-medium text-green-600">
+                            {limite > 0 ? formatGuaranies(Math.max(0, limite - pendiente)) : "—"}
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <p className="text-xs text-slate-500">Monto Original</p>
+                          <p className="font-medium">{formatGuaranies(deuda.monto_total)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">Ya Pagado</p>
+                          <p className="font-medium text-green-600">{formatGuaranies(deuda.monto_pagado)}</p>
+                        </div>
+                      </>
+                    )}
                     <div>
                       <p className="text-xs text-slate-500">Tasa de Interés</p>
                       <p className="font-medium">{deuda.tasa_interes || 0}% anual</p>

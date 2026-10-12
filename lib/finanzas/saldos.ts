@@ -48,5 +48,7 @@ export const NATURALEZA_LABEL: Record<string, string> = {
   pago_deuda: "Pago de deuda",
   cargo_financiero: "Cargo financiero",
   ajuste: "Ajuste",
+  ajuste_saldo: "Ajuste de saldo",
+  reembolso: "Reembolso",
   transferencia: "Transferencia",
 }

@@ -225,7 +225,7 @@ export async function getPersonalDashboardData({
         .lte("fecha", rangoActual.end),
       supabase
         .from("deudas")
-        .select("id, nombre, tipo_deuda, estado, monto_total, monto_pagado, limite_credito, monto_cuota, dia_vencimiento, fecha_pago")
+        .select("id, nombre, tipo_deuda, estado, monto_total, monto_pagado, limite_credito, saldo_utilizado, monto_cuota, dia_vencimiento, fecha_pago")
         .eq("perfil_id", perfilId),
       leerTodo((desde, hasta) =>
         supabase
@@ -366,6 +366,7 @@ export async function getPersonalDashboardData({
         montoTotal: aNumero(d.monto_total),
         montoPagado: aNumero(d.monto_pagado),
         limiteCredito: aNumero(d.limite_credito),
+        saldoUtilizado: aNumero(d.saldo_utilizado),
         montoCuota: aNumero(d.monto_cuota),
         diaPago: d.tipo_deuda === "tarjeta_credito" ? (d.fecha_pago ?? d.dia_vencimiento) : (d.dia_vencimiento ?? d.fecha_pago),
       }))

@@ -52,6 +52,7 @@ import {
   notificarCambioFinanciero,
 } from "@/lib/finanzas/operaciones"
 import {
+  AjusteTarjetaDialog,
   CronogramaCuotas,
   EstadoExtractoBadge,
   PagarDeudaDialog,
@@ -63,8 +64,8 @@ import {
   type Cuota,
   type Extracto,
 } from "./deuda-acciones"
-import { Archive, ArchiveRestore, Wallet } from "lucide-react"
-import { disponibleTarjeta, saldoPendienteDeuda } from "@/lib/finanzas/saldos"
+import { Archive, ArchiveRestore, SlidersHorizontal, Wallet } from "lucide-react"
+import { NATURALEZA_LABEL, disponibleTarjeta, saldoPendienteDeuda } from "@/lib/finanzas/saldos"
 import { generarFechasCuotas, type FrecuenciaPago } from "@/lib/finanzas/amortizacion"
 
 interface Deuda {
@@ -103,6 +104,15 @@ interface PagoDeuda {
   concepto: string | null
   origen_tipo?: string | null
   origen_id?: string | null
+}
+
+interface MovimientoTarjeta {
+  id: string
+  deuda_id: string
+  fecha: string
+  concepto: string | null
+  naturaleza: string
+  impacto_deuda: number
 }
 
 interface DeudasManagerProps {
@@ -188,7 +198,10 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
           calcula automáticamente como la suma de las cuotas. */}
       {tipoDeuda === "tarjeta_credito" && (
         <div className="space-y-2">
-          <Label htmlFor="monto_total">Saldo utilizado actual *</Label>
+          <Label htmlFor="monto_total">Deuda actual de la tarjeta *</Label>
+          <p className="text-xs text-muted-foreground">
+            Lo que debés hoy (saldo utilizado). Si no la usaste, ingresá 0.
+          </p>
           <Input
             id="monto_total"
             type="text"
@@ -391,23 +404,22 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
             <CreditCard className="w-4 h-4" />
             <span className="font-medium text-sm">Datos de la Tarjeta</span>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="limite_credito">Límite de Crédito</Label>
+              <Label htmlFor="limite_credito">
+                Límite de Crédito <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
               <Input
                 id="limite_credito"
                 type="text"
                 inputMode="numeric"
-                placeholder="10000000"
-                value={formData.limite_credito}
+                placeholder="10.000.000"
+                value={formatNumberWithSeparators(parseFormattedNumber(formData.limite_credito))}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, "")
+                  const value = parseFormattedNumber(e.target.value).replace(/[^0-9]/g, "")
                   setFormData((prev) => ({ ...prev, limite_credito: value }))
                 }}
               />
-              {formData.limite_credito && (
-                <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.limite_credito))}</p>
-              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="fecha_corte">Día de Corte</Label>
@@ -422,7 +434,7 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fecha_pago">Día de Pago</Label>
+              <Label htmlFor="fecha_pago">Día de Vencimiento</Label>
               <Input
                 id="fecha_pago"
                 type="number"
@@ -434,6 +446,37 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
               />
             </div>
           </div>
+          {(() => {
+            const limite = Number(parseFormattedNumber(formData.limite_credito)) || 0
+            const usado = Number(parseFormattedNumber(formData.monto_total)) || 0
+            if (limite <= 0) {
+              return (
+                <p className="text-xs text-muted-foreground">
+                  Sin límite cargado: se mostrará solo la deuda actual, sin monto disponible.
+                </p>
+              )
+            }
+            const disponible = limite - usado
+            return (
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-background/40 p-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Monto disponible</p>
+                  <p className={`font-semibold ${disponible < 0 ? "text-red-400" : "text-green-400"}`}>
+                    {formatGuaranies(Math.max(0, disponible))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Deuda actual</p>
+                  <p className="font-semibold text-red-400">{formatGuaranies(usado)}</p>
+                </div>
+                {disponible < 0 && (
+                  <p className="col-span-2 text-xs text-amber-400">
+                    La deuda supera el límite en {formatGuaranies(Math.abs(disponible))}. Se puede guardar igual.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -504,6 +547,10 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   const [cajas, setCajas] = useState<Caja[]>([])
   const [mostrarArchivadas, setMostrarArchivadas] = useState(false)
   const [deudaAPagar, setDeudaAPagar] = useState<Deuda | null>(null)
+  const [tarjetaAAjustar, setTarjetaAAjustar] = useState<Deuda | null>(null)
+  const [movimientos, setMovimientos] = useState<MovimientoTarjeta[]>([])
+  const [movimientoAEliminar, setMovimientoAEliminar] = useState<MovimientoTarjeta | null>(null)
+  const [eliminandoMovimiento, setEliminandoMovimiento] = useState(false)
   const [extractoMinimo, setExtractoMinimo] = useState<Extracto | null>(null)
 
   const fetchCiclos = async () => {
@@ -579,8 +626,33 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
 
       if (error) throw error
       setPagos(data || [])
+
+      const { data: movs, error: movError } = await supabase
+        .from("egresos")
+        .select("id, deuda_id, fecha, concepto, naturaleza, impacto_deuda")
+        .eq("perfil_id", perfilId)
+        .in("naturaleza", ["ajuste_saldo", "reembolso"])
+        .order("fecha", { ascending: false })
+      if (movError) throw movError
+      setMovimientos((movs as MovimientoTarjeta[]) || [])
     } catch (error) {
       console.error("Error fetching pagos:", error)
+    }
+  }
+
+  const eliminarMovimiento = async () => {
+    if (!movimientoAEliminar) return
+    setEliminandoMovimiento(true)
+    try {
+      await eliminarEgreso(movimientoAEliminar.id)
+      notificarCambioFinanciero()
+      toast.success("Movimiento eliminado y saldo restaurado")
+      setMovimientoAEliminar(null)
+      recargarTodo()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el movimiento")
+    } finally {
+      setEliminandoMovimiento(false)
     }
   }
 
@@ -859,8 +931,9 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   // Totales sobre deudas activas, con el saldo canónico de cada tipo.
   const totalPagado = deudasActivas.reduce((sum, d) => sum + (Number(d.monto_pagado) || 0), 0)
   const totalPendiente = deudasActivas.reduce((sum, d) => sum + saldoPendienteDeuda(d), 0)
-  const totalDeudas = totalPendiente + totalPagado
-  const porcentajePagado = totalDeudas > 0 ? (totalPagado / totalDeudas) * 100 : 0
+  const totalDisponibleTarjetas = deudasActivas
+    .filter((d) => d.tipo_deuda === "tarjeta_credito")
+    .reduce((sum, d) => sum + (disponibleTarjeta(d) ?? 0), 0)
 
   if (loading) {
     return <div className="text-center py-8">Cargando deudas...</div>
@@ -872,10 +945,12 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     const limiteCredito = Number(deuda.limite_credito) || 0
     const pendiente = saldoPendienteDeuda(deuda)
     const montoDisponible = esTarjetaDeuda ? (disponibleTarjeta(deuda) ?? 0) : Number(deuda.monto_total) || 0
+    const tieneLimite = esTarjetaDeuda && limiteCredito > 0
     const porcentaje = esTarjetaDeuda
-      ? limiteCredito > 0 ? Math.max(0, 100 - (pendiente / limiteCredito) * 100) : 0
+      ? tieneLimite ? Math.min(100, (pendiente / limiteCredito) * 100) : 0
       : montoDisponible > 0 ? (montoPagado / montoDisponible) * 100 : 0
     const pagosDeuda = pagos.filter((p) => p.deuda_id === deuda.id)
+    const movimientosDeuda = movimientos.filter((m) => m.deuda_id === deuda.id)
     const Icon = deuda.tipo_deuda === "tarjeta_credito" ? CreditCard : Landmark
 
     const cuotaActual = deuda.cuotas_pagadas + 1
@@ -929,23 +1004,27 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-3 sm:px-6">
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs sm:text-sm">
-              <span className="text-muted-foreground">Progreso de pago</span>
-              <span className="font-semibold">{porcentaje.toFixed(1)}%</span>
+          {(!esTarjetaDeuda || tieneLimite) && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs sm:text-sm">
+                <span className="text-muted-foreground">{esTarjetaDeuda ? "Uso del límite" : "Progreso de pago"}</span>
+                <span className="font-semibold">{porcentaje.toFixed(1)}%</span>
+              </div>
+              <Progress value={porcentaje} className="h-2" />
             </div>
-            <Progress value={porcentaje} className="h-2" />
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2 sm:gap-4">
-            <div className="p-2 sm:p-3 rounded-lg bg-muted/30">
+            <div className={`p-2 sm:p-3 rounded-lg ${esTarjetaDeuda ? "bg-green-500/10" : "bg-muted/30"}`}>
               <p className="text-xs text-muted-foreground">
-                {deuda.tipo_deuda === "tarjeta_credito" ? "Monto Disponible" : "Monto Total"}
+                {esTarjetaDeuda ? "Monto Disponible" : "Monto Total"}
               </p>
-              <p className="text-sm sm:text-lg font-bold">{formatGuaranies(montoDisponible)}</p>
+              <p className={`text-sm sm:text-lg font-bold ${esTarjetaDeuda ? "text-green-400" : ""}`}>
+                {esTarjetaDeuda && !tieneLimite ? "Sin límite" : formatGuaranies(montoDisponible)}
+              </p>
             </div>
             <div className="p-2 sm:p-3 rounded-lg bg-red-500/10">
-              <p className="text-xs text-muted-foreground">Saldo Pendiente</p>
+              <p className="text-xs text-muted-foreground">{esTarjetaDeuda ? "Deuda Pendiente" : "Saldo Pendiente"}</p>
               <p className="text-sm sm:text-lg font-bold text-red-400">
                 {formatGuaranies(pendiente)}
               </p>
@@ -1098,6 +1177,17 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                 Pagar
               </Button>
             )}
+            {esTarjetaDeuda && !deuda.archivada && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTarjetaAAjustar(deuda)}
+                className="gap-1 border-purple-500 text-purple-400 hover:bg-purple-500/10 hover:text-purple-300"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                Ajustar
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={() => setShowDetallesDeuda(showDetallesDeuda === deuda.id ? null : deuda.id)}
@@ -1141,6 +1231,48 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           {showDetallesDeuda === deuda.id && (
             <div className="border-t border-green-500/30 pt-4 mt-2 space-y-3">
               <CronogramaCuotas cuotas={cronograma} />
+              {movimientosDeuda.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-purple-400" />
+                    <span className="text-sm font-semibold text-purple-300">Ajustes y reembolsos</span>
+                  </div>
+                  <ul className="flex flex-col gap-2">
+                    {movimientosDeuda.map((m) => {
+                      const impacto = Number(m.impacto_deuda)
+                      return (
+                        <li
+                          key={m.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 p-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {NATURALEZA_LABEL[m.naturaleza] ?? m.naturaleza}
+                              {m.concepto ? ` · ${m.concepto}` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{formatFecha(m.fecha)}</p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`text-sm font-semibold ${impacto > 0 ? "text-red-400" : "text-green-400"}`}>
+                              {impacto > 0 ? "+" : "−"}
+                              {formatGuaranies(Math.abs(impacto))}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setMovimientoAEliminar(m)}
+                              className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              aria-label="Eliminar movimiento"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-green-400" />
                 <span className="text-sm font-semibold text-green-400">
@@ -1279,11 +1411,11 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
-              Total Deudas
+              Deuda Total Actual
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-400">{formatGuaranies(totalDeudas)}</div>
+            <div className="text-2xl font-bold text-red-400">{formatGuaranies(totalPendiente)}</div>
             <p className="text-xs font-semibold text-gray-400 mt-1">{deudasActivas.length} deuda(s) activa(s)</p>
           </CardContent>
         </Card>
@@ -1297,7 +1429,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-400">{formatGuaranies(totalPagado)}</div>
-            <p className="text-xs font-semibold text-gray-400 mt-1">{porcentajePagado.toFixed(1)}% completado</p>
+            <p className="text-xs font-semibold text-gray-400 mt-1">Histórico de pagos registrados</p>
           </CardContent>
         </Card>
 
@@ -1305,12 +1437,12 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
               <TrendingDown className="w-4 h-4" />
-              Saldo Pendiente
+              Disponible en Tarjetas
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-400">{formatGuaranies(totalPendiente)}</div>
-            <Progress value={100 - porcentajePagado} className="mt-2 h-2" />
+            <div className="text-2xl font-bold text-orange-400">{formatGuaranies(totalDisponibleTarjetas)}</div>
+            <p className="text-xs font-semibold text-gray-400 mt-1">Límite restante para usar</p>
           </CardContent>
         </Card>
 
@@ -1532,6 +1664,47 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
         onOpenChange={(open) => !open && setDeudaAPagar(null)}
         onPagado={recargarTodo}
       />
+
+      <AjusteTarjetaDialog
+        tarjeta={
+          tarjetaAAjustar
+            ? {
+                id: tarjetaAAjustar.id,
+                nombre: tarjetaAAjustar.nombre,
+                saldo_utilizado: saldoPendienteDeuda(tarjetaAAjustar),
+                limite_credito: tarjetaAAjustar.limite_credito,
+              }
+            : null
+        }
+        onOpenChange={(open) => !open && setTarjetaAAjustar(null)}
+        onGuardado={recargarTodo}
+      />
+
+      <Dialog open={!!movimientoAEliminar} onOpenChange={(open) => !open && setMovimientoAEliminar(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-500">
+              <AlertTriangle className="w-5 h-5" />
+              Eliminar movimiento
+            </DialogTitle>
+            <DialogDescription>
+              La deuda de la tarjeta vuelve al valor que tenía antes de este movimiento.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMovimientoAEliminar(null)} disabled={eliminandoMovimiento}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={eliminarMovimiento}
+              disabled={eliminandoMovimiento}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PagoMinimoDialog
         extracto={extractoMinimo}
