@@ -10,6 +10,7 @@ import { Progress } from "@/components/ui/progress"
 import { Calendar, Zap, Save, Wand2, ChevronLeft, ChevronRight } from "lucide-react"
 import { createBrowserClient } from "@supabase/ssr"
 import { formatMoneyNumber } from "@/lib/utils"
+import { saldoPendienteDeuda } from "@/lib/finanzas/saldos"
 import { toast } from "sonner"
 
 interface Deuda {
@@ -17,6 +18,8 @@ interface Deuda {
   nombre: string
   monto_total: number
   monto_pagado: number
+  tipo_deuda: string
+  saldo_utilizado: number | null
   cuotas_totales: number | null
   cuotas_pagadas: number
   monto_cuota: number | null
@@ -162,8 +165,8 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
   // Calcular pagos mensuales para cada deuda
   const calcularPagosMensuales = (deuda: Deuda) => {
     const cuotasRestantes = (deuda.cuotas_totales || 12) - deuda.cuotas_pagadas
-    const cuotaMensual = deuda.monto_cuota || Math.ceil((deuda.monto_total - deuda.monto_pagado) / Math.max(cuotasRestantes, 1))
-    const pendiente = deuda.monto_total - deuda.monto_pagado
+    const cuotaMensual = deuda.monto_cuota || Math.ceil((saldoPendienteDeuda(deuda)) / Math.max(cuotasRestantes, 1))
+    const pendiente = saldoPendienteDeuda(deuda)
     
     const pagos: Record<string, number> = {}
     let saldoRestante = pendiente
@@ -201,8 +204,8 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
     
     deudas.forEach(deuda => {
       const cuotasRestantes = (deuda.cuotas_totales || 12) - deuda.cuotas_pagadas
-      const cuotaMensual = deuda.monto_cuota || Math.ceil((deuda.monto_total - deuda.monto_pagado) / Math.max(cuotasRestantes, 1))
-      const pendiente = deuda.monto_total - deuda.monto_pagado
+      const cuotaMensual = deuda.monto_cuota || Math.ceil((saldoPendienteDeuda(deuda)) / Math.max(cuotasRestantes, 1))
+      const pendiente = saldoPendienteDeuda(deuda)
       
       nuevosPagos[deuda.id] = {}
       let saldoRestante = pendiente
@@ -310,7 +313,7 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
 
   // Calcular total general
   const totalGeneral = useMemo(() => {
-    return deudas.reduce((sum, deuda) => sum + (deuda.monto_total - deuda.monto_pagado), 0)
+    return deudas.reduce((sum, deuda) => sum + (saldoPendienteDeuda(deuda)), 0)
   }, [deudas])
 
   if (loading) {
@@ -417,7 +420,7 @@ export function CalendarioDeudas({ userId, perfilId }: CalendarioDeudasProps) {
               {deudas.map((deuda, index) => {
                 const { pagos, saldoFinal, cuotaMensual } = calcularPagosMensuales(deuda)
                 const cuotasRestantes = (deuda.cuotas_totales || 12) - deuda.cuotas_pagadas
-                const pendiente = deuda.monto_total - deuda.monto_pagado
+                const pendiente = saldoPendienteDeuda(deuda)
                 const totalPagado = Object.values(pagos).reduce((a, b) => a + b, 0)
                 const progreso = calcularProgreso(deuda)
                 

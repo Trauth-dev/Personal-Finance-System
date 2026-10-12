@@ -188,7 +188,10 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
           calcula automáticamente como la suma de las cuotas. */}
       {tipoDeuda === "tarjeta_credito" && (
         <div className="space-y-2">
-          <Label htmlFor="monto_total">Saldo utilizado actual *</Label>
+          <Label htmlFor="monto_total">Deuda actual de la tarjeta *</Label>
+          <p className="text-xs text-muted-foreground">
+            Lo que debés hoy (saldo utilizado). Si no la usaste, ingresá 0.
+          </p>
           <Input
             id="monto_total"
             type="text"
@@ -391,23 +394,22 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
             <CreditCard className="w-4 h-4" />
             <span className="font-medium text-sm">Datos de la Tarjeta</span>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="limite_credito">Límite de Crédito</Label>
+              <Label htmlFor="limite_credito">
+                Límite de Crédito <span className="text-muted-foreground font-normal">(opcional)</span>
+              </Label>
               <Input
                 id="limite_credito"
                 type="text"
                 inputMode="numeric"
-                placeholder="10000000"
-                value={formData.limite_credito}
+                placeholder="10.000.000"
+                value={formatNumberWithSeparators(parseFormattedNumber(formData.limite_credito))}
                 onChange={(e) => {
-                  const value = e.target.value.replace(/[^0-9]/g, "")
+                  const value = parseFormattedNumber(e.target.value).replace(/[^0-9]/g, "")
                   setFormData((prev) => ({ ...prev, limite_credito: value }))
                 }}
               />
-              {formData.limite_credito && (
-                <p className="text-xs text-muted-foreground">{formatGuaranies(Number(formData.limite_credito))}</p>
-              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="fecha_corte">Día de Corte</Label>
@@ -422,7 +424,7 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="fecha_pago">Día de Pago</Label>
+              <Label htmlFor="fecha_pago">Día de Vencimiento</Label>
               <Input
                 id="fecha_pago"
                 type="number"
@@ -434,6 +436,37 @@ const DeudaFormFields = ({ tipoDeuda, formData, setFormData, setTipoDeuda }: any
               />
             </div>
           </div>
+          {(() => {
+            const limite = Number(parseFormattedNumber(formData.limite_credito)) || 0
+            const usado = Number(parseFormattedNumber(formData.monto_total)) || 0
+            if (limite <= 0) {
+              return (
+                <p className="text-xs text-muted-foreground">
+                  Sin límite cargado: se mostrará solo la deuda actual, sin monto disponible.
+                </p>
+              )
+            }
+            const disponible = limite - usado
+            return (
+              <div className="grid grid-cols-2 gap-2 rounded-lg bg-background/40 p-3 text-sm">
+                <div>
+                  <p className="text-xs text-muted-foreground">Monto disponible</p>
+                  <p className={`font-semibold ${disponible < 0 ? "text-red-400" : "text-green-400"}`}>
+                    {formatGuaranies(Math.max(0, disponible))}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Deuda actual</p>
+                  <p className="font-semibold text-red-400">{formatGuaranies(usado)}</p>
+                </div>
+                {disponible < 0 && (
+                  <p className="col-span-2 text-xs text-amber-400">
+                    La deuda supera el límite en {formatGuaranies(Math.abs(disponible))}. Se puede guardar igual.
+                  </p>
+                )}
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -859,8 +892,9 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   // Totales sobre deudas activas, con el saldo canónico de cada tipo.
   const totalPagado = deudasActivas.reduce((sum, d) => sum + (Number(d.monto_pagado) || 0), 0)
   const totalPendiente = deudasActivas.reduce((sum, d) => sum + saldoPendienteDeuda(d), 0)
-  const totalDeudas = totalPendiente + totalPagado
-  const porcentajePagado = totalDeudas > 0 ? (totalPagado / totalDeudas) * 100 : 0
+  const totalDisponibleTarjetas = deudasActivas
+    .filter((d) => d.tipo_deuda === "tarjeta_credito")
+    .reduce((sum, d) => sum + (disponibleTarjeta(d) ?? 0), 0)
 
   if (loading) {
     return <div className="text-center py-8">Cargando deudas...</div>
@@ -872,8 +906,9 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
     const limiteCredito = Number(deuda.limite_credito) || 0
     const pendiente = saldoPendienteDeuda(deuda)
     const montoDisponible = esTarjetaDeuda ? (disponibleTarjeta(deuda) ?? 0) : Number(deuda.monto_total) || 0
+    const tieneLimite = esTarjetaDeuda && limiteCredito > 0
     const porcentaje = esTarjetaDeuda
-      ? limiteCredito > 0 ? Math.max(0, 100 - (pendiente / limiteCredito) * 100) : 0
+      ? tieneLimite ? Math.min(100, (pendiente / limiteCredito) * 100) : 0
       : montoDisponible > 0 ? (montoPagado / montoDisponible) * 100 : 0
     const pagosDeuda = pagos.filter((p) => p.deuda_id === deuda.id)
     const Icon = deuda.tipo_deuda === "tarjeta_credito" ? CreditCard : Landmark
@@ -929,23 +964,27 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 px-3 sm:px-6">
-          <div className="space-y-2">
-            <div className="flex justify-between text-xs sm:text-sm">
-              <span className="text-muted-foreground">Progreso de pago</span>
-              <span className="font-semibold">{porcentaje.toFixed(1)}%</span>
+          {(!esTarjetaDeuda || tieneLimite) && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs sm:text-sm">
+                <span className="text-muted-foreground">{esTarjetaDeuda ? "Uso del límite" : "Progreso de pago"}</span>
+                <span className="font-semibold">{porcentaje.toFixed(1)}%</span>
+              </div>
+              <Progress value={porcentaje} className="h-2" />
             </div>
-            <Progress value={porcentaje} className="h-2" />
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-2 sm:gap-4">
-            <div className="p-2 sm:p-3 rounded-lg bg-muted/30">
+            <div className={`p-2 sm:p-3 rounded-lg ${esTarjetaDeuda ? "bg-green-500/10" : "bg-muted/30"}`}>
               <p className="text-xs text-muted-foreground">
-                {deuda.tipo_deuda === "tarjeta_credito" ? "Monto Disponible" : "Monto Total"}
+                {esTarjetaDeuda ? "Monto Disponible" : "Monto Total"}
               </p>
-              <p className="text-sm sm:text-lg font-bold">{formatGuaranies(montoDisponible)}</p>
+              <p className={`text-sm sm:text-lg font-bold ${esTarjetaDeuda ? "text-green-400" : ""}`}>
+                {esTarjetaDeuda && !tieneLimite ? "Sin límite" : formatGuaranies(montoDisponible)}
+              </p>
             </div>
             <div className="p-2 sm:p-3 rounded-lg bg-red-500/10">
-              <p className="text-xs text-muted-foreground">Saldo Pendiente</p>
+              <p className="text-xs text-muted-foreground">{esTarjetaDeuda ? "Deuda Pendiente" : "Saldo Pendiente"}</p>
               <p className="text-sm sm:text-lg font-bold text-red-400">
                 {formatGuaranies(pendiente)}
               </p>
@@ -1279,11 +1318,11 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
               <CreditCard className="w-4 h-4" />
-              Total Deudas
+              Deuda Total Actual
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-400">{formatGuaranies(totalDeudas)}</div>
+            <div className="text-2xl font-bold text-red-400">{formatGuaranies(totalPendiente)}</div>
             <p className="text-xs font-semibold text-gray-400 mt-1">{deudasActivas.length} deuda(s) activa(s)</p>
           </CardContent>
         </Card>
@@ -1297,7 +1336,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-400">{formatGuaranies(totalPagado)}</div>
-            <p className="text-xs font-semibold text-gray-400 mt-1">{porcentajePagado.toFixed(1)}% completado</p>
+            <p className="text-xs font-semibold text-gray-400 mt-1">Histórico de pagos registrados</p>
           </CardContent>
         </Card>
 
@@ -1305,12 +1344,12 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
               <TrendingDown className="w-4 h-4" />
-              Saldo Pendiente
+              Disponible en Tarjetas
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-orange-400">{formatGuaranies(totalPendiente)}</div>
-            <Progress value={100 - porcentajePagado} className="mt-2 h-2" />
+            <div className="text-2xl font-bold text-orange-400">{formatGuaranies(totalDisponibleTarjetas)}</div>
+            <p className="text-xs font-semibold text-gray-400 mt-1">Límite restante para usar</p>
           </CardContent>
         </Card>
 

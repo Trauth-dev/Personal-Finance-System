@@ -636,9 +636,8 @@ export function IngresoForm() {
               id="monto"
               type="text"
               inputMode="numeric"
-              pattern="[0-9]*"
-              placeholder="15000000"
-              value={monto}
+              placeholder="15.000.000"
+              value={monto ? Number(monto).toLocaleString("es-PY") : ""}
               onChange={(e) => {
                 const value = e.target.value.replace(/[^0-9]/g, "")
                 setMonto(value)

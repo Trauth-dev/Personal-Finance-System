@@ -1070,14 +1070,11 @@ export function EgresoForm() {
                       const Icon = getDeudaIcon(deuda.tipo_deuda)
                       const isSelected = selectedDeuda === deuda.id
                       const esTarjeta = deuda.tipo_deuda === "tarjeta_credito"
-                      // Para tarjetas: Pendiente = Límite de Crédito - Monto Disponible (monto_total)
-                      // Para préstamos: Pendiente = Monto Total - Monto Pagado
-                          const pendiente = saldoPendienteDeuda(deuda)
-                      // Para tarjetas: Porcentaje = (Pagado / (Pendiente + Pagado)) * 100
-                      // Para préstamos: Porcentaje = (Pagado / Monto Total) * 100 (igual que en sección Deudas)
-                      const totalDeuda = esTarjeta ? pendiente : Number(deuda.monto_total)
-                      const porcentaje = esTarjeta 
-                        ? (totalDeuda > 0 ? (Number(deuda.monto_pagado) / (totalDeuda + Number(deuda.monto_pagado))) * 100 : 0)
+                      const pendiente = saldoPendienteDeuda(deuda)
+                      const limiteTarjeta = Number(deuda.limite_credito) || 0
+                      const disponible = esTarjeta && limiteTarjeta > 0 ? Math.max(0, limiteTarjeta - pendiente) : null
+                      const porcentaje = esTarjeta
+                        ? (limiteTarjeta > 0 ? Math.min(100, (pendiente / limiteTarjeta) * 100) : 0)
                         : (Number(deuda.monto_total) > 0 ? (Number(deuda.monto_pagado) / Number(deuda.monto_total)) * 100 : 0)
 
                       return (
@@ -1131,8 +1128,19 @@ export function EgresoForm() {
 
                                 <div className="mt-2.5">
                                   <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                                    <span>Pagado: {formatGuaranies(Number(deuda.monto_pagado))}</span>
-                                    <span>{porcentaje.toFixed(0)}%</span>
+                                    {esTarjeta ? (
+                                      <>
+                                        <span>
+                                          {disponible !== null ? `Disponible: ${formatGuaranies(disponible)}` : "Sin límite cargado"}
+                                        </span>
+                                        {disponible !== null && <span>{porcentaje.toFixed(0)}% usado</span>}
+                                      </>
+                                    ) : (
+                                      <>
+                                        <span>Pagado: {formatGuaranies(Number(deuda.monto_pagado))}</span>
+                                        <span>{porcentaje.toFixed(0)}%</span>
+                                      </>
+                                    )}
                                   </div>
                                   <div className="w-full h-1.5 bg-background/50 rounded-full overflow-hidden">
                                     <div
@@ -1252,13 +1260,21 @@ export function EgresoForm() {
                                   {esTarjeta ? "Límite de Crédito" : "Total deuda"}
                                 </p>
                                 <p className="text-sm font-semibold">
-                                  {formatGuaranies(esTarjeta ? limiteCredito : totalDeuda)}
+                                  {esTarjeta
+                                    ? limiteCredito > 0 ? formatGuaranies(limiteCredito) : "Sin límite"
+                                    : formatGuaranies(totalDeuda)}
                                 </p>
                               </div>
                               <div className="text-center p-2 rounded-lg bg-green-500/10">
-                                <p className="text-xs text-muted-foreground">Pagado</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {esTarjeta ? "Disponible" : "Pagado"}
+                                </p>
                                 <p className="text-sm font-semibold text-green-400">
-                                  {formatGuaranies(montoPagado)}
+                                  {esTarjeta
+                                    ? limiteCredito > 0
+                                      ? formatGuaranies(Math.max(0, limiteCredito - pendienteActual))
+                                      : "—"
+                                    : formatGuaranies(montoPagado)}
                                 </p>
                               </div>
                               <div className="text-center p-2 rounded-lg bg-red-500/10">

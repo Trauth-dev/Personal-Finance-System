@@ -1,4 +1,5 @@
 import { diasDelMes, diasEntre, desplazarMes, type DiaLocal } from "../fechas"
+import { saldoPendienteDeuda } from "@/lib/finanzas/saldos"
 
 /**
  * FUENTE PROVISIONAL — DEUDAS
@@ -15,23 +16,24 @@ export interface Deuda {
   nombre: string
   tipo: "prestamo" | "tarjeta_credito" | string
   estado: string | null
-  /** Préstamo: monto total adeudado. Tarjeta: crédito disponible. */
+  /** Préstamo: monto total adeudado. Tarjeta: legacy, no usar. */
   montoTotal: number
   montoPagado: number
   limiteCredito: number
+  /** Tarjeta: deuda real de la tarjeta. */
+  saldoUtilizado: number
   montoCuota: number
   diaPago: number | null
 }
 
-/**
- * Préstamo: lo que falta pagar (total - pagado).
- * Tarjeta: saldo utilizado (límite - disponible). El límite nunca es deuda.
- */
+/** Delegado en la lectura canónica de lib/finanzas/saldos. */
 export function saldoPendiente(deuda: Deuda): number {
-  if (deuda.tipo === "tarjeta_credito") {
-    return Math.max(0, deuda.limiteCredito - deuda.montoTotal)
-  }
-  return Math.max(0, deuda.montoTotal - deuda.montoPagado)
+  return saldoPendienteDeuda({
+    tipo_deuda: deuda.tipo,
+    monto_total: deuda.montoTotal,
+    monto_pagado: deuda.montoPagado,
+    saldo_utilizado: deuda.saldoUtilizado,
+  })
 }
 
 function estaActiva(deuda: Deuda): boolean {
