@@ -52,6 +52,7 @@ import {
   notificarCambioFinanciero,
 } from "@/lib/finanzas/operaciones"
 import {
+  AjusteTarjetaDialog,
   CronogramaCuotas,
   EstadoExtractoBadge,
   PagarDeudaDialog,
@@ -63,8 +64,8 @@ import {
   type Cuota,
   type Extracto,
 } from "./deuda-acciones"
-import { Archive, ArchiveRestore, Wallet } from "lucide-react"
-import { disponibleTarjeta, saldoPendienteDeuda } from "@/lib/finanzas/saldos"
+import { Archive, ArchiveRestore, SlidersHorizontal, Wallet } from "lucide-react"
+import { NATURALEZA_LABEL, disponibleTarjeta, saldoPendienteDeuda } from "@/lib/finanzas/saldos"
 import { generarFechasCuotas, type FrecuenciaPago } from "@/lib/finanzas/amortizacion"
 
 interface Deuda {
@@ -103,6 +104,15 @@ interface PagoDeuda {
   concepto: string | null
   origen_tipo?: string | null
   origen_id?: string | null
+}
+
+interface MovimientoTarjeta {
+  id: string
+  deuda_id: string
+  fecha: string
+  concepto: string | null
+  naturaleza: string
+  impacto_deuda: number
 }
 
 interface DeudasManagerProps {
@@ -537,6 +547,10 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
   const [cajas, setCajas] = useState<Caja[]>([])
   const [mostrarArchivadas, setMostrarArchivadas] = useState(false)
   const [deudaAPagar, setDeudaAPagar] = useState<Deuda | null>(null)
+  const [tarjetaAAjustar, setTarjetaAAjustar] = useState<Deuda | null>(null)
+  const [movimientos, setMovimientos] = useState<MovimientoTarjeta[]>([])
+  const [movimientoAEliminar, setMovimientoAEliminar] = useState<MovimientoTarjeta | null>(null)
+  const [eliminandoMovimiento, setEliminandoMovimiento] = useState(false)
   const [extractoMinimo, setExtractoMinimo] = useState<Extracto | null>(null)
 
   const fetchCiclos = async () => {
@@ -612,8 +626,33 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
 
       if (error) throw error
       setPagos(data || [])
+
+      const { data: movs, error: movError } = await supabase
+        .from("egresos")
+        .select("id, deuda_id, fecha, concepto, naturaleza, impacto_deuda")
+        .eq("perfil_id", perfilId)
+        .in("naturaleza", ["ajuste_saldo", "reembolso"])
+        .order("fecha", { ascending: false })
+      if (movError) throw movError
+      setMovimientos((movs as MovimientoTarjeta[]) || [])
     } catch (error) {
       console.error("Error fetching pagos:", error)
+    }
+  }
+
+  const eliminarMovimiento = async () => {
+    if (!movimientoAEliminar) return
+    setEliminandoMovimiento(true)
+    try {
+      await eliminarEgreso(movimientoAEliminar.id)
+      notificarCambioFinanciero()
+      toast.success("Movimiento eliminado y saldo restaurado")
+      setMovimientoAEliminar(null)
+      recargarTodo()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar el movimiento")
+    } finally {
+      setEliminandoMovimiento(false)
     }
   }
 
@@ -911,6 +950,7 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
       ? tieneLimite ? Math.min(100, (pendiente / limiteCredito) * 100) : 0
       : montoDisponible > 0 ? (montoPagado / montoDisponible) * 100 : 0
     const pagosDeuda = pagos.filter((p) => p.deuda_id === deuda.id)
+    const movimientosDeuda = movimientos.filter((m) => m.deuda_id === deuda.id)
     const Icon = deuda.tipo_deuda === "tarjeta_credito" ? CreditCard : Landmark
 
     const cuotaActual = deuda.cuotas_pagadas + 1
@@ -1137,6 +1177,17 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
                 Pagar
               </Button>
             )}
+            {esTarjetaDeuda && !deuda.archivada && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTarjetaAAjustar(deuda)}
+                className="gap-1 border-purple-500 text-purple-400 hover:bg-purple-500/10 hover:text-purple-300"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                Ajustar
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={() => setShowDetallesDeuda(showDetallesDeuda === deuda.id ? null : deuda.id)}
@@ -1180,6 +1231,48 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
           {showDetallesDeuda === deuda.id && (
             <div className="border-t border-green-500/30 pt-4 mt-2 space-y-3">
               <CronogramaCuotas cuotas={cronograma} />
+              {movimientosDeuda.length > 0 && (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal className="w-4 h-4 text-purple-400" />
+                    <span className="text-sm font-semibold text-purple-300">Ajustes y reembolsos</span>
+                  </div>
+                  <ul className="flex flex-col gap-2">
+                    {movimientosDeuda.map((m) => {
+                      const impacto = Number(m.impacto_deuda)
+                      return (
+                        <li
+                          key={m.id}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 p-3"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {NATURALEZA_LABEL[m.naturaleza] ?? m.naturaleza}
+                              {m.concepto ? ` · ${m.concepto}` : ""}
+                            </p>
+                            <p className="text-xs text-muted-foreground">{formatFecha(m.fecha)}</p>
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className={`text-sm font-semibold ${impacto > 0 ? "text-red-400" : "text-green-400"}`}>
+                              {impacto > 0 ? "+" : "−"}
+                              {formatGuaranies(Math.abs(impacto))}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => setMovimientoAEliminar(m)}
+                              className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                              aria-label="Eliminar movimiento"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <FileText className="w-4 h-4 text-green-400" />
                 <span className="text-sm font-semibold text-green-400">
@@ -1571,6 +1664,47 @@ export function DeudasManager({ userId, perfilId }: DeudasManagerProps) {
         onOpenChange={(open) => !open && setDeudaAPagar(null)}
         onPagado={recargarTodo}
       />
+
+      <AjusteTarjetaDialog
+        tarjeta={
+          tarjetaAAjustar
+            ? {
+                id: tarjetaAAjustar.id,
+                nombre: tarjetaAAjustar.nombre,
+                saldo_utilizado: saldoPendienteDeuda(tarjetaAAjustar),
+                limite_credito: tarjetaAAjustar.limite_credito,
+              }
+            : null
+        }
+        onOpenChange={(open) => !open && setTarjetaAAjustar(null)}
+        onGuardado={recargarTodo}
+      />
+
+      <Dialog open={!!movimientoAEliminar} onOpenChange={(open) => !open && setMovimientoAEliminar(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-500">
+              <AlertTriangle className="w-5 h-5" />
+              Eliminar movimiento
+            </DialogTitle>
+            <DialogDescription>
+              La deuda de la tarjeta vuelve al valor que tenía antes de este movimiento.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMovimientoAEliminar(null)} disabled={eliminandoMovimiento}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={eliminarMovimiento}
+              disabled={eliminandoMovimiento}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Eliminar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PagoMinimoDialog
         extracto={extractoMinimo}

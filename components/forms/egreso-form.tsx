@@ -46,6 +46,7 @@ import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
 import { NuevaDeudaDialog, DEUDAS_ACTUALIZADAS_EVENT, type DeudaCreada } from "@/components/forms/nueva-deuda-dialog"
 import { registrarGasto, registrarPagoDeuda, notificarCambioFinanciero, type OrigenTipo } from "@/lib/finanzas/operaciones"
+import { PagarDeudaDialog } from "@/components/personal/deuda-acciones"
 import { saldoPendienteDeuda, disponibleTarjeta } from "@/lib/finanzas/saldos"
 import { NuevaCajaAhorroDialog, type CajaAhorroCreada } from "@/components/personal/nueva-caja-ahorro-dialog"
 
@@ -161,6 +162,7 @@ export function EgresoForm() {
 
   const [esPagoDeudas, setEsPagoDeudas] = useState(false)
   const [deudas, setDeudas] = useState<Deuda[]>([])
+  const [tarjetaAPagar, setTarjetaAPagar] = useState<Deuda | null>(null)
   const [selectedDeuda, setSelectedDeuda] = useState<string>("")
   const [numeroCuota, setNumeroCuota] = useState("")
   // Nombre de la línea de presupuesto vinculada automáticamente a la deuda
@@ -1061,6 +1063,30 @@ export function EgresoForm() {
                   perfilId={perfilActual?.id}
                   onCreated={handleDeudaCreada}
                 />
+                {perfilActual?.id && (
+                  <PagarDeudaDialog
+                    deuda={
+                      tarjetaAPagar
+                        ? {
+                            id: tarjetaAPagar.id,
+                            nombre: tarjetaAPagar.nombre,
+                            tipo_deuda: tarjetaAPagar.tipo_deuda,
+                            saldo_pendiente: saldoPendienteDeuda(tarjetaAPagar),
+                          }
+                        : null
+                    }
+                    extracto={null}
+                    proximaCuota={null}
+                    cajas={cajasAhorro.map((c) => ({ id: c.id, nombre: c.nombre, monto_actual: Number(c.monto_actual) }))}
+                    perfilId={perfilActual.id}
+                    onOpenChange={(open) => !open && setTarjetaAPagar(null)}
+                    onPagado={() => {
+                      setTarjetaAPagar(null)
+                      loadDeudas()
+                      loadOrigenFondos()
+                    }}
+                  />
+                )}
               </div>
 
               {deudas.length > 0 ? (
@@ -1082,6 +1108,10 @@ export function EgresoForm() {
                           key={deuda.id}
                           type="button"
                           onClick={() => {
+                            if (esTarjeta) {
+                              setTarjetaAPagar(deuda)
+                              return
+                            }
                             setSelectedDeuda(deuda.id)
                             const proximaCuota = deuda.cuotas_pagadas + 1
                             // Monto sugerido: si el préstamo tiene cuotas de montos diferentes,
