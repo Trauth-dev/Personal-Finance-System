@@ -15,74 +15,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { RotateCcw, DatabaseBackup, AlertTriangle, Loader2, CheckCircle2, ShieldAlert } from "lucide-react"
 
-// ============================================================================
-// TABLAS PROTEGIDAS — NUNCA BORRAR
-// ----------------------------------------------------------------------------
-// Estas tablas contienen la ESTRUCTURA/predeterminados que el sistema siembra
-// automáticamente al crear un perfil (mediante triggers AFTER INSERT ON
-// perfiles). NO se regeneran en un reinicio, así que borrarlas dejaría el
-// perfil roto (sin categorías donde cargar). El reinicio JAMÁS debe tocarlas.
-//
-// Actúan como allowlist de seguridad: el borrado se valida contra esta lista
-// en tiempo de ejecución, de modo que aunque alguien agregue una de estas
-// tablas a TABLAS_A_REINICIAR por error, el guard la excluirá igual.
-const TABLAS_NUNCA_BORRAR = [
-  "tipos_categoria_egreso", // categorías de egreso predeterminadas
-  "categorias_egreso", // subcategorías de egreso predeterminadas
-  "categorias_ingresos", // Salario / Emprendimiento / Ingresos Extras
-  "categorias_egresos_vivienda", // estructura de gastos de vivienda
-  "categorias_egresos_varios", // estructura de gastos varios
-  "configuracion_usuario", // preferencias/configuración del usuario
-] as const
-
-// Tablas de DATOS/cargas que se vacían al reiniciar un perfil.
-// Se filtran por perfil_id (UUID único del perfil), por lo que el reinicio
-// afecta EXCLUSIVAMENTE al perfil activo (Personal, Empresarial o CRM) y
-// nunca a los otros perfiles del mismo usuario.
-//
-// IMPORTANTE: NO se incluyen las tablas de TABLAS_NUNCA_BORRAR (estructura de
-// categorías y configuración), porque son la base funcional del perfil y solo
-// se siembran al crearlo. Así la cuenta queda "en cero" pero operativa.
-const TABLAS_A_REINICIAR = [
-  // Presupuesto
-  "presupuesto_ingresos",
-  "presupuesto_categorias",
-  "presupuesto_mensual",
-  // Movimientos personales
-  "egresos",
-  "ingresos",
-  "calendario_pagos_deudas",
-  "deudas", // cascada: pagos_deuda
-  "tareas_meta",
-  "metas",
-  "patrimonio",
-  "cajas_ahorro", // cascada: movimientos_caja
-  "alertas_financieras",
-  "logros_financieros",
-  "registro_habitos",
-  "registro_habitos_recurrentes",
-  "habitos",
-  "habitos_recurrentes",
-  // Empresarial
-  "compras",
-  "ventas",
-  "inventario",
-  "materias_primas",
-  "proveedores",
-  // CRM
-  "crm_ventas", // cascada: crm_pagos_cuotas
-  "crm_seguimientos",
-  "crm_revisitas",
-  "crm_testimonios",
-  "crm_no_compras",
-  "crm_citas",
-  "crm_agendamientos",
-  "crm_interacciones",
-  "crm_oportunidades", // cascada: crm_pipeline_historial
-  "crm_prospectos",
-  "crm_configuracion_seguimiento",
-] as const
-
 type EstadoReinicio = "idle" | "procesando" | "exito" | "error"
 
 export function PerfilAcciones() {
@@ -125,20 +57,13 @@ export function PerfilAcciones() {
         return
       }
 
-      // Borrado secuencial por perfil_id. RLS garantiza que solo se toquen
-      // las filas del usuario autenticado.
-      for (const tabla of TABLAS_A_REINICIAR) {
-        // Guard de seguridad: nunca borrar las tablas de estructura/predeterminados.
-        if ((TABLAS_NUNCA_BORRAR as readonly string[]).includes(tabla)) {
-          console.log("[v0] Tabla protegida, se omite del reinicio:", tabla)
-          continue
-        }
-
-        const { error } = await supabase.from(tabla).delete().eq("perfil_id", perfilActual.id)
-        if (error) {
-          console.log("[v0] Error al reiniciar tabla:", tabla, error.message)
-          throw new Error(`No se pudo reiniciar "${tabla}": ${error.message}`)
-        }
+      // Reinicio atómico en la base (función reiniciar_perfil): borra todos los
+      // datos y categorías del perfil, vuelve a sembrar las categorías de fábrica
+      // y pone en cero el Plan Anti-Deudas, conservando moneda y país.
+      // Si cualquier paso falla, no se borra nada.
+      const { error } = await supabase.rpc("reiniciar_perfil", { p_perfil_id: perfilActual.id })
+      if (error) {
+        throw new Error(`No se pudo reiniciar el perfil: ${error.message}`)
       }
 
       setEstado("exito")
@@ -248,7 +173,8 @@ export function PerfilAcciones() {
                   Esta acción es{" "}
                   <span className="font-semibold text-red-300">permanente e irreversible</span>. Se borrarán todos los
                   datos cargados en este perfil: ingresos, egresos, presupuestos, deudas, metas, patrimonio, cajas de
-                  ahorro y demás registros. La cuenta volverá a cero.
+                  ahorro, el monto del Plan Anti-Deudas y todas las categorías personalizadas, de todos los meses. Las
+                  categorías vuelven a las de fábrica y se mantienen tu moneda y país.
                 </AlertDialogDescription>
               </AlertDialogHeader>
 
