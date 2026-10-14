@@ -19,8 +19,17 @@ function nuevaOperacionId(): string {
     : `${Date.now().toString(16).padStart(12, "0")}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`
 }
 
+export const MENSAJE_NOMBRE_DEUDA_DUPLICADO =
+  "Ya tenés una deuda con ese nombre en este perfil. Usá un nombre distinto (por ejemplo, agregá el banco o un número)."
+
+export function esNombreDeudaDuplicado(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null
+  return !!e && e.code === "23505" && !!e.message?.includes("deudas_perfil_nombre_unico")
+}
+
 function mensajeHumano(error: { message?: string; code?: string } | null): string {
   if (!error) return "Ocurrió un error inesperado."
+  if (esNombreDeudaDuplicado(error)) return MENSAJE_NOMBRE_DEUDA_DUPLICADO
   if (error.code === "P0001" || error.code === "42501" || error.code === "28000") return error.message || "Operación no permitida."
   if (error.message?.includes("Failed to fetch")) return "Sin conexión. Revisá tu internet e intentá de nuevo."
   return "No se pudo completar la operación. Intentá de nuevo."

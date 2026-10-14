@@ -10,7 +10,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { createClient } from "@/lib/supabase/client"
 import { formatGuaranies, getTodayDate } from "@/lib/utils"
-import { crearTarjeta, notificarCambioFinanciero } from "@/lib/finanzas/operaciones"
+import {
+  MENSAJE_NOMBRE_DEUDA_DUPLICADO,
+  OperacionFinancieraError,
+  crearTarjeta,
+  esNombreDeudaDuplicado,
+  notificarCambioFinanciero,
+} from "@/lib/finanzas/operaciones"
 
 // Evento global que se emite cada vez que se registra una deuda desde este
 // diálogo. Egresos y Presupuesto lo escuchan para mantenerse sincronizados.
@@ -158,7 +164,9 @@ export function NuevaDeudaDialog({ open, onOpenChange, perfilId, onCreated }: Nu
       await onCreated?.(data as DeudaCreada)
     } catch (error) {
       console.error("Error creating deuda:", error)
-      toast.error("Error al registrar la deuda")
+      if (esNombreDeudaDuplicado(error)) toast.error(MENSAJE_NOMBRE_DEUDA_DUPLICADO)
+      else if (error instanceof OperacionFinancieraError) toast.error(error.message)
+      else toast.error("Error al registrar la deuda")
     } finally {
       setGuardando(false)
     }
