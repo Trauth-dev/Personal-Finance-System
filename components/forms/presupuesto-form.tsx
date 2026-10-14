@@ -684,8 +684,10 @@ export function PresupuestoForm() {
   // Calcular totales
   const totalAsignado = Object.values(categoriasData).reduce((sum, cat) => sum + cat.total, 0)
   const totalIngresos = ingresosCategoria.reduce((sum, ing) => sum + ing.montoPresupuestado, 0)
-  const presupuestoNum = totalIngresos > 0 ? totalIngresos : Number(presupuesto) || 0
+  // El ingreso presupuestado sale SOLO de lo cargado en la sección Ingresos.
+  const presupuestoNum = totalIngresos
   const porcentajeTotal = presupuestoNum > 0 ? (totalAsignado / presupuestoNum) * 100 : 0
+  const egresoSuperaIngreso = totalAsignado > presupuestoNum
 
   // Manejar cambio de monto en ingreso
   const handleIngresoMontoChange = (ingresoId: string, newMonto: string) => {
@@ -899,8 +901,8 @@ export function PresupuestoForm() {
       return
     }
 
-    if (totalIngresos <= 0 && (!presupuesto || presupuestoNum <= 0)) {
-      setError("Ingresa al menos un monto en los ingresos.")
+    if (totalIngresos <= 0 && totalAsignado <= 0) {
+      setError("Ingresá al menos un monto en ingresos o en gastos.")
       return
     }
 
@@ -1220,8 +1222,9 @@ export function PresupuestoForm() {
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 border-b pb-2">
               <Label className="text-base sm:text-lg font-semibold">Gastos por categorias</Label>
-              <div className={`text-sm sm:text-lg font-bold ${Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : porcentajeTotal > 100 ? 'text-red-500' : 'text-cyan-500'}`}>
-                Total: {formatGuaranies(presupuestoNum)} ({porcentajeTotal.toFixed(1)}%)
+              <div className={`text-sm sm:text-lg font-bold ${egresoSuperaIngreso ? 'text-red-500' : presupuestoNum > 0 && Math.abs(porcentajeTotal - 100) < 0.01 ? 'text-green-500' : 'text-cyan-500'}`}>
+                Total: {formatGuaranies(totalAsignado)}
+                {presupuestoNum > 0 && ` (${porcentajeTotal.toFixed(1)}%)`}
               </div>
             </div>
 
@@ -1369,11 +1372,13 @@ export function PresupuestoForm() {
               </div>
             )}
 
-            {presupuestoNum > 0 && totalAsignado > presupuestoNum && (
-              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
-                <AlertCircle className="w-4 h-4 text-red-500" />
-                <p className="text-sm text-red-500">
-                  Has excedido el presupuesto por {formatGuaranies(totalAsignado - presupuestoNum)}
+            {egresoSuperaIngreso && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+                <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-red-500 text-pretty">
+                  {presupuestoNum > 0
+                    ? `Tu presupuesto de egresos (${formatGuaranies(totalAsignado)}) supera a tu ingreso presupuestado (${formatGuaranies(presupuestoNum)}) por ${formatGuaranies(totalAsignado - presupuestoNum)}. Podés guardarlo igual.`
+                    : `Tu presupuesto de egresos (${formatGuaranies(totalAsignado)}) supera a tu ingreso presupuestado (${formatGuaranies(0)}). Podés guardarlo igual, o cargar tus ingresos arriba.`}
                 </p>
               </div>
             )}
