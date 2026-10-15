@@ -291,7 +291,7 @@ export function PagarDeudaDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={guardando}>
             Cancelar
           </Button>
-          <Button onClick={pagar} disabled={guardando || montoNum <= 0} className="bg-green-600 hover:bg-green-700 text-white">
+          <Button onClick={pagar} disabled={guardando || montoNum <= 0 || saldoInsuficiente} className="bg-green-600 hover:bg-green-700 text-white">
             {guardando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
             Pagar {montoNum > 0 ? formatGuaranies(montoNum) : ""}
           </Button>

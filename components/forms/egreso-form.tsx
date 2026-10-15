@@ -46,7 +46,6 @@ import { usePlanTier } from "@/hooks/use-plan-tier"
 import { toast } from "sonner"
 import { NuevaDeudaDialog, DEUDAS_ACTUALIZADAS_EVENT, type DeudaCreada } from "@/components/forms/nueva-deuda-dialog"
 import { registrarGasto, registrarPagoDeuda, notificarCambioFinanciero, type OrigenTipo } from "@/lib/finanzas/operaciones"
-import { PagarDeudaDialog } from "@/components/personal/deuda-acciones"
 import { saldoPendienteDeuda, disponibleTarjeta } from "@/lib/finanzas/saldos"
 import { NuevaCajaAhorroDialog, type CajaAhorroCreada } from "@/components/personal/nueva-caja-ahorro-dialog"
 
@@ -162,7 +161,6 @@ export function EgresoForm() {
 
   const [esPagoDeudas, setEsPagoDeudas] = useState(false)
   const [deudas, setDeudas] = useState<Deuda[]>([])
-  const [tarjetaAPagar, setTarjetaAPagar] = useState<Deuda | null>(null)
   const [selectedDeuda, setSelectedDeuda] = useState<string>("")
   const [numeroCuota, setNumeroCuota] = useState("")
   // Nombre de la línea de presupuesto vinculada automáticamente a la deuda
@@ -180,9 +178,12 @@ export function EgresoForm() {
 
   // Caja por defecto al elegir "Caja de Ahorro": la última usada en un egreso
   // (si sigue activa) o, en su defecto, la primera caja habilitada.
-  const cajaPorDefectoId = (cajas: CajaAhorro[] = cajasAhorro) => {
-    if (ultimaCajaUsadaId && cajas.some((c) => c.id === ultimaCajaUsadaId)) return ultimaCajaUsadaId
-    return cajas[0]?.id ?? ""
+  // Nunca se preselecciona una caja sin saldo si hay otra que alcanza.
+  const cajaPorDefectoId = (cajas: CajaAhorro[] = cajasAhorro, montoRequerido = Number(monto) || 0) => {
+    const alcanza = (c: CajaAhorro) => Number(c.monto_actual) >= montoRequerido
+    const ultima = cajas.find((c) => c.id === ultimaCajaUsadaId)
+    if (ultima && alcanza(ultima)) return ultima.id
+    return (cajas.find(alcanza) ?? ultima ?? cajas[0])?.id ?? ""
   }
 
   const handleCajaCreada = (caja: CajaAhorroCreada) => {
@@ -326,6 +327,17 @@ export function EgresoForm() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTipo, cajasAhorro, tarjetasCredito])
+
+  // Si al cambiar el monto la caja elegida deja de alcanzar, se pasa a otra
+  // caja que sí tenga saldo (la caja sin saldo no se puede volver a elegir).
+  useEffect(() => {
+    if (origenTipo !== "caja_ahorro" || !origenId) return
+    const requerido = Number(monto) || 0
+    const actual = cajasAhorro.find((c) => c.id === origenId)
+    if (actual && Number(actual.monto_actual) >= requerido) return
+    const alternativa = cajasAhorro.find((c) => Number(c.monto_actual) >= requerido)
+    if (alternativa) setOrigenId(alternativa.id)
+  }, [monto, cajasAhorro, origenTipo, origenId])
 
   const loadTiposCategorias = async () => {
     if (!perfilActual?.id) return
@@ -1076,30 +1088,6 @@ export function EgresoForm() {
                   perfilId={perfilActual?.id}
                   onCreated={handleDeudaCreada}
                 />
-                {perfilActual?.id && (
-                  <PagarDeudaDialog
-                    deuda={
-                      tarjetaAPagar
-                        ? {
-                            id: tarjetaAPagar.id,
-                            nombre: tarjetaAPagar.nombre,
-                            tipo_deuda: tarjetaAPagar.tipo_deuda,
-                            saldo_pendiente: saldoPendienteDeuda(tarjetaAPagar),
-                          }
-                        : null
-                    }
-                    extracto={null}
-                    proximaCuota={null}
-                    cajas={cajasAhorro.map((c) => ({ id: c.id, nombre: c.nombre, monto_actual: Number(c.monto_actual) }))}
-                    perfilId={perfilActual.id}
-                    onOpenChange={(open) => !open && setTarjetaAPagar(null)}
-                    onPagado={() => {
-                      setTarjetaAPagar(null)
-                      loadDeudas()
-                      loadOrigenFondos()
-                    }}
-                  />
-                )}
               </div>
 
               {deudas.length > 0 ? (
@@ -1121,11 +1109,13 @@ export function EgresoForm() {
                           key={deuda.id}
                           type="button"
                           onClick={() => {
+                            setSelectedDeuda(deuda.id)
                             if (esTarjeta) {
-                              setTarjetaAPagar(deuda)
+                              setNumeroCuota("")
+                              if (pendiente > 0) setMonto(String(pendiente))
+                              preseleccionarCategoriaPorDeuda(deuda.nombre)
                               return
                             }
-                            setSelectedDeuda(deuda.id)
                             const proximaCuota = deuda.cuotas_pagadas + 1
                             // Monto sugerido: si el préstamo tiene cuotas de montos diferentes,
                             // se toma el monto de la próxima cuota pendiente; si no, el monto fijo.
@@ -1253,6 +1243,18 @@ export function EgresoForm() {
                           <Label className="text-sm text-muted-foreground">Monto sugerido</Label>
                           {(() => {
                             // Monto sugerido según la cuota seleccionada para cuotas variables
+                            if (selectedDeudaData.tipo_deuda === "tarjeta_credito") {
+                              return (
+                                <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+                                  <p className="text-xl font-bold text-green-400">
+                                    {formatGuaranies(saldoPendienteDeuda(selectedDeudaData))}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    saldo total utilizado · podés cambiar el monto abajo
+                                  </p>
+                                </div>
+                              )
+                            }
                             const n = Number.parseInt(numeroCuota)
                             const montoSugerido =
                               selectedDeudaData.montos_cuotas && selectedDeudaData.montos_cuotas.length > 0 && n
@@ -1350,31 +1352,14 @@ export function EgresoForm() {
             </div>
           )}
 
-          {selectedTipo && (!esPagoDeudas || selectedDeuda) && (
+          {/* En Pago de Deudas la línea del presupuesto se imputa automáticamente
+              según la deuda elegida, así que no se pide la descripción. */}
+          {selectedTipo && !esPagoDeudas && (
             <div className="space-y-3 scroll-mt-20 sm:scroll-mt-24" ref={descripcionRef}>
-              <Label>{esPagoDeudas ? "¿A qué línea del presupuesto corresponde?" : "Descripción"}</Label>
+              <Label>Descripción</Label>
 
-              {/* Vínculo automático: al elegir la deuda ya sabemos a qué línea de
-                  presupuesto corresponde, así que lo confirmamos sin pedirlo de
-                  nuevo. El usuario puede cambiarlo si lo necesita. */}
-              {esPagoDeudas ? (
-                <div className="flex items-start gap-2 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
-                  <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <p className="text-sm text-muted-foreground text-pretty">
-                    Se registrará en la línea{" "}
-                    <span className="font-semibold text-emerald-300">{selectedDeudaData?.nombre}</span> del mes en
-                    que realizás el pago.
-                  </p>
-                </div>
-              ) : (
+              {(
                 <>
-                  {esPagoDeudas && (
-                    <p className="text-xs text-muted-foreground">
-                      Elegí la tarjeta o deuda del presupuesto a la que aplica este pago (ej: TC Atlas). Así el gasto se
-                      refleja en la subcategoría correcta de Presupuesto vs Realidad.
-                    </p>
-                  )}
-
                   {categorias.length > 0 ? (
                 <div className="grid grid-cols-2 gap-2">
                   {categorias.map((cat) => {
