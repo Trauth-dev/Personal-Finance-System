@@ -713,6 +713,10 @@ export function EgresoForm() {
   const preseleccionarCategoriaPorDeuda = (deudaNombre: string) => {
     const target = (deudaNombre || "").trim().toLowerCase()
     setOverrideCategoriaManual(false)
+    if (origenTipo === "tarjeta_credito") {
+      setOrigenTipo("")
+      setOrigenId("")
+    }
     if (!target) {
       setSelectedCategoria("")
       setCategoriaAutoVinculada("")
@@ -759,8 +763,12 @@ export function EgresoForm() {
         throw new Error("Usuario no autenticado")
       }
 
-      if (!modoNegocio && (!selectedTipo || !selectedCategoria)) {
+      if (!modoNegocio && (!selectedTipo || (!esPagoDeudas && !selectedCategoria))) {
         throw new Error("Debes seleccionar un tipo de categoría y una descripción")
+      }
+
+      if (cajaSinSaldo) {
+        throw new Error("La caja seleccionada no tiene saldo suficiente para este pago. Elegí otra caja.")
       }
 
       if (egresoFeatures.seguimientoDeudas && esPagoDeudas && !selectedDeuda) {
@@ -864,6 +872,11 @@ export function EgresoForm() {
 
   const selectedTipoData = tiposCategorias.find((t) => t.id === selectedTipo)
   const selectedDeudaData = deudas.find((d) => d.id === selectedDeuda)
+  const cajaSeleccionada =
+    origenTipo === "caja_ahorro" ? cajasAhorro.find((c) => c.id === origenId) : undefined
+  const cajaSinSaldo = Boolean(
+    cajaSeleccionada && monto && Number(cajaSeleccionada.monto_actual) < Number(monto),
+  )
 
   // ======================================================================
   // Selector de "Mes del egreso"
@@ -1223,22 +1236,13 @@ export function EgresoForm() {
                               min="1"
                               max={selectedDeudaData.cuotas_totales}
                               value={numeroCuota}
-                              onChange={(e) => {
-                                const val = e.target.value
-                                setNumeroCuota(val)
-                                // Al cambiar el número de cuota, actualizar el monto sugerido
-                                // según el monto correspondiente a esa cuota (cuotas variables).
-                                const n = Number.parseInt(val)
-                                if (n && selectedDeudaData.montos_cuotas && selectedDeudaData.montos_cuotas.length > 0) {
-                                  const m = selectedDeudaData.montos_cuotas[n - 1]
-                                  if (m) setMonto(String(m))
-                                } else if (n && selectedDeudaData.monto_cuota) {
-                                  setMonto(String(selectedDeudaData.monto_cuota))
-                                }
-                              }}
-                              placeholder={`1 - ${selectedDeudaData.cuotas_totales}`}
-                              className="bg-background/50 border-border/50"
+                              readOnly
+                              aria-describedby="numeroCuotaAyuda"
+                              className="bg-background/50 border-border/50 cursor-default"
                             />
+                            <p id="numeroCuotaAyuda" className="sr-only">
+                              Las cuotas se pagan en orden; siempre corresponde la próxima pendiente.
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               Pagadas: {selectedDeudaData.cuotas_pagadas} de {selectedDeudaData.cuotas_totales}
                             </p>
@@ -1353,24 +1357,14 @@ export function EgresoForm() {
               {/* Vínculo automático: al elegir la deuda ya sabemos a qué línea de
                   presupuesto corresponde, así que lo confirmamos sin pedirlo de
                   nuevo. El usuario puede cambiarlo si lo necesita. */}
-              {esPagoDeudas && categoriaAutoVinculada && !overrideCategoriaManual ? (
-                <div className="flex items-center justify-between gap-3 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <p className="text-sm text-muted-foreground truncate">
-                      Se aplicará a la línea{" "}
-                      <span className="font-semibold text-emerald-300">{categoriaAutoVinculada}</span>
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs text-emerald-300 hover:text-emerald-200 shrink-0"
-                    onClick={() => setOverrideCategoriaManual(true)}
-                  >
-                    Cambiar
-                  </Button>
+              {esPagoDeudas ? (
+                <div className="flex items-start gap-2 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10">
+                  <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <p className="text-sm text-muted-foreground text-pretty">
+                    Se registrará en la línea{" "}
+                    <span className="font-semibold text-emerald-300">{selectedDeudaData?.nombre}</span> del mes en
+                    que realizás el pago.
+                  </p>
                 </div>
               ) : (
                 <>
@@ -1489,7 +1483,7 @@ export function EgresoForm() {
               </div>
 
               {/* Tipo de origen */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className={`grid gap-2 ${esPagoDeudas ? "grid-cols-2" : "grid-cols-3"}`}>
                 <button
                   type="button"
                   onClick={() => { setOrigenTipo(""); setOrigenId("") }}
@@ -1519,18 +1513,20 @@ export function EgresoForm() {
                   <Building2 className="w-5 h-5 mx-auto mb-1 text-blue-400" />
                   <span className="font-medium">Caja de Ahorro</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { setOrigenTipo("tarjeta_credito"); setOrigenId("") }}
-                  className={`p-3 rounded-lg border-2 transition-all text-center text-xs ${
-                    origenTipo === "tarjeta_credito"
-                      ? "border-purple-400 bg-purple-500/20"
-                      : "border-border/30 hover:border-border/60"
-                  }`}
-                >
-                  <CreditCard className="w-5 h-5 mx-auto mb-1 text-purple-400" />
-                  <span className="font-medium">Tarjeta Crédito</span>
-                </button>
+                {!esPagoDeudas && (
+                  <button
+                    type="button"
+                    onClick={() => { setOrigenTipo("tarjeta_credito"); setOrigenId("") }}
+                    className={`p-3 rounded-lg border-2 transition-all text-center text-xs ${
+                      origenTipo === "tarjeta_credito"
+                        ? "border-purple-400 bg-purple-500/20"
+                        : "border-border/30 hover:border-border/60"
+                    }`}
+                  >
+                    <CreditCard className="w-5 h-5 mx-auto mb-1 text-purple-400" />
+                    <span className="font-medium">Tarjeta Crédito</span>
+                  </button>
+                )}
               </div>
 
               {/* Seleccionar caja de ahorro */}
@@ -1545,6 +1541,8 @@ export function EgresoForm() {
                           <button
                             key={caja.id}
                             type="button"
+                            disabled={Boolean(saldoInsuficiente)}
+                            aria-disabled={Boolean(saldoInsuficiente)}
                             onClick={() => setOrigenId(caja.id)}
                             className={`p-3 rounded-lg border-2 transition-all text-left flex items-center justify-between ${
                               isSelected
@@ -1666,7 +1664,16 @@ export function EgresoForm() {
               )}
 
               {/* Resumen del origen seleccionado */}
-              {origenTipo && origenId && monto && (
+              {cajaSinSaldo && (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+                  <AlertCircle className="w-4 h-4 text-destructive shrink-0" />
+                  <p className="text-sm text-destructive">
+                    {cajaSeleccionada?.nombre} no tiene saldo suficiente. Elegí otra caja o &quot;Sin especificar&quot;.
+                  </p>
+                </div>
+              )}
+
+              {origenTipo && origenId && monto && !cajaSinSaldo && (
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                   <ArrowRight className="w-4 h-4 text-emerald-400" />
                   <p className="text-sm text-emerald-400">
@@ -1748,7 +1755,7 @@ export function EgresoForm() {
           <Button
             type="submit"
             className="w-full"
-            disabled={Boolean(isLoading || (!modoNegocio && (!selectedTipo || !selectedCategoria)) || !monto || (egresoFeatures.seguimientoDeudas && esPagoDeudas && !selectedDeuda) || (origenTipo && !origenId))}
+            disabled={Boolean(isLoading || cajaSinSaldo || (!modoNegocio && (!selectedTipo || (!esPagoDeudas && !selectedCategoria))) || !monto || (egresoFeatures.seguimientoDeudas && esPagoDeudas && !selectedDeuda) || (origenTipo && !origenId))}
             style={{
               backgroundColor: modoNegocio ? COLOR_CATEGORIA_NEGOCIO : selectedTipoData?.color || undefined,
             }}
