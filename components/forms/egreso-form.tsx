@@ -871,6 +871,32 @@ export function EgresoForm() {
     return tipo === "tarjeta_credito" ? CreditCard : Landmark
   }
 
+  // Debe declararse antes del return anticipado de "Cargando perfil" para
+  // mantener estable el orden de hooks entre renders.
+  const mesEgreso = (fecha || getTodayDate()).slice(0, 7) // "YYYY-MM"
+
+  const mesesDisponibles = useMemo(() => {
+    const hoy = getTodayDate()
+    const y0 = Number(hoy.slice(0, 4))
+    const m0 = Number(hoy.slice(5, 7)) // 1-12
+    const mapa = new Map<string, string>()
+    // Mes actual + 11 meses anteriores (12 en total)
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(y0, m0 - 1 - i, 1)
+      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+      mapa.set(value, `${MESES[d.getMonth()]} ${d.getFullYear()}`)
+    }
+    // Garantizar que el mes seleccionado actualmente (p. ej. elegido con el
+    // campo Fecha) siempre exista como opción, aunque quede fuera del rango.
+    if (!mapa.has(mesEgreso)) {
+      const [yy, mm] = mesEgreso.split("-").map(Number)
+      if (yy && mm) mapa.set(mesEgreso, `${MESES[mm - 1]} ${yy}`)
+    }
+    return Array.from(mapa.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => (a.value < b.value ? 1 : -1)) // más reciente primero
+  }, [mesEgreso])
+
   if (!perfilActual) {
     return (
       <Card className="max-w-2xl mx-auto glass-effect border-border/50">
@@ -898,30 +924,6 @@ export function EgresoForm() {
   // vía loadCategorias, mostrando exactamente las del presupuesto de ese mes.
   // Por defecto es el mes actual; permite registrar pagos de meses anteriores.
   // ======================================================================
-  const mesEgreso = (fecha || getTodayDate()).slice(0, 7) // "YYYY-MM"
-
-  const mesesDisponibles = useMemo(() => {
-    const hoy = getTodayDate()
-    const y0 = Number(hoy.slice(0, 4))
-    const m0 = Number(hoy.slice(5, 7)) // 1-12
-    const mapa = new Map<string, string>()
-    // Mes actual + 11 meses anteriores (12 en total)
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(y0, m0 - 1 - i, 1)
-      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-      mapa.set(value, `${MESES[d.getMonth()]} ${d.getFullYear()}`)
-    }
-    // Garantizar que el mes seleccionado actualmente (p. ej. elegido con el
-    // campo Fecha) siempre exista como opción, aunque quede fuera del rango.
-    if (!mapa.has(mesEgreso)) {
-      const [yy, mm] = mesEgreso.split("-").map(Number)
-      if (yy && mm) mapa.set(mesEgreso, `${MESES[mm - 1]} ${yy}`)
-    }
-    return Array.from(mapa.entries())
-      .map(([value, label]) => ({ value, label }))
-      .sort((a, b) => (a.value < b.value ? 1 : -1)) // más reciente primero
-  }, [mesEgreso])
-
   const handleMesEgresoChange = (value: string) => {
     const hoy = getTodayDate()
     // Si eligen el mes actual, usar la fecha de hoy.
