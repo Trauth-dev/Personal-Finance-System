@@ -23,22 +23,45 @@ export interface Egreso {
   deudaId: string | null
   origenTipo: string | null
   origenId: string | null
+  naturaleza: string | null
   /** Nombre del tipo de categoría (Supermercado, Salud, ...). */
   categoria: string | null
   subcategoria: string | null
 }
 
-/**
- * Un egreso asociado a una deuda es un pago de deuda: cancela una obligación
- * (la compra con tarjeta ya se contó como gasto cuando ocurrió, y el capital de
- * un préstamo no es consumo). Por eso NO suma en Gastos del Mes.
- *
- * Provisional hasta el nuevo módulo Deudas: hoy los pagos de préstamos no
- * separan capital de intereses, así que el pago completo se excluye del gasto
- * y se informa aparte como "pagos de deudas".
- */
-export function esPagoDeDeuda(egreso: Egreso): boolean {
+export const CATEGORIA_PAGO_DEUDAS = "Pago Deudas"
+
+const NATURALEZAS_TECNICAS = new Set(["ajuste", "ajuste_saldo", "reembolso", "transferencia"])
+
+/** Ajustes de saldo, reembolsos y transferencias no son salida de dinero. */
+export function esAjusteTecnico(egreso: Pick<Egreso, "naturaleza">): boolean {
+  return !!egreso.naturaleza && NATURALEZAS_TECNICAS.has(egreso.naturaleza)
+}
+
+export function esPagoDeDeuda(egreso: Pick<Egreso, "naturaleza" | "deudaId">): boolean {
+  if (egreso.naturaleza) return egreso.naturaleza === "pago_deuda"
   return egreso.deudaId !== null
+}
+
+/**
+ * Criterio único de flujo de caja: un egreso es dinero que salió.
+ * - Pagos de préstamos y de tarjetas SÍ son egreso (salió dinero de tu bolsillo).
+ * - Una compra hecha CON tarjeta todavía no es salida de dinero: aumenta la deuda
+ *   de la tarjeta y se convierte en egreso cuando pagás la tarjeta. Contarla en
+ *   ambos momentos duplicaría el gasto.
+ * - Ajustes técnicos nunca suman.
+ */
+export function cuentaComoEgreso(
+  egreso: Pick<Egreso, "naturaleza" | "deudaId" | "origenTipo" | "monto">,
+): boolean {
+  if (egreso.monto <= 0 || esAjusteTecnico(egreso)) return false
+  if (!esPagoDeDeuda(egreso) && egreso.origenTipo === "tarjeta_credito") return false
+  return true
+}
+
+/** Los pagos registrados desde Deudas sin tipo de categoría se ubican en "Pago Deudas". */
+export function categoriaDeEgreso(egreso: Egreso): string {
+  return egreso.categoria || (esPagoDeDeuda(egreso) ? CATEGORIA_PAGO_DEUDAS : SIN_CATEGORIA)
 }
 
 export function ingresoEnCuenta(ingreso: Ingreso, cajaId: string | null): boolean {
@@ -64,7 +87,7 @@ export interface ResumenPeriodo {
 }
 
 export function gastosDelPeriodo(egresos: Egreso[], rango: RangoFechas, cajaId: string | null): Egreso[] {
-  return egresos.filter((e) => !esPagoDeDeuda(e) && enRango(e.fecha, rango) && egresoEnCuenta(e, cajaId))
+  return egresos.filter((e) => cuentaComoEgreso(e) && enRango(e.fecha, rango) && egresoEnCuenta(e, cajaId))
 }
 
 export function resumirPeriodo(
@@ -86,13 +109,10 @@ export function resumirPeriodo(
   let pagosDeuda = 0
   let cantidadGastos = 0
   for (const egreso of egresos) {
-    if (!enRango(egreso.fecha, rango) || !egresoEnCuenta(egreso, cajaId)) continue
-    if (esPagoDeDeuda(egreso)) {
-      pagosDeuda += egreso.monto
-    } else {
-      gastos += egreso.monto
-      cantidadGastos++
-    }
+    if (!cuentaComoEgreso(egreso) || !enRango(egreso.fecha, rango) || !egresoEnCuenta(egreso, cajaId)) continue
+    gastos += egreso.monto
+    cantidadGastos++
+    if (esPagoDeDeuda(egreso)) pagosDeuda += egreso.monto
   }
 
   return {
@@ -128,7 +148,7 @@ export function distribuirGastos(gastos: Egreso[]): CategoriaGasto[] {
   const total = gastos.reduce((s, g) => s + g.monto, 0)
   const porCategoria = new Map<string, number>()
   for (const gasto of gastos) {
-    const nombre = gasto.categoria || SIN_CATEGORIA
+    const nombre = categoriaDeEgreso(gasto)
     porCategoria.set(nombre, (porCategoria.get(nombre) ?? 0) + gasto.monto)
   }
   return Array.from(porCategoria, ([categoria, monto]) => ({

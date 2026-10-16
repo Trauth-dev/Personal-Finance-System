@@ -1,5 +1,5 @@
 import { normalizarNombre } from "@/lib/utils"
-import { esPagoDeDeuda, SIN_CATEGORIA, type Egreso } from "../reglas"
+import { categoriaDeEgreso, cuentaComoEgreso, type Egreso } from "../reglas"
 
 /**
  * FUENTE PROVISIONAL — PRESUPUESTO
@@ -35,9 +35,9 @@ export interface MontoPresupuestado {
 }
 
 /**
- * Consumo del presupuesto: todos los gastos del mes, más los pagos de deudas
- * solo cuando el usuario presupuestó una línea para ellos (ej. "Pago Deudas").
- * Así un pago planificado no aparece como presupuesto "sin usar".
+ * Consumo del presupuesto: el mismo criterio que Egresos del Mes (cuentaComoEgreso),
+ * así el total utilizado del presupuesto siempre coincide con los egresos reales.
+ * Los pagos de préstamos y tarjetas consumen la línea "Pago Deudas".
  */
 export function calcularPresupuesto(
   montos: MontoPresupuestado[],
@@ -60,8 +60,8 @@ export function calcularPresupuesto(
   const utilizadoPorTipo = new Map<string, number>()
   let utilizado = 0
   for (const egreso of egresosDelMes) {
-    const tipo = egreso.categoria || SIN_CATEGORIA
-    if (esPagoDeDeuda(egreso) && !presupuestado.has(tipo)) continue
+    if (!cuentaComoEgreso(egreso)) continue
+    const tipo = categoriaDeEgreso(egreso)
     utilizado += egreso.monto
     utilizadoPorTipo.set(tipo, (utilizadoPorTipo.get(tipo) ?? 0) + egreso.monto)
   }
