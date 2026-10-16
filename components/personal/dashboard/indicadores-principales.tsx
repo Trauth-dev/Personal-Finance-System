@@ -49,7 +49,7 @@ export function IndicadoresPrincipales({ data }: { data: PersonalDashboardData }
           detalle={
             resumen &&
             (resumen.pagosDeuda > 0
-              ? `No incluye ${dinero(resumen.pagosDeuda)} en pagos de deudas`
+              ? `Incluye ${dinero(resumen.pagosDeuda)} en pagos de deudas`
               : resumen.cantidadGastos === 0
                 ? "Sin gastos registrados"
                 : `${resumen.cantidadGastos} ${resumen.cantidadGastos === 1 ? "movimiento" : "movimientos"}`)

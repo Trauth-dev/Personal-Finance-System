@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { formatGuaranies, getParaguayDate } from "@/lib/utils"
 import { getNombreCategoriaDisplay, getColorCategoria } from "@/lib/categorias-egreso"
+import { cuentaComoEgreso } from "@/lib/dashboard/reglas"
 import {
   Info,
   Wallet,
@@ -156,17 +157,24 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
 
     const { data: egresosRaw } = await supabase
       .from("egresos")
-      .select("id, monto, fecha, concepto, naturaleza, tipo_categoria_id, tipo_categoria:tipos_categoria_egreso(nombre), categoria_egreso:categorias_egreso(nombre), deuda:deudas(nombre)")
+      .select("id, monto, fecha, concepto, naturaleza, deuda_id, origen_tipo, tipo_categoria_id, tipo_categoria:tipos_categoria_egreso(nombre), categoria_egreso:categorias_egreso(nombre), deuda:deudas(nombre)")
       .eq("perfil_id", perfilId)
       .gte("fecha", primerDia)
       .lte("fecha", ultimoDia)
       .order("fecha", { ascending: false })
 
-    // Los ajustes de saldo de tarjeta no son salida de dinero. Los pagos de deuda
-    // registrados desde el modal no traen categoría: se ubican en "Pago Deudas",
+    // Mismo criterio de salida de dinero que el dashboard (cuentaComoEgreso). Los pagos
+    // de deuda registrados desde el modal no traen categoría: se ubican en "Pago Deudas",
     // en la línea de la propia deuda/tarjeta que se presupuesta por nombre.
     const egresos = (egresosRaw || [])
-      .filter((e: any) => e.naturaleza !== "ajuste")
+      .filter((e: any) =>
+        cuentaComoEgreso({
+          monto: Number(e.monto) || 0,
+          deudaId: e.deuda_id ?? null,
+          origenTipo: e.origen_tipo ?? null,
+          naturaleza: e.naturaleza ?? null,
+        }),
+      )
       .map((e: any) =>
         e.naturaleza === "pago_deuda" && !e.tipo_categoria?.nombre
           ? {

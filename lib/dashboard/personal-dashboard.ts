@@ -15,14 +15,14 @@ import {
   type DiaLocal,
 } from "./fechas"
 import {
+  cuentaComoEgreso,
   distribuirGastos,
   enRango,
-  esPagoDeDeuda,
   gastosDelPeriodo,
   margenDelMes,
   principalesGastos,
   resumirPeriodo,
-  SIN_CATEGORIA,
+  categoriaDeEgreso,
   variacionPorcentual,
   type CategoriaGasto,
   type Egreso,
@@ -135,7 +135,7 @@ const variacionSobreBase = (actual: number, anterior: number): number | null =>
 function agruparPorCategoria(gastos: Egreso[]): GrupoCategoria[] {
   const grupos = new Map<string, GrupoCategoria>()
   for (const gasto of gastos) {
-    const categoria = gasto.categoria || SIN_CATEGORIA
+    const categoria = categoriaDeEgreso(gasto)
     const grupo = grupos.get(categoria) ?? { categoria, total: 0, gastos: [] }
     grupo.total += gasto.monto
     grupo.gastos.push(gasto)
@@ -208,7 +208,7 @@ export async function getPersonalDashboardData({
         supabase
           .from("egresos")
           .select(
-            "id, monto, fecha, concepto, deuda_id, origen_tipo, origen_id, tipos_categoria_egreso(nombre), categorias_egreso(nombre)",
+            "id, monto, fecha, concepto, deuda_id, origen_tipo, origen_id, naturaleza, tipos_categoria_egreso(nombre), categorias_egreso(nombre)",
           )
           .eq("perfil_id", perfilId)
           .gte("fecha", ventana.start)
@@ -258,7 +258,7 @@ export async function getPersonalDashboardData({
       leerTodo((desde, hasta) =>
         supabase
           .from("egresos")
-          .select("id, monto, deuda_id")
+          .select("id, monto, deuda_id, origen_tipo, naturaleza")
           .eq("perfil_id", perfilId)
           .order("id")
           .range(desde, hasta),
@@ -308,6 +308,7 @@ export async function getPersonalDashboardData({
     deudaId: e.deuda_id,
     origenTipo: e.origen_tipo,
     origenId: e.origen_id,
+    naturaleza: e.naturaleza ?? null,
     categoria: unico(e.tipos_categoria_egreso as { nombre: string } | { nombre: string }[] | null)?.nombre ?? null,
     subcategoria: unico(e.categorias_egreso as { nombre: string } | { nombre: string }[] | null)?.nombre ?? null,
   }))
@@ -348,11 +349,20 @@ export async function getPersonalDashboardData({
     })
   }
 
-  // Patrimonio = ingresos - gastos reales. Los pagos de deuda no restan: la compra ya se contó como gasto.
+  // Patrimonio = ingresos - egresos reales (mismo criterio que Egresos del Mes, incluye pagos de deudas).
   let historico: Seccion<Historico> = fallo
   if (!ingresosHistRes.error && !egresosHistRes.error) {
     const totalIngresos = ingresosHistRes.data.reduce((s, i) => s + aNumero(i.monto), 0)
-    const totalGastos = egresosHistRes.data.reduce((s, e) => (e.deuda_id ? s : s + aNumero(e.monto)), 0)
+    const totalGastos = egresosHistRes.data.reduce((s, e) => {
+      const monto = aNumero(e.monto)
+      const real = cuentaComoEgreso({
+        monto,
+        deudaId: e.deuda_id,
+        origenTipo: e.origen_tipo,
+        naturaleza: e.naturaleza ?? null,
+      })
+      return real ? s + monto : s
+    }, 0)
     historico = ok({ ingresos: totalIngresos, gastos: totalGastos, patrimonio: totalIngresos - totalGastos })
   }
 
