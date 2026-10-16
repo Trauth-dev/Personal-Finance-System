@@ -137,6 +137,8 @@ export default function PersonalHistorialPage() {
       .eq("perfil_id", perfilActual.id)
       .order("fecha", { ascending: false })
 
+    // Los ajustes técnicos (p. ej. "Saldo inicial de la tarjeta", monto 0) solo
+    // registran el saldo de apertura de una tarjeta: no son cargas del usuario.
     const { data: egresosData } = await supabase
       .from("egresos")
       .select(`
@@ -145,6 +147,7 @@ export default function PersonalHistorialPage() {
         categorias_egreso (nombre)
       `)
       .eq("perfil_id", perfilActual.id)
+      .or("naturaleza.is.null,naturaleza.neq.ajuste")
       .order("fecha", { ascending: false })
 
     setIngresos(ingresosData || [])
