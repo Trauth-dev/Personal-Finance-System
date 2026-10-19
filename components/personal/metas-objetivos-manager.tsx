@@ -17,8 +17,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { 
   Target, Plus, CheckCircle2, Circle, Calendar, TrendingUp, 
   Award, Flame, ChevronLeft, ChevronRight, Trash2, Edit, 
-  ListTodo, BarChart3, Clock, Star, Zap, Trophy, Repeat, RefreshCw
+  ListTodo, BarChart3, Clock, Star, Zap, Trophy, Repeat, RefreshCw,
+  Hourglass, CalendarPlus, Loader2
 } from "lucide-react"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu"
 
 interface Meta {
   id: string
@@ -108,6 +113,50 @@ const getParaguayDateString = () => {
   return `${y}-${m}-${day}`
 }
 
+// Las tareas diarias se conservan hoy + 5 días; luego se eliminan solas salvo que el usuario extienda el plazo.
+const DIAS_RETENCION_TAREAS = 5
+const OPCIONES_EXTENSION_DIAS = [7, 15, 30]
+
+type TareaDiaria = {
+  id: string
+  titulo: string
+  completada: boolean
+  prioridad: string
+  fecha_limite: string
+  conservar_hasta?: string | null
+}
+
+const sumarDiasAFecha = (fechaStr: string, dias: number) => {
+  const d = new Date(`${fechaStr}T12:00:00`)
+  d.setDate(d.getDate() + dias)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+const diasEntreFechas = (desde: string, hasta: string) =>
+  Math.round((new Date(`${hasta}T12:00:00`).getTime() - new Date(`${desde}T12:00:00`).getTime()) / 86_400_000)
+
+const getExpiracionTarea = (tarea: TareaDiaria) => {
+  const plazoEstandar = sumarDiasAFecha(tarea.fecha_limite, DIAS_RETENCION_TAREAS)
+  return tarea.conservar_hasta && tarea.conservar_hasta > plazoEstandar ? tarea.conservar_hasta : plazoEstandar
+}
+
+const formatFechaCorta = (fechaStr: string) =>
+  new Date(`${fechaStr}T12:00:00`).toLocaleDateString("es-ES", { day: "numeric", month: "short" })
+
+const describirExpiracion = (expiracion: string, hoy: string) => {
+  const dias = diasEntreFechas(hoy, expiracion)
+  if (dias <= 0) return { texto: "Se elimina hoy a medianoche", tono: "urgente" as const }
+  if (dias === 1) return { texto: "Se elimina mañana", tono: "urgente" as const }
+  if (dias <= 2) return { texto: `Se elimina en ${dias} días`, tono: "aviso" as const }
+  return { texto: `Se elimina en ${dias} días`, tono: "normal" as const }
+}
+
+const TONO_EXPIRACION_CLASES = {
+  urgente: "text-red-600 bg-red-500/10 border-red-500/30",
+  aviso: "text-amber-600 bg-amber-500/10 border-amber-500/30",
+  normal: "text-muted-foreground bg-muted/40 border-border",
+} as const
+
 const COLORES_HABITOS = [
   "#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", 
   "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
@@ -127,8 +176,9 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
   const [habitos, setHabitos] = useState<Habito[]>([])
   const [registrosHabitos, setRegistrosHabitos] = useState<RegistroHabito[]>([])
   const [tareasMetas, setTareasMetas] = useState<TareaMeta[]>([])
-  const [tareasDelDia, setTareasDelDia] = useState<{id: string, titulo: string, completada: boolean, prioridad: string, fecha_limite: string}[]>([])
-  const [tareasPorFecha, setTareasPorFecha] = useState<Record<string, {id: string, titulo: string, completada: boolean, prioridad: string, fecha_limite: string}[]>>({})
+  const [tareasDelDia, setTareasDelDia] = useState<TareaDiaria[]>([])
+  const [tareasPorFecha, setTareasPorFecha] = useState<Record<string, TareaDiaria[]>>({})
+  const [extendiendoTareas, setExtendiendoTareas] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("tareas")
   const [userId, setUserId] = useState<string | null>(null)
@@ -203,27 +253,24 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
       
       const hoy = getParaguayDate()
       const hace5Dias = new Date(hoy)
-      hace5Dias.setDate(hoy.getDate() - 5)
-      const hace6Dias = new Date(hoy)
-      hace6Dias.setDate(hoy.getDate() - 6)
+      hace5Dias.setDate(hoy.getDate() - DIAS_RETENCION_TAREAS)
       
       const hoyStr = getParaguayDateString()
       const hace5DiasStr = formatDate(hace5Dias)
-      const hace6DiasStr = formatDate(hace6Dias)
       
-      // Eliminar tareas de más de 6 días
+      // Eliminar tareas diarias vencidas: plazo estándar cumplido sin extensión, o extensión ya vencida
       await supabase.from("tareas_meta")
         .delete()
         .eq("perfil_id", perfilId)
         .is("meta_id", null)
-        .lt("fecha_limite", hace6DiasStr)
+        .or(`and(conservar_hasta.is.null,fecha_limite.lt.${hace5DiasStr}),and(conservar_hasta.lt.${hoyStr},fecha_limite.lt.${hace5DiasStr})`)
       
       const [metasRes, habitosRes, registrosRes, tareasMetaRes, tareasUltimos5DiasRes] = await Promise.all([
         supabase.from("metas").select("*").eq("perfil_id", perfilId).order("created_at", { ascending: false }),
         supabase.from("habitos").select("*").eq("perfil_id", perfilId).eq("activo", true).order("created_at", { ascending: true }),
         supabase.from("registro_habitos").select("*").gte("fecha", getStartOfMonth(currentDate)).lte("fecha", getEndOfMonth(currentDate)),
         supabase.from("tareas_meta").select("*").order("orden", { ascending: true }),
-        supabase.from("tareas_meta").select("*").eq("perfil_id", perfilId).is("meta_id", null).gte("fecha_limite", hace5DiasStr).lte("fecha_limite", hoyStr).order("fecha_limite", { ascending: false })
+        supabase.from("tareas_meta").select("*").eq("perfil_id", perfilId).is("meta_id", null).lte("fecha_limite", hoyStr).or(`fecha_limite.gte.${hace5DiasStr},conservar_hasta.gte.${hoyStr}`).order("fecha_limite", { ascending: false })
       ])
       
       if (metasRes.data) setMetas(metasRes.data)
@@ -604,6 +651,31 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
     }
   }
   
+  const extenderPlazoTareas = async (tareas: TareaDiaria[], dias: number, claveCarga: string) => {
+    if (tareas.length === 0) return
+    setExtendiendoTareas(claveCarga)
+    try {
+      const hoy = getParaguayDateString()
+      const resultados = await Promise.all(
+        tareas.map((tarea) => {
+          const expiracionActual = getExpiracionTarea(tarea)
+          const base = expiracionActual > hoy ? expiracionActual : hoy
+          return supabase
+            .from("tareas_meta")
+            .update({ conservar_hasta: sumarDiasAFecha(base, dias) })
+            .eq("id", tarea.id)
+        })
+      )
+      const fallo = resultados.find((r) => r.error)
+      if (fallo?.error) throw fallo.error
+      await cargarDatos()
+    } catch (error) {
+      console.error("Error extendiendo plazo de tareas:", error)
+    } finally {
+      setExtendiendoTareas(null)
+    }
+  }
+
   // Eliminar tarea
   const eliminarTarea = async (tareaId: string, metaId: string) => {
     try {
@@ -1113,19 +1185,67 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
               {Object.keys(tareasPorFecha).sort((a, b) => b.localeCompare(a)).map((fecha) => {
                 const tareas = tareasPorFecha[fecha]
                 const fechaObj = new Date(fecha + "T12:00:00")
-                const esHoy = fecha === getParaguayDateString()
+                const hoyStr = getParaguayDateString()
+                const esHoy = fecha === hoyStr
+                const expiracionGrupo = tareas.map(getExpiracionTarea).sort()[0]
+                const expiracionInfo = describirExpiracion(expiracionGrupo, hoyStr)
+                const claveGrupo = `dia-${fecha}`
                 
                 return (
                   <Card key={fecha} className={`border-blue-200 ${esHoy ? "ring-2 ring-blue-400" : ""}`}>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-blue-600 flex items-center gap-2">
-                        <Calendar className="h-5 w-5" />
-                        {esHoy ? "Hoy - " : ""}{fechaObj.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
-                        {esHoy && <Badge variant="default" className="ml-2 bg-blue-600">Hoy</Badge>}
-                      </CardTitle>
-                      <CardDescription>
-                        {tareas.filter(t => t.completada).length} de {tareas.length} completadas
-                      </CardDescription>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex flex-col gap-1.5">
+                          <CardTitle className="text-blue-600 flex items-center gap-2 capitalize">
+                            <Calendar className="h-5 w-5" />
+                            {esHoy ? "Hoy - " : ""}{fechaObj.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" })}
+                            {esHoy && <Badge variant="default" className="ml-2 bg-blue-600 normal-case">Hoy</Badge>}
+                          </CardTitle>
+                          <CardDescription>
+                            {tareas.filter(t => t.completada).length} de {tareas.length} completadas
+                          </CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${TONO_EXPIRACION_CLASES[expiracionInfo.tono]}`}
+                            title={`Eliminación automática el ${formatFechaCorta(sumarDiasAFecha(expiracionGrupo, 1))}`}
+                          >
+                            <Hourglass className="h-3.5 w-3.5" aria-hidden="true" />
+                            {expiracionInfo.texto}
+                          </span>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs"
+                                disabled={extendiendoTareas === claveGrupo}
+                              >
+                                {extendiendoTareas === claveGrupo ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <CalendarPlus className="h-3.5 w-3.5" aria-hidden="true" />
+                                )}
+                                Extender plazo
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                                Conservar las {tareas.length} tareas de este día
+                              </DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              {OPCIONES_EXTENSION_DIAS.map((dias) => (
+                                <DropdownMenuItem
+                                  key={dias}
+                                  onSelect={() => extenderPlazoTareas(tareas, dias, claveGrupo)}
+                                >
+                                  +{dias} días
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-2">
@@ -1156,12 +1276,58 @@ export function MetasObjetivosManager({ perfilId }: MetasObjetivosManagerProps) 
                                 <p className={`font-medium ${tarea.completada ? "line-through text-muted-foreground" : ""}`}>
                                   {tarea.titulo}
                                 </p>
-                                <Badge variant={tarea.prioridad === "alta" ? "destructive" : tarea.prioridad === "media" ? "default" : "secondary"} className="text-xs">
-                                  {tarea.prioridad}
-                                </Badge>
+                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                  <Badge variant={tarea.prioridad === "alta" ? "destructive" : tarea.prioridad === "media" ? "default" : "secondary"} className="text-xs">
+                                    {tarea.prioridad}
+                                  </Badge>
+                                  {(() => {
+                                    const expiracion = getExpiracionTarea(tarea)
+                                    const info = describirExpiracion(expiracion, hoyStr)
+                                    const extendida = expiracion !== sumarDiasAFecha(tarea.fecha_limite, DIAS_RETENCION_TAREAS)
+                                    return (
+                                      <span className={`inline-flex items-center gap-1 text-xs ${info.tono === "urgente" ? "text-red-600" : info.tono === "aviso" ? "text-amber-600" : "text-muted-foreground"}`}>
+                                        <Hourglass className="h-3 w-3" aria-hidden="true" />
+                                        {info.texto}
+                                        {extendida && <span className="text-muted-foreground">{`· extendida hasta ${formatFechaCorta(expiracion)}`}</span>}
+                                      </span>
+                                    )
+                                  })()}
+                                </div>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                    title="Extender plazo de eliminación"
+                                    disabled={extendiendoTareas === tarea.id}
+                                  >
+                                    {extendiendoTareas === tarea.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                                    ) : (
+                                      <CalendarPlus className="h-4 w-4" aria-hidden="true" />
+                                    )}
+                                    <span className="sr-only">Extender plazo de eliminación</span>
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52">
+                                  <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                                    Conservar esta tarea
+                                  </DropdownMenuLabel>
+                                  <DropdownMenuSeparator />
+                                  {OPCIONES_EXTENSION_DIAS.map((dias) => (
+                                    <DropdownMenuItem
+                                      key={dias}
+                                      onSelect={() => extenderPlazoTareas([tarea], dias, tarea.id)}
+                                    >
+                                      +{dias} días
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                               <Button 
                                 variant="ghost" 
                                 size="icon" 

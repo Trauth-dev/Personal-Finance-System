@@ -7,6 +7,7 @@ import { MonthSelector } from "@/components/personal/month-selector"
 import { AnalisisMensualComparativo } from "@/components/personal/analisis-mensual-comparativo"
 import { getParaguayDate } from "@/lib/utils"
 import { getNombreCategoriaDisplay } from "@/lib/categorias-egreso"
+import { cuentaComoEgreso } from "@/lib/dashboard/reglas"
 import { TrendingUp, BarChart3, Info } from "lucide-react"
 import { PresupuestoVsRealidad } from "@/components/personal/presupuesto-vs-realidad"
 import { Card, CardContent } from "@/components/ui/card"
@@ -43,14 +44,27 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
 
     // Parsear mes seleccionado
     const [year, month] = selectedMonth.split("-").map(Number)
-    
-    // Mes actual seleccionado
-    const primerDiaMesActual = new Date(year, month - 1, 1).toISOString().split("T")[0]
-    const ultimoDiaMesActual = new Date(year, month, 0).toISOString().split("T")[0]
-    
-    // Mes anterior
-    const primerDiaMesAnterior = new Date(year, month - 2, 1).toISOString().split("T")[0]
-    const ultimoDiaMesAnterior = new Date(year, month - 1, 0).toISOString().split("T")[0]
+
+    // Rangos en calendario local (toISOString() corre el día en husos horarios positivos)
+    const rangoMes = (y: number, m: number) => {
+      const d = new Date(y, m - 1, 1)
+      const yy = d.getFullYear()
+      const mm = d.getMonth() + 1
+      const mmStr = String(mm).padStart(2, "0")
+      return {
+        start: `${yy}-${mmStr}-01`,
+        end: `${yy}-${mmStr}-${String(new Date(yy, mm, 0).getDate()).padStart(2, "0")}`,
+        mes: mm,
+      }
+    }
+    const rangoActual = rangoMes(year, month)
+    const rangoAnterior = rangoMes(year, month - 1)
+    const rangoEvolucionInicio = rangoMes(year, month - 5).start
+
+    const primerDiaMesActual = rangoActual.start
+    const ultimoDiaMesActual = rangoActual.end
+    const primerDiaMesAnterior = rangoAnterior.start
+    const ultimoDiaMesAnterior = rangoAnterior.end
 
     // Obtener nombres de meses
     const monthNames = [
@@ -80,45 +94,52 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
       .order("fecha", { ascending: false })
       .limit(1)
 
-    // Obtener ingresos mes actual
-    const { data: ingresosActuales } = await supabase
-      .from("ingresos")
-      .select("monto")
-      .eq("perfil_id", perfilId)
-      .gte("fecha", primerDiaMesActual)
-      .lte("fecha", ultimoDiaMesActual)
+    // Una sola consulta por tabla para los 6 meses de evolución (incluye actual y anterior)
+    const [{ data: ingresosRango }, { data: egresosRango }] = await Promise.all([
+      supabase
+        .from("ingresos")
+        .select("monto, fecha")
+        .eq("perfil_id", perfilId)
+        .gte("fecha", rangoEvolucionInicio)
+        .lte("fecha", ultimoDiaMesActual),
+      supabase
+        .from("egresos")
+        .select("monto, fecha, naturaleza, deuda_id, origen_tipo, tipo_categoria:tipos_categoria_egreso(nombre)")
+        .eq("perfil_id", perfilId)
+        .gte("fecha", rangoEvolucionInicio)
+        .lte("fecha", ultimoDiaMesActual),
+    ])
 
-    const totalIngresosActual = ingresosActuales?.reduce((sum, i) => sum + Number(i.monto), 0) || 0
+    const ingresosTodos = (ingresosRango || []).map((i: any) => ({ monto: Number(i.monto) || 0, fecha: i.fecha as string }))
+    // Mismo criterio de salida de dinero que el Dashboard y Presupuesto vs Realidad:
+    // sin ajustes técnicos ni compras con tarjeta (se cuentan al pagar la tarjeta).
+    const egresosTodos = (egresosRango || [])
+      .map((e: any) => ({
+        monto: Number(e.monto) || 0,
+        fecha: e.fecha as string,
+        naturaleza: e.naturaleza ?? null,
+        deudaId: e.deuda_id ?? null,
+        origenTipo: e.origen_tipo ?? null,
+        tipo_categoria: e.tipo_categoria?.nombre
+          ? e.tipo_categoria
+          : e.naturaleza === "pago_deuda"
+            ? { nombre: "Pago Deudas" }
+            : null,
+      }))
+      .filter((e) => cuentaComoEgreso(e))
 
-    // Obtener ingresos mes anterior
-    const { data: ingresosAnteriores } = await supabase
-      .from("ingresos")
-      .select("monto")
-      .eq("perfil_id", perfilId)
-      .gte("fecha", primerDiaMesAnterior)
-      .lte("fecha", ultimoDiaMesAnterior)
+    const enRangoFecha = (fecha: string, start: string, end: string) => fecha >= start && fecha <= end
+    const sumar = (items: { monto: number }[]) => items.reduce((s, x) => s + x.monto, 0)
 
-    const totalIngresosAnterior = ingresosAnteriores?.reduce((sum, i) => sum + Number(i.monto), 0) || 0
+    const ingresosActuales = ingresosTodos.filter((i) => enRangoFecha(i.fecha, primerDiaMesActual, ultimoDiaMesActual))
+    const ingresosAnteriores = ingresosTodos.filter((i) => enRangoFecha(i.fecha, primerDiaMesAnterior, ultimoDiaMesAnterior))
+    const egresosActuales = egresosTodos.filter((e) => enRangoFecha(e.fecha, primerDiaMesActual, ultimoDiaMesActual))
+    const egresosAnteriores = egresosTodos.filter((e) => enRangoFecha(e.fecha, primerDiaMesAnterior, ultimoDiaMesAnterior))
 
-    // Obtener egresos por categoría mes actual
-    const { data: egresosActuales } = await supabase
-      .from("egresos")
-      .select("monto, categoria_id, tipo_categoria:tipos_categoria_egreso(nombre)")
-      .eq("perfil_id", perfilId)
-      .gte("fecha", primerDiaMesActual)
-      .lte("fecha", ultimoDiaMesActual)
-
-    const totalEgresosActual = egresosActuales?.reduce((sum, e) => sum + Number(e.monto), 0) || 0
-
-    // Obtener egresos por categoría mes anterior
-    const { data: egresosAnteriores } = await supabase
-      .from("egresos")
-      .select("monto, categoria_id, tipo_categoria:tipos_categoria_egreso(nombre)")
-      .eq("perfil_id", perfilId)
-      .gte("fecha", primerDiaMesAnterior)
-      .lte("fecha", ultimoDiaMesAnterior)
-
-    const totalEgresosAnterior = egresosAnteriores?.reduce((sum, e) => sum + Number(e.monto), 0) || 0
+    const totalIngresosActual = sumar(ingresosActuales)
+    const totalIngresosAnterior = sumar(ingresosAnteriores)
+    const totalEgresosActual = sumar(egresosActuales)
+    const totalEgresosAnterior = sumar(egresosAnteriores)
 
     // Agrupar por categoría
     const categoriasMap = new Map()
@@ -159,32 +180,10 @@ export function AnalisisFinancieroClient({ perfilId }: Props) {
     // Calcular evolución de los últimos 6 meses (incluyendo el mes seleccionado)
     const evolucion = []
     for (let i = 5; i >= 0; i--) {
-      const mesEvolucion = new Date(year, month - 1 - i, 1)
-      const yearEv = mesEvolucion.getFullYear()
-      const monthEv = mesEvolucion.getMonth() + 1
-      
-      const primerDia = new Date(yearEv, monthEv - 1, 1).toISOString().split("T")[0]
-      const ultimoDia = new Date(yearEv, monthEv, 0).toISOString().split("T")[0]
-      
-      // Obtener ingresos del mes
-      const { data: ingresosEv } = await supabase
-        .from("ingresos")
-        .select("monto")
-        .eq("perfil_id", perfilId)
-        .gte("fecha", primerDia)
-        .lte("fecha", ultimoDia)
-      
-      const totalIngresosEv = ingresosEv?.reduce((sum, i) => sum + Number(i.monto), 0) || 0
-      
-      // Obtener egresos del mes
-      const { data: egresosEv } = await supabase
-        .from("egresos")
-        .select("monto")
-        .eq("perfil_id", perfilId)
-        .gte("fecha", primerDia)
-        .lte("fecha", ultimoDia)
-      
-      const totalEgresosEv = egresosEv?.reduce((sum, e) => sum + Number(e.monto), 0) || 0
+      const rangoEv = rangoMes(year, month - i)
+      const monthEv = rangoEv.mes
+      const totalIngresosEv = sumar(ingresosTodos.filter((x) => enRangoFecha(x.fecha, rangoEv.start, rangoEv.end)))
+      const totalEgresosEv = sumar(egresosTodos.filter((x) => enRangoFecha(x.fecha, rangoEv.start, rangoEv.end)))
       
       const balanceEv = totalIngresosEv - totalEgresosEv
       

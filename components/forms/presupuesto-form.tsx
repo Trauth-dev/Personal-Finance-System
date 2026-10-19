@@ -88,6 +88,20 @@ interface SubcategoriaItem {
   bloqueada?: boolean // true si no se puede quitar desde el presupuesto (préstamos)
 }
 
+// Orden de la categoría "Deudas": primero préstamos, luego tarjetas de crédito,
+// luego cualquier otra línea manual; dentro de cada grupo, alfabético (es-PY,
+// sin distinguir mayúsculas/acentos y con números naturales: "Personal 2" < "Personal 10").
+const ORDEN_TIPO_DEUDA: Record<string, number> = { prestamo: 0, tarjeta_credito: 1 }
+const compararNombre = new Intl.Collator("es", { sensitivity: "base", numeric: true }).compare
+
+function ordenarDeudas(items: SubcategoriaItem[]): SubcategoriaItem[] {
+  return [...items].sort((a, b) => {
+    const ta = ORDEN_TIPO_DEUDA[a.tipoDeuda ?? ""] ?? 2
+    const tb = ORDEN_TIPO_DEUDA[b.tipoDeuda ?? ""] ?? 2
+    return ta - tb || compararNombre(a.nombre.trim(), b.nombre.trim())
+  })
+}
+
 interface CategoriaData {
   subcategorias: SubcategoriaItem[]
   total: number
@@ -1254,7 +1268,10 @@ export function PresupuestoForm() {
                       </CardHeader>
                       <CardContent className="px-4 pb-3 space-y-2">
                         {/* Lista de subcategorías */}
-                        {catData.subcategorias.map((sub) => (
+                        {(categoria.key === "pct_pago_deudas"
+                          ? ordenarDeudas(catData.subcategorias)
+                          : catData.subcategorias
+                        ).map((sub) => (
                           <div key={sub.id} className="flex items-center justify-between gap-2 py-1">
                             <span className="text-sm text-foreground truncate flex-1 min-w-0">{sub.nombre}</span>
                             <div className="flex items-center gap-1 flex-shrink-0">

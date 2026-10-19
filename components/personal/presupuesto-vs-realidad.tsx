@@ -108,8 +108,10 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     const supabase = createClient()
 
     const [year, month] = selectedMonth.split("-").map(Number)
-    const primerDia = new Date(year, month - 1, 1).toISOString().split("T")[0]
-    const ultimoDia = new Date(year, month, 0).toISOString().split("T")[0]
+    // Fechas en calendario local: toISOString() corre el día en husos horarios positivos
+    const mesStr = String(month).padStart(2, "0")
+    const primerDia = `${year}-${mesStr}-01`
+    const ultimoDia = `${year}-${mesStr}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`
 
     // Fetch presupuesto_mensual
     const { data: presupuestoMensual } = await supabase
@@ -137,22 +139,36 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     // Obtener relación categorias_egreso -> tipos_categoria_egreso
     const { data: categoriasEgreso } = await supabase
       .from("categorias_egreso")
-      .select("nombre, tipos_categoria_egreso!inner(nombre)")
+      .select("nombre, mes_desde, mes_hasta, deuda_id, tipos_categoria_egreso!inner(nombre)")
       .eq("perfil_id", perfilId)
 
-    // Crear mapa de subcategoría -> tipo principal
+    const { data: deudasPerfil } = await supabase
+      .from("deudas")
+      .select("nombre")
+      .eq("perfil_id", perfilId)
+
+    // Subcategoría -> tipo principal. Si un mismo nombre existe en varias categorías,
+    // gana la subcategoría vigente en el mes consultado.
+    const vigenteEnMes = (ce: any) =>
+      (!ce.mes_desde || ce.mes_desde <= ultimoDia) && (!ce.mes_hasta || ce.mes_hasta >= primerDia)
     const subcategoriaToTipo: Record<string, string> = {}
-    categoriasEgreso?.forEach((ce: any) => {
-      subcategoriaToTipo[ce.nombre] = ce.tipos_categoria_egreso?.nombre || ""
+    const ordenadas = [...(categoriasEgreso || [])].sort(
+      (a: any, b: any) => Number(vigenteEnMes(a)) - Number(vigenteEnMes(b)),
+    )
+    ordenadas.forEach((ce: any) => {
+      if (ce.tipos_categoria_egreso?.nombre) subcategoriaToTipo[ce.nombre] = ce.tipos_categoria_egreso.nombre
     })
+    // Líneas de deudas sin subcategoría sincronizada (deudas renombradas o saldadas) siguen en "Pago Deudas"
+    deudasPerfil?.forEach((d: any) => {
+      if (d.nombre && !subcategoriaToTipo[d.nombre]) subcategoriaToTipo[d.nombre] = "Pago Deudas"
+    })
+    const tipoDeLinea = (categoria: string) => subcategoriaToTipo[categoria] || "Sin categoria"
 
     // Sumar montos por tipo de categoría desde presupuesto_categorias
     const montosPorTipo: Record<string, number> = {}
     presupuestoCategorias?.forEach((pc: any) => {
-      const tipoPrincipal = subcategoriaToTipo[pc.categoria]
-      if (tipoPrincipal) {
-        montosPorTipo[tipoPrincipal] = (montosPorTipo[tipoPrincipal] || 0) + Number(pc.monto_presupuestado || 0)
-      }
+      const tipoPrincipal = tipoDeLinea(pc.categoria)
+      montosPorTipo[tipoPrincipal] = (montosPorTipo[tipoPrincipal] || 0) + Number(pc.monto_presupuestado || 0)
     })
 
     const { data: egresosRaw } = await supabase
@@ -216,8 +232,7 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
     // tipo -> (subcategoria -> presupuestado)
     const subcatBudget = new Map<string, Map<string, number>>()
     presupuestoCategorias?.forEach((pc: any) => {
-      const tipo = subcategoriaToTipo[pc.categoria]
-      if (!tipo) return
+      const tipo = tipoDeLinea(pc.categoria)
       if (!subcatBudget.has(tipo)) subcatBudget.set(tipo, new Map())
       const m = subcatBudget.get(tipo)!
       m.set(pc.categoria, (m.get(pc.categoria) || 0) + Number(pc.monto_presupuestado || 0))
@@ -273,19 +288,25 @@ export function PresupuestoVsRealidad({ perfilId }: Props) {
       }
     }
 
-    gastosMap.forEach((monto, nombre) => {
-      if (!nombresUsados.has(nombre)) {
-        categoriasResult.push({
-          nombre,
-          presupuestado: 0,
-          gastado: monto,
-          diferencia: -monto,
-          porcentaje: 100,
-          transacciones: transaccionesPorCategoria.get(nombre) || [],
-          subcategorias: buildSubcats(nombre),
-        })
-        sumGastado += monto
-      }
+    // Categorías sin tipo registrado en el perfil (gasto o presupuesto huérfano) también se muestran
+    const nombresExtra = new Set<string>([...gastosMap.keys(), ...Object.keys(montosPorTipo)])
+    nombresExtra.forEach((nombre) => {
+      if (nombresUsados.has(nombre)) return
+      const presupuestado = montosPorTipo[nombre] || 0
+      const gastado = gastosMap.get(nombre) || 0
+      if (presupuestado === 0 && gastado === 0) return
+      categoriasResult.push({
+        nombre,
+        presupuestado,
+        gastado,
+        diferencia: presupuestado - gastado,
+        porcentaje: presupuestado > 0 ? (gastado / presupuestado) * 100 : 100,
+        transacciones: transaccionesPorCategoria.get(nombre) || [],
+        subcategorias: buildSubcats(nombre),
+      })
+      sumPresupuestado += presupuestado
+      sumGastado += gastado
+      nombresUsados.add(nombre)
     })
 
     categoriasResult.sort((a, b) => b.presupuestado - a.presupuestado)
