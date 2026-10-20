@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { verificarTokenWebhook, consultarPedido } from "@/lib/pagopar"
+import { PLANES, esPlanId } from "@/lib/plans/catalogo"
 
 /**
  * Webhook de PagoPar. PagoPar hace un POST a esta URL cuando cambia el estado de
@@ -63,17 +64,21 @@ export async function POST(request: Request) {
       const base = Math.max(ahora, venceActual)
       const nuevoVence = new Date(base + 30 * 24 * 60 * 60 * 1000).toISOString()
 
+      // Pagos anteriores ("prospera", Gs 100.000) equivalen al plan Total.
+      const plan = PLANES[esPlanId(pago.plan_id) ? pago.plan_id : "total"]
+      const accesoTotal = plan.id === "total"
+
       await admin
         .from("profiles")
-        .update({ plan_tier: "completo", suscripcion_vence: nuevoVence })
+        .update({ plan_tier: plan.tier, suscripcion_vence: nuevoVence })
         .eq("id", pago.user_id)
 
-      // Plan unico: dar acceso a TODOS los perfiles (personal, empresarial y crm).
+      // Personal: solo el perfil Personal. Total: los tres perfiles.
       await admin.from("user_plan_access").upsert(
         [
           { user_id: pago.user_id, plan_type: "personal", is_active: true, granted_by: "pagopar" },
-          { user_id: pago.user_id, plan_type: "empresarial", is_active: true, granted_by: "pagopar" },
-          { user_id: pago.user_id, plan_type: "crm", is_active: true, granted_by: "pagopar" },
+          { user_id: pago.user_id, plan_type: "empresarial", is_active: accesoTotal, granted_by: "pagopar" },
+          { user_id: pago.user_id, plan_type: "crm", is_active: accesoTotal, granted_by: "pagopar" },
         ],
         { onConflict: "user_id,plan_type" },
       )

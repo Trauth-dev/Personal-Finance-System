@@ -1,82 +1,27 @@
 "use client"
 
-import { useState } from "react"
+import { usePathname } from "next/navigation"
+import { Lock, Sparkles, ArrowLeft } from "lucide-react"
 import { useSuscripcion } from "@/hooks/use-suscripcion"
-import { Lock, ShieldCheck, CreditCard, Loader2, Sparkles, Check } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { usePerfil } from "@/lib/contexts/perfil-context"
 import { createClient } from "@/lib/supabase/client"
-import { formatMoney } from "@/lib/utils"
+import { rutaRequierePlanTotal } from "@/lib/plans/catalogo"
+import { PlanCards } from "@/components/planes/plan-cards"
 
 interface PlanAccessGuardProps {
   children: React.ReactNode
 }
 
-// Precio del plan unico Prospera+ (guaraníes). PagoPar liquida en PYG.
-const PRECIO_PROSPERA = 100000
-
-const BENEFICIOS = [
-  "Acceso a los perfiles Personal, Empresarial y CRM",
-  "Carga de ingresos y egresos ilimitada",
-  "Cajas de ahorro, deudas y plan anti-deudas",
-  "Metas, presupuesto y asesoramiento con herramientas",
-  "Todas las funciones actuales y futuras del plan",
-]
-
 /**
- * Muro de pago (paywall) de Prospera+.
- *
- * Modelo de plan unico: si el usuario tiene la suscripcion activa
- * (profiles.suscripcion_vence > ahora), ve la app completa. Si no pago o su
- * suscripcion vencio, ve esta pantalla con el boton para pagar via PagoPar.
+ * Muro de pago de Prospera+.
+ * - Sin suscripción vigente: muestra los planes Personal y Total.
+ * - Plan Personal intentando usar Empresarial o CRM: ofrece mejorar a Total.
  */
 export function PlanAccessGuard({ children }: PlanAccessGuardProps) {
-  const { activa, isLoading } = useSuscripcion()
-  const [procesando, setProcesando] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [noConfigurado, setNoConfigurado] = useState(false)
+  const { activa, plan, accesoTotal, isLoading } = useSuscripcion()
+  const { perfilActual, perfiles, cambiarPerfil } = usePerfil()
+  const pathname = usePathname()
 
-  const iniciarPago = async () => {
-    setProcesando(true)
-    setError(null)
-    setNoConfigurado(false)
-    try {
-      const res = await fetch("/api/pagopar/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: "prospera" }),
-      })
-
-      if (res.status === 501) {
-        setNoConfigurado(true)
-        return
-      }
-
-      const data = (await res.json()) as { checkoutUrl?: string; error?: string }
-      if (!res.ok || !data.checkoutUrl) {
-        setError("No pudimos iniciar el pago. Intentá nuevamente en unos minutos.")
-        return
-      }
-
-      // Redirigir a la pasarela. Dentro de un iframe (preview) abrimos pestaña nueva.
-      if (window.self !== window.top) {
-        window.open(data.checkoutUrl, "_blank", "noopener,noreferrer")
-      } else {
-        window.location.href = data.checkoutUrl
-      }
-    } catch {
-      setError("Ocurrió un error de conexión. Intentá nuevamente.")
-    } finally {
-      setProcesando(false)
-    }
-  }
-
-  const cerrarSesion = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    window.location.href = "/auth/login"
-  }
-
-  // Cargando estado de la suscripcion
   if (isLoading) {
     return (
       <div className="flex h-[60vh] items-center justify-center">
@@ -85,15 +30,25 @@ export function PlanAccessGuard({ children }: PlanAccessGuardProps) {
     )
   }
 
-  // Suscripcion activa: acceso completo
-  if (activa) {
+  const usaPerfilNegocio =
+    rutaRequierePlanTotal(pathname) || (perfilActual != null && perfilActual.tipo !== "personal")
+
+  if (activa && (accesoTotal || !usaPerfilNegocio)) {
     return <>{children}</>
   }
 
-  // Sin suscripcion activa: muro de pago
+  const perfilPersonal = perfiles.find((p) => p.tipo === "personal")
+  const esMejora = activa && plan === "personal"
+
+  const cerrarSesion = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    window.location.href = "/auth/login"
+  }
+
   return (
     <div className="flex min-h-[70vh] items-center justify-center px-4 py-8">
-      <div className="relative w-full max-w-lg overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-6 sm:p-8">
+      <div className="relative w-full max-w-5xl overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-6 sm:p-10">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 opacity-70"
@@ -103,92 +58,45 @@ export function PlanAccessGuard({ children }: PlanAccessGuardProps) {
           }}
         />
 
-        <div className="relative">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
-            <Lock className="h-8 w-8 text-emerald-400" />
-          </div>
-
-          <div className="mt-5 text-center">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-semibold text-emerald-400">
+        <div className="relative flex flex-col gap-8">
+          <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-500/30 bg-emerald-500/10">
+              <Lock className="h-7 w-7 text-emerald-400" />
+            </div>
+            <span className="mt-5 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-1.5 text-xs font-semibold text-emerald-400">
               <Sparkles className="h-3.5 w-3.5" />
-              Plan Prospera+
+              {esMejora ? "Disponible en Prospera+ Total" : "Planes Prospera+"}
             </span>
             <h1 className="mt-4 text-balance text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-              Activá tu suscripción para continuar
+              {esMejora ? "Mejorá a Total para usar este perfil" : "Activá tu suscripción para continuar"}
             </h1>
             <p className="mt-3 text-pretty text-sm leading-relaxed text-slate-400">
-              Prospera+ es una suscripción mensual con acceso total a la plataforma. Aboná para
-              desbloquear todas las herramientas.
+              {esMejora
+                ? "Tu plan Personal incluye el perfil Personal completo. Los perfiles Empresarial y CRM forman parte de Prospera+ Total."
+                : "Elegí el plan que mejor se adapta a vos. Podés mejorar a Total en cualquier momento."}
             </p>
           </div>
 
-          {/* Precio */}
-          <div className="mt-6 flex items-end justify-center gap-1">
-            <span className="text-4xl font-extrabold tracking-tight text-white">
-              {formatMoney(PRECIO_PROSPERA, "PYG")}
-            </span>
-            <span className="pb-1 text-sm text-slate-400">/mes</span>
-          </div>
+          <PlanCards planActual={plan} planes={esMejora ? ["total"] : ["personal", "total"]} />
 
-          {/* Beneficios */}
-          <ul className="mx-auto mt-6 max-w-sm space-y-2.5">
-            {BENEFICIOS.map((b) => (
-              <li key={b} className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
-                  <Check className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-sm text-slate-300">{b}</span>
-              </li>
-            ))}
-          </ul>
-
-          {noConfigurado && (
-            <div className="mt-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
-              <p className="font-medium text-amber-400">Pago en configuración</p>
-              <p className="mt-2 text-slate-400">
-                Estamos terminando de conectar la pasarela PagoPar. En breve vas a poder completar el
-                pago con tarjeta, QR o transferencia.
-              </p>
-            </div>
-          )}
-
-          {error && (
-            <p className="mt-6 rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-center text-sm text-red-300">
-              {error}
-            </p>
-          )}
-
-          {/* CTA */}
-          <div className="mt-7 space-y-3">
-            <Button
-              onClick={iniciarPago}
-              disabled={procesando}
-              className="w-full bg-emerald-500 py-6 text-base font-semibold text-white hover:bg-emerald-600"
-            >
-              {procesando ? (
-                <>
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  Redirigiendo a PagoPar...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="mr-2 h-5 w-5" />
-                  Pagar {formatMoney(PRECIO_PROSPERA, "PYG")}
-                </>
-              )}
-            </Button>
-
-            <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Pago seguro con PagoPar Paraguay — tarjetas, QR y transferencias
-            </p>
-
-            <button
-              onClick={cerrarSesion}
-              className="mx-auto block text-xs text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline"
-            >
-              Cerrar sesión
-            </button>
+          <div className="flex flex-col items-center gap-3">
+            {esMejora && perfilPersonal && (
+              <button
+                onClick={() => cambiarPerfil(perfilPersonal.id)}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-700 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:bg-slate-800"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Volver a mi perfil Personal
+              </button>
+            )}
+            {!activa && (
+              <button
+                onClick={cerrarSesion}
+                className="text-xs text-slate-500 underline-offset-4 hover:text-slate-300 hover:underline"
+              >
+                Cerrar sesión
+              </button>
+            )}
           </div>
         </div>
       </div>

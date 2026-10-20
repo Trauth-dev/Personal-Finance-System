@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getPagoparCredentials, iniciarTransaccion } from "@/lib/pagopar"
+import { PLANES, esPlanId } from "@/lib/plans/catalogo"
 
 /**
  * Checkout de PagoPar. Crea un pedido en PagoPar y devuelve la URL de pago.
@@ -11,14 +12,14 @@ import { getPagoparCredentials, iniciarTransaccion } from "@/lib/pagopar"
  * en la que el usuario ve la app.
  */
 
-// Plan unico Prospera+. Monto EN GUARANÍES y fuente de verdad server-side.
-// PagoPar liquida SIEMPRE en guaraníes (PYG).
-const PLAN_PROSPERA = { id: "prospera", monto: 100000, nombre: "Prospera+" }
-
 export async function POST(request: Request) {
   try {
-    // Plan unico: ignoramos cualquier planId entrante y usamos siempre Prospera+.
-    const plan = PLAN_PROSPERA
+    // El cliente solo elige el plan; monto y nombre salen del catálogo server-side.
+    const body = (await request.json().catch(() => ({}))) as { planId?: unknown }
+    if (!esPlanId(body.planId)) {
+      return NextResponse.json({ error: "plan_invalido" }, { status: 400 })
+    }
+    const plan = PLANES[body.planId]
     const planId = plan.id
 
     // La integración solo funciona con credenciales cargadas.
@@ -72,7 +73,7 @@ export async function POST(request: Request) {
     const result = await iniciarTransaccion({
       idPedidoComercio,
       montoTotal: monto,
-      descripcion: `Suscripción ${plan.nombre} - Prospera+`,
+      descripcion: `Suscripción mensual ${plan.nombre}`,
       comprador: {
         nombre: perfil?.nombre_completo || user.email?.split("@")[0] || "Usuario",
         email: perfil?.email || user.email || "sincorreo@prospera.app",
