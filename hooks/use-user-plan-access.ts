@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useSuscripcion } from "@/hooks/use-suscripcion"
 
 export type PlanType = "personal" | "empresarial" | "crm"
 
@@ -106,25 +107,22 @@ export function useUserPlanAccess(): UseUserPlanAccessReturn {
     fetchAccess()
   }, [fetchAccess])
 
-  // Plan unico "Prospera+": todos los usuarios tienen acceso a TODOS los perfiles
-  // (personal, empresarial y crm). El unico control de acceso es la suscripcion
-  // (ver useSuscripcion + PlanAccessGuard), no el tipo de perfil.
-  const allowedPlans: PlanType[] = ["personal", "empresarial", "crm"]
+  // Prospera+ Personal habilita solo el perfil Personal; Prospera+ Total (o una
+  // suscripción anterior / acceso libre) habilita también Empresarial y CRM.
+  const { accesoTotal, isLoading: isLoadingSuscripcion } = useSuscripcion()
+  const allowedPlans: PlanType[] = accesoTotal ? ["personal", "empresarial", "crm"] : ["personal"]
 
-  // Verificar si tiene acceso a un plan específico
-  const hasAccess = useCallback((_plan: PlanType): boolean => {
-    return true
-  }, [])
+  const hasAccess = useCallback((plan: PlanType): boolean => plan === "personal" || accesoTotal, [accesoTotal])
 
-  // Verificar si tiene acceso a al menos uno de los planes
-  const hasAnyAccess = useCallback((_plans: PlanType[]): boolean => {
-    return true
-  }, [])
+  const hasAnyAccess = useCallback(
+    (plans: PlanType[]): boolean => plans.some((plan) => plan === "personal" || accesoTotal),
+    [accesoTotal],
+  )
 
   return {
     allowedPlans,
     planAccesses,
-    isLoading,
+    isLoading: isLoading || isLoadingSuscripcion,
     error,
     hasAccess,
     hasAnyAccess,

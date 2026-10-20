@@ -3,8 +3,13 @@
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { tieneAccesoLibre } from "@/lib/plans/acceso-libre"
+import { planDesdeTier, type PlanId } from "@/lib/plans/catalogo"
 
 interface UseSuscripcionReturn {
+  // plan contratado vigente (null si no hay suscripcion activa)
+  plan: PlanId | null
+  // true si puede usar los perfiles Empresarial y CRM (plan Total o acceso libre)
+  accesoTotal: boolean
   // true si la suscripcion esta vigente (pago y no vencida) o el usuario tiene acceso libre
   activa: boolean
   // true si el usuario es socio/fundador con acceso libre (sin abonar)
@@ -27,6 +32,7 @@ interface UseSuscripcionReturn {
 export function useSuscripcion(): UseSuscripcionReturn {
   const [vence, setVence] = useState<string | null>(null)
   const [exento, setExento] = useState(false)
+  const [tier, setTier] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const fetchSuscripcion = useCallback(async () => {
@@ -49,13 +55,15 @@ export function useSuscripcion(): UseSuscripcionReturn {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("suscripcion_vence")
+        .select("suscripcion_vence, plan_tier")
         .eq("id", user.id)
         .maybeSingle()
 
       setVence(profile?.suscripcion_vence ?? null)
+      setTier(profile?.plan_tier ?? null)
     } catch {
       setVence(null)
+      setTier(null)
       setExento(false)
     } finally {
       setIsLoading(false)
@@ -70,8 +78,12 @@ export function useSuscripcion(): UseSuscripcionReturn {
   const venceMs = vence ? new Date(vence).getTime() : 0
   const activa = exento || venceMs > ahora
   const diasRestantes = venceMs > ahora ? Math.ceil((venceMs - ahora) / (1000 * 60 * 60 * 24)) : 0
+  const plan: PlanId | null = exento ? "total" : venceMs > ahora ? planDesdeTier(tier) : null
+  const accesoTotal = plan === "total"
 
   return {
+    plan,
+    accesoTotal,
     activa,
     exento,
     vence,
