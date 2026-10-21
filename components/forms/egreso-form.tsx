@@ -809,6 +809,12 @@ export function EgresoForm() {
       }
 
       const montoNumerico = Number.parseFloat(monto)
+      if (!Number.isFinite(montoNumerico) || montoNumerico <= 0) {
+        throw new Error("El monto debe ser mayor a cero.")
+      }
+      if (!fecha) {
+        throw new Error("Seleccioná la fecha del egreso.")
+      }
 
       // Todos los efectos (cuenta, tarjeta, préstamo, cuota, extracto) se aplican
       // en una única transacción del servidor.
