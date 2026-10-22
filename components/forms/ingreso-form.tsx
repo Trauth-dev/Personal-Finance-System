@@ -295,6 +295,20 @@ export function IngresoForm() {
       return
     }
 
+    const montoNumerico = Number.parseFloat(monto)
+    if (!tipoIngreso.trim()) {
+      setError("Seleccioná el tipo de ingreso.")
+      return
+    }
+    if (!Number.isFinite(montoNumerico) || montoNumerico <= 0) {
+      setError("El monto debe ser mayor a cero.")
+      return
+    }
+    if (!fecha) {
+      setError("Seleccioná la fecha del ingreso.")
+      return
+    }
+
     setIsLoading(true)
     setError(null)
     setSuccess(false)
@@ -308,8 +322,6 @@ export function IngresoForm() {
       if (!user) {
         throw new Error("Usuario no autenticado")
       }
-
-      const montoNumerico = Number.parseFloat(monto)
 
       // El ingreso y el depósito en la caja destino se aplican en una sola transacción.
       await registrarIngreso({

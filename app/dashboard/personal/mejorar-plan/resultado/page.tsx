@@ -44,7 +44,7 @@ export default async function ResultadoPagoPage() {
         <p className="text-pretty text-sm leading-relaxed text-muted-foreground">
           {pagado
             ? "Tu plan ya está activo. Disfrutá de todas las herramientas de Prospera+."
-            : "Estamos confirmando tu pago con PagoPar. En cuanto se acredite, tu plan se activará automáticamente. Esto puede tardar unos minutos."}
+            : "Estamos confirmando tu pago con Bancard. En cuanto se acredite, tu plan se activará automáticamente. Esto puede tardar unos minutos."}
         </p>
       </div>
 

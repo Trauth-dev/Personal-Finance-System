@@ -30,9 +30,11 @@ interface PlanCardsProps {
   planActual: PlanId | null
   /** Muestra únicamente estos planes (por defecto, ambos). */
   planes?: PlanId[]
+  /** Cuenta con acceso Total habilitado sin pago: se muestran los planes sin permitir pagar. */
+  accesoIncluido?: boolean
 }
 
-export function PlanCards({ planActual, planes = ["personal", "total"] }: PlanCardsProps) {
+export function PlanCards({ planActual, planes = ["personal", "total"], accesoIncluido = false }: PlanCardsProps) {
   const { iniciarPago, procesando, error, noConfigurado } = useCheckoutPagopar()
 
   return (
@@ -49,6 +51,7 @@ export function PlanCards({ planActual, planes = ["personal", "total"] }: PlanCa
             icono={<User className="h-5 w-5" />}
             beneficios={BENEFICIOS_PERSONAL}
             planActual={planActual}
+            accesoIncluido={accesoIncluido}
             procesando={procesando}
             onPagar={iniciarPago}
           />
@@ -60,6 +63,7 @@ export function PlanCards({ planActual, planes = ["personal", "total"] }: PlanCa
             icono={<Layers className="h-5 w-5" />}
             beneficios={BENEFICIOS_TOTAL}
             planActual={planActual}
+            accesoIncluido={accesoIncluido}
             procesando={procesando}
             onPagar={iniciarPago}
           />
@@ -70,7 +74,7 @@ export function PlanCards({ planActual, planes = ["personal", "total"] }: PlanCa
         <div className="mx-auto w-full max-w-xl rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
           <p className="font-medium text-amber-400">Pago en configuración</p>
           <p className="mt-1 leading-relaxed text-slate-400">
-            Estamos terminando de conectar la pasarela PagoPar. En breve vas a poder completar el pago con
+            Estamos terminando de conectar la pasarela Bancard. En breve vas a poder completar el pago con
             tarjeta, QR o transferencia.
           </p>
         </div>
@@ -87,7 +91,7 @@ export function PlanCards({ planActual, planes = ["personal", "total"] }: PlanCa
 
       <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
         <ShieldCheck className="h-3.5 w-3.5" />
-        Pago mensual seguro con PagoPar Paraguay — tarjetas, QR y transferencias
+        Pago mensual seguro con Bancard Paraguay — tarjetas, QR y transferencias
       </p>
     </div>
   )
@@ -101,20 +105,34 @@ interface PlanCardProps {
   procesando: PlanId | null
   onPagar: (planId: PlanId) => void
   destacado?: boolean
+  accesoIncluido?: boolean
 }
 
-function PlanCard({ planId, icono, beneficios, planActual, procesando, onPagar, destacado }: PlanCardProps) {
+function PlanCard({
+  planId,
+  icono,
+  beneficios,
+  planActual,
+  procesando,
+  onPagar,
+  destacado,
+  accesoIncluido,
+}: PlanCardProps) {
   const plan = PLANES[planId]
   const esActual = planActual === planId
   // Bajar de Total a Personal a mitad de ciclo haría perder el acceso Total ya pagado.
   const bajaBloqueada = planId === "personal" && planActual === "total"
   const cargando = procesando === planId
 
-  const etiquetaBoton = esActual
-    ? "Renovar 30 días"
-    : planId === "total" && planActual === "personal"
-      ? "Mejorar a Total"
-      : `Elegir ${plan.nombre.replace("Prospera+ ", "")}`
+  const etiquetaBoton = accesoIncluido
+    ? esActual
+      ? "Incluido en tu cuenta"
+      : "Ya incluido en tu acceso Total"
+    : esActual
+      ? "Renovar 30 días"
+      : planId === "total" && planActual === "personal"
+        ? "Mejorar a Total"
+        : `Elegir ${plan.nombre.replace("Prospera+ ", "")}`
 
   return (
     <article
@@ -159,7 +177,7 @@ function PlanCard({ planId, icono, beneficios, planActual, procesando, onPagar, 
 
       <Button
         onClick={() => onPagar(planId)}
-        disabled={procesando !== null || bajaBloqueada}
+        disabled={accesoIncluido || procesando !== null || bajaBloqueada}
         className={cn(
           "mt-6 w-full font-semibold",
           destacado
@@ -170,11 +188,13 @@ function PlanCard({ planId, icono, beneficios, planActual, procesando, onPagar, 
         {cargando ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Redirigiendo a PagoPar...
+            Redirigiendo a Bancard...
           </>
         ) : (
           <>
-            {planId === "total" && planActual === "personal" ? (
+            {accesoIncluido ? (
+              <Check className="mr-2 h-4 w-4" />
+            ) : planId === "total" && planActual === "personal" ? (
               <ArrowUpRight className="mr-2 h-4 w-4" />
             ) : (
               <CreditCard className="mr-2 h-4 w-4" />
@@ -183,7 +203,7 @@ function PlanCard({ planId, icono, beneficios, planActual, procesando, onPagar, 
           </>
         )}
       </Button>
-      {bajaBloqueada && (
+      {bajaBloqueada && !accesoIncluido && (
         <p className="mt-2 text-center text-xs leading-relaxed text-slate-500">
           Disponible cuando venza tu plan Total vigente.
         </p>

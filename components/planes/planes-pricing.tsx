@@ -71,11 +71,11 @@ export function PlanesPricing() {
           </div>
         )}
 
-        {!exento && <PlanCards planActual={isLoading ? null : plan} />}
+        <PlanCards planActual={isLoading ? null : exento ? "total" : plan} accesoIncluido={exento} />
 
         <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
           {[
-            { icon: ShieldCheck, titulo: "Pago protegido", desc: "Transacciones seguras con PagoPar" },
+            { icon: ShieldCheck, titulo: "Pago protegido", desc: "Transacciones seguras con Bancard" },
             { icon: CreditCard, titulo: "Múltiples métodos", desc: "Tarjetas, QR y transferencias" },
             { icon: Headphones, titulo: "Soporte cercano", desc: "Te acompañamos en el proceso" },
           ].map((g) => (
