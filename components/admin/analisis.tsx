@@ -43,9 +43,9 @@ function construirHallazgos(r: ResumenAdmin, usuarios: UsuarioAdmin[]): Hallazgo
     })
   if (r.accesoLibreGlobal)
     h.push({
-      titulo: "El acceso libre general está activado",
-      detalle: "Hoy ningún usuario necesita pagar. Los estados de pago muestran \u201cAcceso libre\u201d hasta que se cierre.",
-      recomendacion: "Definí la fecha de cierre con anticipación y avisá a los usuarios al menos 7 días antes.",
+      titulo: "Los cobros están pausados hasta diciembre",
+      detalle: "Cada usuario accede según su plan actual sin pagar. Los estados de pago muestran \u201cSin cobro\u201d hasta habilitar Bancard.",
+      recomendacion: "Avisá a los usuarios al menos 7 días antes de empezar a cobrar en diciembre.",
     })
   return h
 }

@@ -45,8 +45,8 @@ export function AdminPanel({ datos, adminEmail }: { datos: DatosAdmin; adminEmai
 
       {datos.resumen.accesoLibreGlobal && (
         <p className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-          <span className="font-medium text-foreground">Acceso libre general activado.</span> Todos los usuarios ingresan sin
-          pagar. Pausar o bloquear una cuenta sí se aplica de inmediato.
+          <span className="font-medium text-foreground">Cobros pausados hasta diciembre (Bancard).</span> Cada usuario accede
+          según su plan actual sin pagar. Pausar o bloquear una cuenta sí se aplica de inmediato.
         </p>
       )}
 

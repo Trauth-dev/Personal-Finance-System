@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import { ACCESO_LIBRE_GLOBAL, EMAILS_ACCESO_LIBRE } from "@/lib/plans/acceso-libre"
+import { COBROS_PAUSADOS, EMAILS_ACCESO_LIBRE } from "@/lib/plans/acceso-libre"
+import { planSinCobro, type PlanId } from "@/lib/plans/catalogo"
 import { PRECIO_PLAN_COMPLETO, PRECIO_PLAN_PERSONAL, esAdmin, type EstadoCuenta } from "@/lib/admin/config"
 
 const DIA = 86_400_000
@@ -46,6 +47,8 @@ export type UsuarioAdmin = {
     ultimaActividad: string | null
   }
   planSugerido: "personal" | "completo"
+  /** Plan con el que el usuario accede hoy a la app. */
+  planActual: PlanId
   segmento: Segmento
   diasDesdeAlta: number
   diasSinIngreso: number | null
@@ -194,7 +197,7 @@ export async function getDatosAdmin(): Promise<DatosAdmin> {
     let estadoPago: EstadoPago
     if (EMAILS_ACCESO_LIBRE.has(email)) estadoPago = "exento"
     else if (venceMs && venceMs > ahora) estadoPago = "activa"
-    else if (ACCESO_LIBRE_GLOBAL) estadoPago = "libre_temporal"
+    else if (COBROS_PAUSADOS) estadoPago = "libre_temporal"
     else if (pagos.aprobados > 0) estadoPago = "vencida"
     else estadoPago = "sin_pago"
 
@@ -275,6 +278,7 @@ export async function getDatosAdmin(): Promise<DatosAdmin> {
       },
       actividad: a,
       planSugerido,
+      planActual: estadoPago === "exento" ? "total" : planSinCobro(perfil?.plan_tier as string | null),
       segmento,
       diasDesdeAlta,
       diasSinIngreso,
@@ -325,7 +329,7 @@ export async function getDatosAdmin(): Promise<DatosAdmin> {
       exentos: usuarios.filter((u) => u.pago.estado === "exento").length,
     },
     altasPorMes: meses,
-    accesoLibreGlobal: ACCESO_LIBRE_GLOBAL,
+    accesoLibreGlobal: COBROS_PAUSADOS,
   }
 
   const auditoria: RegistroAuditoria[] = (auditoriaRes.data ?? []).map((r) => ({

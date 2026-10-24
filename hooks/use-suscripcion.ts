@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { tieneAccesoLibre } from "@/lib/plans/acceso-libre"
-import { planDesdeTier, type PlanId } from "@/lib/plans/catalogo"
+import { COBROS_PAUSADOS, tieneAccesoLibre } from "@/lib/plans/acceso-libre"
+import { planDesdeTier, planSinCobro, type PlanId } from "@/lib/plans/catalogo"
 
 interface UseSuscripcionReturn {
   // plan contratado vigente (null si no hay suscripcion activa)
@@ -14,6 +14,8 @@ interface UseSuscripcionReturn {
   activa: boolean
   // true si el usuario es socio/fundador con acceso libre (sin abonar)
   exento: boolean
+  // true si accede por su plan actual durante el período sin cobro (hasta habilitar Bancard)
+  sinCobro: boolean
   // fecha hasta la que esta vigente (ISO) o null si nunca pago
   vence: string | null
   // dias restantes hasta el vencimiento (0 si vencida o sin pago)
@@ -76,9 +78,17 @@ export function useSuscripcion(): UseSuscripcionReturn {
 
   const ahora = Date.now()
   const venceMs = vence ? new Date(vence).getTime() : 0
-  const activa = exento || venceMs > ahora
-  const diasRestantes = venceMs > ahora ? Math.ceil((venceMs - ahora) / (1000 * 60 * 60 * 24)) : 0
-  const plan: PlanId | null = exento ? "total" : venceMs > ahora ? planDesdeTier(tier) : null
+  const pagoVigente = venceMs > ahora
+  const diasRestantes = pagoVigente ? Math.ceil((venceMs - ahora) / (1000 * 60 * 60 * 24)) : 0
+  const sinCobro = !exento && !pagoVigente && COBROS_PAUSADOS
+  const plan: PlanId | null = exento
+    ? "total"
+    : pagoVigente
+      ? planDesdeTier(tier)
+      : COBROS_PAUSADOS
+        ? planSinCobro(tier)
+        : null
+  const activa = plan !== null
   const accesoTotal = plan === "total"
 
   return {
@@ -86,6 +96,7 @@ export function useSuscripcion(): UseSuscripcionReturn {
     accesoTotal,
     activa,
     exento,
+    sinCobro,
     vence,
     diasRestantes,
     isLoading,
