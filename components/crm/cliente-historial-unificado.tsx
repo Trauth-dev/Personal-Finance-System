@@ -76,6 +76,8 @@ interface Venta {
   monto_total: number
   estado: string
   created_at: string
+  producto?: string | null
+  origen?: "empresarial"
 }
 
 interface ActividadUnificada {
@@ -201,14 +203,36 @@ export function ClienteHistorialUnificado({ clienteId, perfilId }: ClienteHistor
       setAgendamientos(agendamientosData || [])
 
       // Cargar ventas
-      const { data: ventasData } = await supabase
-        .from("crm_ventas")
-        .select("*")
-        .eq("cliente_id", clienteId)
-        .eq("perfil_id", perfilId)
-        .order("created_at", { ascending: false })
+      const [{ data: crmVentasData }, { data: ventasEmpresaData }] = await Promise.all([
+        supabase
+          .from("crm_ventas")
+          .select("id, monto_total, estado, created_at")
+          .eq("cliente_id", clienteId)
+          .eq("perfil_id", perfilId),
+        supabase
+          .from("ventas")
+          .select("id, total, estado_pago, fecha, producto_nombre")
+          .eq("cliente_id", clienteId),
+      ])
 
-      setVentas(ventasData || [])
+      const ventasData: Venta[] = [
+        ...(crmVentasData || []).map((v) => ({
+          id: v.id,
+          monto_total: Number(v.monto_total) || 0,
+          estado: v.estado,
+          created_at: v.created_at,
+        })),
+        ...(ventasEmpresaData || []).map((v) => ({
+          id: `emp-${v.id}`,
+          monto_total: Number(v.total) || 0,
+          estado: v.estado_pago,
+          created_at: `${v.fecha}T12:00:00`,
+          producto: v.producto_nombre,
+          origen: "empresarial" as const,
+        })),
+      ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+      setVentas(ventasData)
 
       // Construir timeline unificado
       const actividadesUnificadas: ActividadUnificada[] = []
@@ -259,18 +283,20 @@ export function ClienteHistorialUnificado({ clienteId, perfilId }: ClienteHistor
       })
 
       // Agregar ventas
-      ventasData?.forEach(v => {
+      ventasData.forEach(v => {
         actividadesUnificadas.push({
           id: `v-${v.id}`,
           tipo: "venta",
-          titulo: "Venta realizada",
-          descripcion: `Venta por ${formatMoney(v.monto_total)}`,
+          titulo: v.origen === "empresarial" ? "Venta (Empresarial)" : "Venta realizada",
+          descripcion: v.producto
+            ? `${v.producto} - ${formatMoney(v.monto_total)}`
+            : `Venta por ${formatMoney(v.monto_total)}`,
           fecha: v.created_at,
           monto: v.monto_total,
           estado: v.estado,
           color: "#10b981",
           icono: "shopping-cart",
-          datos: v
+          datos: { ...v }
         })
       })
 
