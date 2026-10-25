@@ -137,6 +137,7 @@ export function TablaUsuarios({
             <TableRow className="hover:bg-transparent">
               <TableHead>Usuario</TableHead>
               <TableHead>Cuenta</TableHead>
+              <TableHead>Plan</TableHead>
               <TableHead>Pago</TableHead>
               <TableHead>Uso</TableHead>
               <TableHead>Alta</TableHead>
@@ -151,7 +152,7 @@ export function TablaUsuarios({
           <TableBody>
             {visibles.length === 0 && (
               <TableRow>
-                <TableCell colSpan={9} className="py-10 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
                   No hay usuarios con ese criterio.
                 </TableCell>
               </TableRow>
@@ -178,6 +179,9 @@ export function TablaUsuarios({
                     >
                       {ESTADO_CUENTA_INFO[u.estado].label}
                     </span>
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap text-sm text-foreground">
+                    {u.planActual === "total" ? "Total" : "Personal"}
                   </TableCell>
                   <TableCell className={cn("text-sm", ESTADO_PAGO_INFO[u.pago.estado].clase)}>
                     {ESTADO_PAGO_INFO[u.pago.estado].label}

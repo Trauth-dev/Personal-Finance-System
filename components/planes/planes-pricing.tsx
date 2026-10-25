@@ -11,7 +11,7 @@ function formatFecha(iso: string | null): string {
 }
 
 export function PlanesPricing() {
-  const { activa, exento, plan, vence, diasRestantes, isLoading } = useSuscripcion()
+  const { activa, exento, sinCobro, plan, vence, diasRestantes, isLoading } = useSuscripcion()
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-5 sm:p-8 lg:p-12">
@@ -53,7 +53,9 @@ export function PlanesPricing() {
                   <p className="text-xs text-slate-400">
                     {exento
                       ? "Tu cuenta tiene acceso completo sin vencimiento."
-                      : `Vence el ${formatFecha(vence)} · ${diasRestantes} día${diasRestantes === 1 ? "" : "s"} restante${diasRestantes === 1 ? "" : "s"}`}
+                      : sinCobro
+                        ? "Sin costo hasta que habilitemos los pagos con Bancard en diciembre."
+                        : `Vence el ${formatFecha(vence)} · ${diasRestantes} día${diasRestantes === 1 ? "" : "s"} restante${diasRestantes === 1 ? "" : "s"}`}
                   </p>
                 </div>
               </div>
@@ -71,7 +73,11 @@ export function PlanesPricing() {
           </div>
         )}
 
-        <PlanCards planActual={isLoading ? null : exento ? "total" : plan} accesoIncluido={exento} />
+        <PlanCards
+          planActual={isLoading ? null : exento ? "total" : plan}
+          accesoIncluido={exento}
+          pagosProximamente={sinCobro}
+        />
 
         <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
           {[

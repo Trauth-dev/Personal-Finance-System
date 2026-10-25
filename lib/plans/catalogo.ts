@@ -42,6 +42,14 @@ export function planDesdeTier(tier: string | null | undefined): PlanId {
   return tier === "personal" ? "personal" : "total"
 }
 
+/**
+ * Plan asignado mientras los cobros están pausados (sin pago registrado):
+ * solo las cuentas "completo" tienen acceso Total; el resto, Personal.
+ */
+export function planSinCobro(tier: string | null | undefined): PlanId {
+  return tier === "completo" ? "total" : "personal"
+}
+
 /** Rutas que requieren el plan Total (perfiles Empresarial y CRM). */
 export function rutaRequierePlanTotal(pathname: string): boolean {
   return /^\/dashboard\/(empresarial|crm)(\/|$)/.test(pathname)

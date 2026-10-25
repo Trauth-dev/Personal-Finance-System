@@ -32,9 +32,16 @@ interface PlanCardsProps {
   planes?: PlanId[]
   /** Cuenta con acceso Total habilitado sin pago: se muestran los planes sin permitir pagar. */
   accesoIncluido?: boolean
+  /** Período sin cobro: se muestra el plan actual y los pagos quedan deshabilitados hasta Bancard. */
+  pagosProximamente?: boolean
 }
 
-export function PlanCards({ planActual, planes = ["personal", "total"], accesoIncluido = false }: PlanCardsProps) {
+export function PlanCards({
+  planActual,
+  planes = ["personal", "total"],
+  accesoIncluido = false,
+  pagosProximamente = false,
+}: PlanCardsProps) {
   const { iniciarPago, procesando, error, noConfigurado } = useCheckoutPagopar()
 
   return (
@@ -52,6 +59,7 @@ export function PlanCards({ planActual, planes = ["personal", "total"], accesoIn
             beneficios={BENEFICIOS_PERSONAL}
             planActual={planActual}
             accesoIncluido={accesoIncluido}
+            pagosProximamente={pagosProximamente}
             procesando={procesando}
             onPagar={iniciarPago}
           />
@@ -64,6 +72,7 @@ export function PlanCards({ planActual, planes = ["personal", "total"], accesoIn
             beneficios={BENEFICIOS_TOTAL}
             planActual={planActual}
             accesoIncluido={accesoIncluido}
+            pagosProximamente={pagosProximamente}
             procesando={procesando}
             onPagar={iniciarPago}
           />
@@ -91,7 +100,9 @@ export function PlanCards({ planActual, planes = ["personal", "total"], accesoIn
 
       <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
         <ShieldCheck className="h-3.5 w-3.5" />
-        Pago mensual seguro con Bancard Paraguay — tarjetas, QR y transferencias
+        {pagosProximamente
+          ? "Los pagos con Bancard se habilitan en diciembre. Hasta entonces, usás tu plan sin costo."
+          : "Pago mensual seguro con Bancard Paraguay — tarjetas, QR y transferencias"}
       </p>
     </div>
   )
@@ -106,6 +117,7 @@ interface PlanCardProps {
   onPagar: (planId: PlanId) => void
   destacado?: boolean
   accesoIncluido?: boolean
+  pagosProximamente?: boolean
 }
 
 function PlanCard({
@@ -117,17 +129,24 @@ function PlanCard({
   onPagar,
   destacado,
   accesoIncluido,
+  pagosProximamente,
 }: PlanCardProps) {
   const plan = PLANES[planId]
   const esActual = planActual === planId
   // Bajar de Total a Personal a mitad de ciclo haría perder el acceso Total ya pagado.
   const bajaBloqueada = planId === "personal" && planActual === "total"
   const cargando = procesando === planId
+  const sinPago = accesoIncluido || pagosProximamente
+  const ofreceMejora = !sinPago && planId === "total" && planActual === "personal"
 
   const etiquetaBoton = accesoIncluido
     ? esActual
       ? "Incluido en tu cuenta"
       : "Ya incluido en tu acceso Total"
+    : pagosProximamente
+      ? esActual
+        ? "Tu plan actual"
+        : "Disponible desde diciembre"
     : esActual
       ? "Renovar 30 días"
       : planId === "total" && planActual === "personal"
@@ -177,7 +196,7 @@ function PlanCard({
 
       <Button
         onClick={() => onPagar(planId)}
-        disabled={accesoIncluido || procesando !== null || bajaBloqueada}
+        disabled={sinPago || procesando !== null || bajaBloqueada}
         className={cn(
           "mt-6 w-full font-semibold",
           destacado
@@ -192,9 +211,9 @@ function PlanCard({
           </>
         ) : (
           <>
-            {accesoIncluido ? (
+            {sinPago ? (
               <Check className="mr-2 h-4 w-4" />
-            ) : planId === "total" && planActual === "personal" ? (
+            ) : ofreceMejora ? (
               <ArrowUpRight className="mr-2 h-4 w-4" />
             ) : (
               <CreditCard className="mr-2 h-4 w-4" />
@@ -203,12 +222,12 @@ function PlanCard({
           </>
         )}
       </Button>
-      {bajaBloqueada && !accesoIncluido && (
+      {bajaBloqueada && !sinPago && (
         <p className="mt-2 text-center text-xs leading-relaxed text-slate-500">
           Disponible cuando venza tu plan Total vigente.
         </p>
       )}
-      {planId === "total" && planActual === "personal" && (
+      {ofreceMejora && (
         <p className="mt-2 text-center text-xs leading-relaxed text-slate-500">
           El acceso Total se activa al instante y suma 30 días a tu vencimiento.
         </p>

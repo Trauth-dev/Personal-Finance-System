@@ -50,7 +50,7 @@ export const ESTADO_CUENTA_INFO: Record<EstadoCuenta, { label: string; clase: st
 export const ESTADO_PAGO_INFO: Record<EstadoPago, { label: string; clase: string }> = {
   exento: { label: "Exento", clase: "text-primary" },
   activa: { label: "Al día", clase: "text-[hsl(var(--chart-4))]" },
-  libre_temporal: { label: "Acceso libre", clase: "text-muted-foreground" },
+  libre_temporal: { label: "Sin cobro (hasta dic.)", clase: "text-muted-foreground" },
   vencida: { label: "Vencida", clase: "text-destructive" },
   sin_pago: { label: "Sin pago", clase: "text-destructive" },
 }

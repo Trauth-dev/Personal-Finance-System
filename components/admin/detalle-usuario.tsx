@@ -162,6 +162,10 @@ export function DetalleUsuario({
                     label="Estado de pago"
                     valor={<span className={ESTADO_PAGO_INFO[usuario.pago.estado].clase}>{ESTADO_PAGO_INFO[usuario.pago.estado].label}</span>}
                   />
+                  <Dato
+                    label="Plan actual"
+                    valor={usuario.planActual === "total" ? "Prospera+ Total · 120.000 Gs" : "Prospera+ Personal · 80.000 Gs"}
+                  />
                   <Dato label="Suscripción vence" valor={fmtFecha(usuario.suscripcionVence)} />
                   <Dato label="Total pagado" valor={fmtGs(usuario.pago.totalPagado)} />
                   <Dato label="Pagos confirmados" valor={`${usuario.pago.pagosAprobados} (último: ${fmtFecha(usuario.pago.ultimoPago)})`} />

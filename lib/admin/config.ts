@@ -2,7 +2,7 @@
  * Cuentas con acceso al panel de administración (/admin).
  * La verificación se hace SIEMPRE en el servidor (página y server actions).
  */
-export const ADMIN_EMAILS = new Set<string>(["matiastrauth64@gmail.com"])
+export const ADMIN_EMAILS = new Set<string>(["matiastrauth64@gmail.com", "matiastrauth@gmail.com"])
 
 export function esAdmin(email: string | null | undefined): boolean {
   if (!email) return false
