@@ -40,6 +40,50 @@
     --sidebar-ring: 275 70% 55%;
   }
 
+  /* Tema claro del perfil Empresarial: se aplica sobre <html> y se revierte
+     dentro de la barra lateral y de las tarjetas de métricas con .tema-oscuro */
+  .tema-claro {
+    --background: 228 33% 97%;
+    --foreground: 230 35% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 230 35% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 35% 12%;
+    --primary: 265 75% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 262 70% 96%;
+    --secondary-foreground: 265 60% 38%;
+    --muted: 228 28% 95%;
+    --muted-foreground: 230 12% 42%;
+    --accent: 262 70% 96%;
+    --accent-foreground: 265 60% 38%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 22% 90%;
+    --input: 230 22% 88%;
+    --ring: 265 75% 55%;
+  }
+
+  .tema-oscuro {
+    --background: 220 20% 8%;
+    --foreground: 220 10% 98%;
+    --card: 225 28% 12%;
+    --card-foreground: 220 10% 98%;
+    --popover: 220 20% 10%;
+    --popover-foreground: 220 10% 98%;
+    --primary: 275 70% 55%;
+    --primary-foreground: 220 10% 98%;
+    --secondary: 220 15% 20%;
+    --secondary-foreground: 220 10% 98%;
+    --muted: 220 15% 18%;
+    --muted-foreground: 220 10% 65%;
+    --accent: 200 80% 50%;
+    --accent-foreground: 220 10% 98%;
+    --border: 220 15% 22%;
+    --input: 220 15% 20%;
+    --ring: 275 70% 55%;
+  }
+
   /* Removido @apply border-border que no es compatible con Tailwind v3 */
   * {
     border-color: hsl(var(--border));

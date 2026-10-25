@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { useAbrirNuevo } from "@/hooks/use-abrir-nuevo"
 import { createClient } from "@/lib/supabase/client"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { Button } from "@/components/ui/button"
@@ -41,6 +42,7 @@ export function InventarioManager() {
   const [productos, setProductos] = useState<Producto[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
+  useAbrirNuevo(() => setIsDialogOpen(true))
   const [editingProducto, setEditingProducto] = useState<Producto | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [formData, setFormData] = useState({

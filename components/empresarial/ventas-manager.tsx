@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { useAbrirNuevo } from "@/hooks/use-abrir-nuevo"
 import { createClient } from "@/lib/supabase/client"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { Button } from "@/components/ui/button"
@@ -26,10 +27,21 @@ import { toast } from "sonner"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import Link from "next/link"
+import { guardarVenta, eliminarVenta, mensajeError, type EstadoPago } from "@/lib/empresarial/operaciones"
+
+const CLIENTE_MANUAL = "manual"
+
+interface ClienteCrm {
+  id: string
+  nombre: string
+  apellido: string | null
+  telefono: string | null
+}
 
 interface Venta {
   id: string
   producto_id: string | null
+  cliente_id: string | null
   cantidad: number
   precio_unitario: number
   total: number
@@ -62,12 +74,16 @@ export function VentasManager() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingVenta, setEditingVenta] = useState<Venta | null>(null)
+  const [clientes, setClientes] = useState<ClienteCrm[]>([])
+  const [isSaving, setIsSaving] = useState(false)
+  useAbrirNuevo(() => setIsDialogOpen(true), !!perfilActual)
 
   // Form state
   const [formData, setFormData] = useState({
     producto_id: "",
     cantidad: "",
     precio_unitario: "",
+    cliente_id: CLIENTE_MANUAL,
     cliente_nombre: "",
     fecha: format(new Date(), "yyyy-MM-dd"),
     notas: "",
@@ -114,6 +130,15 @@ export function VentasManager() {
       if (productosError) throw productosError
 
       setProductos(productosData || [])
+
+      // Clientes compartidos con el CRM
+      const { data: clientesData } = await supabase
+        .from("clientes")
+        .select("id, nombre, apellido, telefono")
+        .eq("user_id", perfilActual.user_id)
+        .neq("estado", "inactivo")
+        .order("nombre", { ascending: true })
+      setClientes(clientesData || [])
     } catch (error) {
       console.error("Error al cargar datos:", error)
       toast.error("Error al cargar datos")
@@ -167,98 +192,43 @@ export function VentasManager() {
       return
     }
 
-    const supabase = createClient()
+    const precioUnitario = Number.parseFloat(formData.precio_unitario)
+    if (Number.isNaN(precioUnitario) || precioUnitario < 0) {
+      toast.error("Ingresá un precio válido")
+      return
+    }
 
+    setIsSaving(true)
     try {
-      const total = calcularTotal()
-      // producto_nombre es NOT NULL en la tabla: lo tomamos del producto elegido.
-      const productoNombre = producto?.nombre || "Producto"
-
-      const dataToSave = {
-        producto_id: formData.producto_id,
-        producto_nombre: productoNombre,
-        cantidad: cantidad,
-        precio_unitario: Number.parseFloat(formData.precio_unitario),
-        total: total,
-        cliente_nombre: formData.cliente_nombre || null,
+      await guardarVenta({
+        id: editingVenta?.id,
+        perfilId: perfilActual.id,
+        productoId: formData.producto_id,
+        cantidad,
+        precioUnitario,
         fecha: formData.fecha,
-        notas: formData.notas || null,
-        estado_pago: formData.estado_pago,
-        fecha_pago: formData.estado_pago === "pagado" ? formData.fecha : null,
-        fecha_vencimiento:
-          formData.estado_pago === "pendiente" && formData.fecha_vencimiento ? formData.fecha_vencimiento : null,
-      }
+        estadoPago: formData.estado_pago as EstadoPago,
+        fechaVencimiento: formData.fecha_vencimiento,
+        clienteId: formData.cliente_id !== CLIENTE_MANUAL ? formData.cliente_id : null,
+        clienteNombre: formData.cliente_nombre,
+        notas: formData.notas,
+      })
 
-      if (editingVenta) {
-        const { error } = await supabase.from("ventas").update(dataToSave).eq("id", editingVenta.id)
-
-        if (error) throw error
-
-        // Mantener sincronizado el ingreso vinculado (si existe)
-        if (editingVenta.ingreso_id) {
-          await supabase
-            .from("ingresos")
-            .update({
-              tipo_ingreso: "Ventas",
-              monto: total,
-              fecha: formData.fecha,
-            })
-            .eq("id", editingVenta.ingreso_id)
-        }
-
-        toast.success("Venta actualizada exitosamente")
-      } else {
-        // 1) Crear el ingreso primero, para vincularlo a la venta
-        const { data: ingresoData, error: ingresoError } = await supabase
-          .from("ingresos")
-          .insert({
-            user_id: perfilActual.user_id,
-            perfil_id: perfilActual.id,
-            tipo_ingreso: "Ventas",
-            monto: total,
-            fecha: formData.fecha,
-          })
-          .select("id")
-          .single()
-
-        if (ingresoError) throw ingresoError
-
-        // 2) Crear la venta vinculada al ingreso
-        const { error } = await supabase.from("ventas").insert({
-          ...dataToSave,
-          perfil_id: perfilActual.id,
-          ingreso_id: ingresoData?.id ?? null,
-        })
-
-        if (error) {
-          // Revertir el ingreso si la venta falla, para no dejar ingresos huérfanos
-          if (ingresoData?.id) {
-            await supabase.from("ingresos").delete().eq("id", ingresoData.id)
-          }
-          throw error
-        }
-
-        // 3) Actualizar stock del producto
-        if (producto) {
-          const { error: stockError } = await supabase
-            .from("inventario")
-            .update({
-              stock_actual: producto.stock_actual - cantidad,
-            })
-            .eq("id", formData.producto_id)
-
-          if (stockError) throw stockError
-        }
-
-        toast.success("Venta registrada e ingreso generado")
-      }
-
+      toast.success(
+        editingVenta
+          ? "Venta actualizada"
+          : formData.estado_pago === "pagado"
+            ? "Venta registrada: stock descontado e ingreso en caja"
+            : "Venta registrada: stock descontado y cuenta por cobrar creada",
+      )
       setIsDialogOpen(false)
       resetForm()
       cargarDatos()
     } catch (error) {
       console.error("Error al guardar venta:", error)
-      toast.error("Error al guardar venta")
+      toast.error(mensajeError(error, "Error al guardar venta"))
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -268,6 +238,7 @@ export function VentasManager() {
       producto_id: venta.producto_id || "",
       cantidad: venta.cantidad.toString(),
       precio_unitario: venta.precio_unitario.toString(),
+      cliente_id: venta.cliente_id || CLIENTE_MANUAL,
       cliente_nombre: venta.cliente_nombre || "",
       fecha: venta.fecha,
       notas: venta.notas || "",
@@ -278,38 +249,15 @@ export function VentasManager() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Estás seguro de que deseas eliminar esta venta? También se eliminará el ingreso asociado.")) return
-
-    const supabase = createClient()
+    if (!confirm("¿Eliminar esta venta? Se repondrá el stock y se quitará el ingreso asociado.")) return
 
     try {
-      const venta = ventas.find((v) => v.id === id)
-
-      // Reponer el stock del producto vendido
-      if (venta?.producto_id) {
-        const producto = productos.find((p) => p.id === venta.producto_id)
-        if (producto) {
-          await supabase
-            .from("inventario")
-            .update({ stock_actual: producto.stock_actual + Number(venta.cantidad) })
-            .eq("id", venta.producto_id)
-        }
-      }
-
-      const { error } = await supabase.from("ventas").delete().eq("id", id)
-
-      if (error) throw error
-
-      // Eliminar el ingreso vinculado, para que las finanzas queden consistentes
-      if (venta?.ingreso_id) {
-        await supabase.from("ingresos").delete().eq("id", venta.ingreso_id)
-      }
-
-      toast.success("Venta e ingreso eliminados")
+      await eliminarVenta(id)
+      toast.success("Venta eliminada y stock repuesto")
       cargarDatos()
     } catch (error) {
       console.error("Error al eliminar venta:", error)
-      toast.error("Error al eliminar venta")
+      toast.error(mensajeError(error, "Error al eliminar venta"))
     }
   }
 
@@ -318,6 +266,7 @@ export function VentasManager() {
       producto_id: "",
       cantidad: "",
       precio_unitario: "",
+      cliente_id: CLIENTE_MANUAL,
       cliente_nombre: "",
       fecha: format(new Date(), "yyyy-MM-dd"),
       notas: "",
@@ -471,13 +420,35 @@ export function VentasManager() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="cliente_nombre">Cliente</Label>
-                      <Input
-                        id="cliente_nombre"
-                        value={formData.cliente_nombre}
-                        onChange={(e) => setFormData({ ...formData, cliente_nombre: e.target.value })}
-                        placeholder="Nombre del cliente (opcional)"
-                      />
+                      <Label htmlFor="cliente_id">Cliente</Label>
+                      <Select
+                        value={formData.cliente_id}
+                        onValueChange={(value) => setFormData({ ...formData, cliente_id: value })}
+                      >
+                        <SelectTrigger id="cliente_id">
+                          <SelectValue placeholder="Seleccionar cliente" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value={CLIENTE_MANUAL}>Cliente ocasional / escribir nombre</SelectItem>
+                          {clientes.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {[c.nombre, c.apellido].filter(Boolean).join(" ")}
+                              {c.telefono ? ` · ${c.telefono}` : ""}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {formData.cliente_id === CLIENTE_MANUAL ? (
+                        <Input
+                          id="cliente_nombre"
+                          value={formData.cliente_nombre}
+                          onChange={(e) => setFormData({ ...formData, cliente_nombre: e.target.value })}
+                          placeholder="Nombre del cliente (opcional)"
+                          aria-label="Nombre del cliente"
+                        />
+                      ) : (
+                        <p className="text-xs text-muted-foreground">Cliente del CRM: la venta queda en su historial.</p>
+                      )}
                     </div>
 
                     <div className="space-y-2">
@@ -588,8 +559,8 @@ export function VentasManager() {
                     >
                       Cancelar
                     </Button>
-                    <Button type="submit" disabled={stockInsuficiente}>
-                      {editingVenta ? "Actualizar" : "Registrar"} Venta
+                    <Button type="submit" disabled={stockInsuficiente || isSaving}>
+                      {isSaving ? "Guardando..." : `${editingVenta ? "Actualizar" : "Registrar"} Venta`}
                     </Button>
                   </div>
                 </form>

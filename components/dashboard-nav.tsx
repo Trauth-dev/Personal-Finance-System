@@ -42,7 +42,10 @@ import {
   Kanban,
   Snowflake,
   Sparkles,
+  Home,
+  CircleDollarSign,
 } from "lucide-react"
+import { GRUPOS_EMPRESARIAL } from "@/components/empresarial/empresarial-subnav"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
@@ -137,67 +140,35 @@ const navItemsPersonal = [
   },
 ]
 
-const navItemsEmpresarial = [
+type NavItem = {
+  title: string
+  href: string
+  icon: typeof Home
+  /** Rutas que mantienen activo el ítem (grupos con sub-secciones). */
+  matches?: readonly string[]
+}
+
+const navItemsEmpresarial: NavItem[] = [
+  { title: "Resumen", href: "/dashboard/empresarial", icon: Home },
   {
-    title: "Dashboard Principal",
-    href: "/dashboard/empresarial",
-    icon: Building2,
-  },
-  {
-    title: "Carga de Ingreso y Egreso",
-    href: "/dashboard/carga",
-    icon: PlusCircle,
+    title: "Operaciones",
+    href: "/dashboard/empresarial/ventas",
+    icon: ShoppingCart,
+    matches: GRUPOS_EMPRESARIAL[0].items.map((i) => i.href),
   },
   {
     title: "Inventario",
     href: "/dashboard/empresarial/inventario",
     icon: Package,
+    matches: GRUPOS_EMPRESARIAL[1].items.map((i) => i.href),
   },
   {
-    title: "Proveedores",
-    href: "/dashboard/empresarial/proveedores",
-    icon: Users,
-  },
-  {
-    title: "Materias Primas",
-    href: "/dashboard/empresarial/materias-primas",
-    icon: Boxes,
-  },
-  {
-    title: "Compras",
-    href: "/dashboard/empresarial/compras",
-    icon: ShoppingBag,
-  },
-  {
-    title: "Ventas",
-    href: "/dashboard/empresarial/ventas",
-    icon: ShoppingCart,
-  },
-  {
-    title: "Cuentas por Cobrar/Pagar",
+    title: "Finanzas",
     href: "/dashboard/empresarial/cuentas",
-    icon: Wallet,
+    icon: CircleDollarSign,
+    matches: GRUPOS_EMPRESARIAL[2].items.map((i) => i.href),
   },
-  {
-    title: "Flujo de Caja",
-    href: "/dashboard/empresarial/flujo",
-    icon: TrendingUp,
-  },
-  {
-    title: "Reportes",
-    href: "/dashboard/empresarial/reportes",
-    icon: BarChart3,
-  },
-  {
-    title: "Historial",
-    href: "/dashboard/empresarial/historial",
-    icon: History,
-  },
-  // Ocultos temporalmente (páginas aún no desarrolladas):
-  // Dashboard Secundario -> /dashboard/empresarial/resumen
-  // Diagnóstico inteligente -> /dashboard/empresarial/terciario
-  // Asesoramiento + Herramientas -> /dashboard/empresarial/analisis
-  // Categorías -> /dashboard/empresarial/categorias
+  { title: "Reportes", href: "/dashboard/empresarial/reportes", icon: BarChart3 },
 ]
 
 const navItemsCRM = [
@@ -314,7 +285,7 @@ function NavContent({
     }
   }
 
-  const getNavItems = () => {
+  const getNavItems = (): NavItem[] => {
     switch (perfilActual?.tipo) {
       case "empresarial":
         return [...navItemsEmpresarial, ...navItemsCommon]
@@ -338,7 +309,7 @@ function NavContent({
   const navItems = getNavItems()
 
   return (
-    <div className="flex flex-col h-full bg-sidebar border-r border-sidebar-border">
+    <div className="tema-oscuro flex flex-col h-full bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
       <div className={cn("p-4 border-b border-sidebar-border transition-all", isCollapsed && !isMobile && "p-2")}>
         <div className={cn("flex items-center gap-3 mb-4", isCollapsed && !isMobile && "justify-center mb-2")}>
           {isCollapsed && !isMobile ? (
@@ -442,7 +413,9 @@ function NavContent({
               </div>
             ))
           : navItems.map((item) => {
-          const isActive = pathname === item.href
+          const isActive = item.matches
+            ? item.matches.some((ruta) => pathname.startsWith(ruta))
+            : pathname === item.href
           const Icon = item.icon
 
           return (
