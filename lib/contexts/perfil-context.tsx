@@ -10,6 +10,7 @@ import {
   DEFAULT_COUNTRY_CODE,
   DEFAULT_TIMEZONE,
 } from "@/lib/currency"
+import { resolverPlan } from "@/lib/plans/catalogo"
 
 interface Perfil {
   id: string
@@ -65,12 +66,16 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
 
       // Cargar moneda/país del usuario y activarlos globalmente para el
       // formateo de dinero (formatMoney/formatGuaranies) en toda la app.
+      let accesoTotal = false
       try {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("moneda, pais, zona_horaria")
+          .select("moneda, pais, zona_horaria, plan_tier, suscripcion_vence")
           .eq("id", user.id)
           .maybeSingle()
+
+        accesoTotal =
+          resolverPlan({ email: user.email, tier: profile?.plan_tier, vence: profile?.suscripcion_vence }) === "total"
 
         const monedaUsuario = profile?.moneda || DEFAULT_CURRENCY
         setCurrentCurrency(monedaUsuario)
@@ -101,7 +106,12 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
       
       // Priorizar: 1) Perfil guardado, 2) Perfil "Personal", 3) Primer perfil disponible
       let perfilInicial = perfilGuardadoId ? data?.find((p) => p.id === perfilGuardadoId) : null
-      
+
+      // Sin plan Completo, Empresarial y CRM no se abren: siempre entra a Personal.
+      if (perfilInicial && perfilInicial.tipo !== "personal" && !accesoTotal) {
+        perfilInicial = null
+      }
+
       // Si no hay perfil guardado o no se encontró, usar el perfil "Personal" por defecto
       if (!perfilInicial) {
         perfilInicial = data?.find((p) => p.tipo === "personal") || data?.[0]

@@ -6,6 +6,7 @@
  * importar profiles.suscripcion_vence ni profiles.plan_tier.
  */
 export const EMAILS_ACCESO_LIBRE = new Set<string>([
+  "matiastrauth64@gmail.com", // Matías Trauth
   "matiastrauth64lol@gmail.com", // Matías Trauth
   "matiastrauth@gmail.com", // Matías Trauth (admin)
   "luccianaramos007@gmail.com", // Luciana Ramos

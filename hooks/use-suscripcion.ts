@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { COBROS_PAUSADOS, tieneAccesoLibre } from "@/lib/plans/acceso-libre"
-import { planDesdeTier, planSinCobro, type PlanId } from "@/lib/plans/catalogo"
+import { resolverPlan, type PlanId } from "@/lib/plans/catalogo"
 
 interface UseSuscripcionReturn {
   // plan contratado vigente (null si no hay suscripcion activa)
@@ -81,13 +81,7 @@ export function useSuscripcion(): UseSuscripcionReturn {
   const pagoVigente = venceMs > ahora
   const diasRestantes = pagoVigente ? Math.ceil((venceMs - ahora) / (1000 * 60 * 60 * 24)) : 0
   const sinCobro = !exento && !pagoVigente && COBROS_PAUSADOS
-  const plan: PlanId | null = exento
-    ? "total"
-    : pagoVigente
-      ? planDesdeTier(tier)
-      : COBROS_PAUSADOS
-        ? planSinCobro(tier)
-        : null
+  const plan: PlanId | null = exento ? "total" : resolverPlan({ email: null, tier, vence })
   const activa = plan !== null
   const accesoTotal = plan === "total"
 
