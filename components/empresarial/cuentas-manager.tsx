@@ -14,6 +14,7 @@ import { ArrowDownCircle, ArrowUpCircle, CheckCircle2, Wallet, AlertTriangle, Cl
 import { toast } from "sonner"
 import { format, differenceInCalendarDays, parseISO } from "date-fns"
 import { formatMoney } from "@/lib/currency"
+import { registrarPago, mensajeError } from "@/lib/empresarial/operaciones"
 
 interface Cuenta {
   id: string
@@ -135,18 +136,13 @@ export function CuentasManager() {
   }
 
   const marcarPagado = async (tabla: "ventas" | "compras", id: string) => {
-    const supabase = createClient()
     try {
-      const { error } = await supabase
-        .from(tabla)
-        .update({ estado_pago: "pagado", fecha_pago: format(new Date(), "yyyy-MM-dd") })
-        .eq("id", id)
-      if (error) throw error
-      toast.success(tabla === "ventas" ? "Marcado como cobrado" : "Marcado como pagado")
+      await registrarPago(tabla === "ventas" ? "venta" : "compra", id, format(new Date(), "yyyy-MM-dd"))
+      toast.success(tabla === "ventas" ? "Cobro registrado en caja" : "Pago registrado en caja")
       cargarCuentas()
     } catch (error) {
-      console.error("[v0] Error al marcar pago:", error)
-      toast.error("No se pudo actualizar el estado")
+      console.error("Error al registrar pago:", error)
+      toast.error(mensajeError(error, "No se pudo registrar el pago"))
     }
   }
 

@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
+import { useAbrirNuevo } from "@/hooks/use-abrir-nuevo"
 import { createClient } from "@/lib/supabase/client"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,7 @@ import { Plus, Search, Edit, Trash2, ShoppingBag } from "lucide-react"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { formatMoney } from "@/lib/currency"
+import { guardarCompra, eliminarCompra, mensajeError, type EstadoPago } from "@/lib/empresarial/operaciones"
 
 const SIN_PROVEEDOR = "none"
 
@@ -79,6 +81,8 @@ export function ComprasManager() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingCompra, setEditingCompra] = useState<Compra | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
+  useAbrirNuevo(() => setIsDialogOpen(true), !!perfilActual)
 
   const [formData, setFormData] = useState({
     destino: "producto" as Destino,
@@ -164,32 +168,6 @@ export function ComprasManager() {
     return cantidad * costo
   }
 
-  // Suma (signo +1) o resta (signo -1) stock al destino de una compra
-  const ajustarStock = async (
-    supabase: ReturnType<typeof createClient>,
-    compra: { producto_id: string | null; materia_prima_id: string | null; cantidad: number },
-    signo: 1 | -1,
-  ) => {
-    const delta = signo * Number(compra.cantidad)
-    if (compra.producto_id) {
-      const p = productos.find((x) => x.id === compra.producto_id)
-      if (p) {
-        await supabase
-          .from("inventario")
-          .update({ stock_actual: Math.max(0, Number(p.stock_actual) + delta) })
-          .eq("id", compra.producto_id)
-      }
-    } else if (compra.materia_prima_id) {
-      const m = materiasPrimas.find((x) => x.id === compra.materia_prima_id)
-      if (m) {
-        await supabase
-          .from("materias_primas")
-          .update({ stock_actual: Math.max(0, Number(m.stock_actual) + delta) })
-          .eq("id", compra.materia_prima_id)
-      }
-    }
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -240,90 +218,39 @@ export function ComprasManager() {
     }
 
     const proveedor = proveedores.find((p) => p.id === formData.proveedor_id)
-    const supabase = createClient()
 
+    setIsSaving(true)
     try {
-      const total = cantidad * costoUnitario
-      const proveedorNombre = proveedor?.nombre || "Sin proveedor"
-
-      const dataToSave = {
-        producto_id: productoId,
-        materia_prima_id: materiaPrimaId,
-        materia_prima_nombre: itemNombre,
-        proveedor_id: proveedor?.id || null,
-        proveedor_nombre: proveedorNombre,
+      await guardarCompra({
+        id: editingCompra?.id,
+        perfilId: perfilActual.id,
+        destino: formData.destino,
+        itemId: productoId || materiaPrimaId,
+        itemNombre,
+        proveedorId: proveedor?.id || null,
         cantidad,
-        costo_unitario: costoUnitario,
-        total,
+        costoUnitario,
         fecha: formData.fecha,
-        notas: formData.notas || null,
-        estado_pago: formData.estado_pago,
-        fecha_pago: formData.estado_pago === "pagado" ? formData.fecha : null,
-        fecha_vencimiento:
-          formData.estado_pago === "pendiente" && formData.fecha_vencimiento ? formData.fecha_vencimiento : null,
-      }
+        estadoPago: formData.estado_pago as EstadoPago,
+        fechaVencimiento: formData.fecha_vencimiento,
+        notas: formData.notas,
+      })
 
-      if (editingCompra) {
-        // Revertir el stock del destino anterior antes de aplicar el nuevo
-        await ajustarStock(supabase, editingCompra, -1)
-
-        const { error } = await supabase.from("compras").update(dataToSave).eq("id", editingCompra.id)
-        if (error) throw error
-
-        // Aplicar el stock del nuevo destino
-        await ajustarStock(supabase, { producto_id: productoId, materia_prima_id: materiaPrimaId, cantidad }, 1)
-
-        // Sincronizar el egreso vinculado
-        if (editingCompra.egreso_id) {
-          await supabase
-            .from("egresos")
-            .update({ monto: total, fecha: formData.fecha, concepto: `Compra: ${itemNombre}` })
-            .eq("id", editingCompra.egreso_id)
-        }
-
-        toast.success("Compra actualizada exitosamente")
-      } else {
-        // 1) Crear el egreso primero (queda como costo del negocio)
-        const { data: egresoData, error: egresoError } = await supabase
-          .from("egresos")
-          .insert({
-            user_id: perfilActual.user_id,
-            perfil_id: perfilActual.id,
-            monto: total,
-            fecha: formData.fecha,
-            concepto: `Compra: ${itemNombre}`,
-          })
-          .select("id")
-          .single()
-
-        if (egresoError) throw egresoError
-
-        // 2) Crear la compra vinculada al egreso
-        const { error } = await supabase.from("compras").insert({
-          ...dataToSave,
-          perfil_id: perfilActual.id,
-          egreso_id: egresoData?.id ?? null,
-        })
-
-        if (error) {
-          if (egresoData?.id) {
-            await supabase.from("egresos").delete().eq("id", egresoData.id)
-          }
-          throw error
-        }
-
-        // 3) Sumar stock al destino elegido (producto o materia prima)
-        await ajustarStock(supabase, { producto_id: productoId, materia_prima_id: materiaPrimaId, cantidad }, 1)
-
-        toast.success("Compra registrada y egreso generado")
-      }
-
+      toast.success(
+        editingCompra
+          ? "Compra actualizada"
+          : formData.estado_pago === "pagado"
+            ? "Compra registrada: stock sumado y egreso en caja"
+            : "Compra registrada: stock sumado y cuenta por pagar creada",
+      )
       setIsDialogOpen(false)
       resetForm()
       cargarDatos()
     } catch (error) {
       console.error("Error al guardar compra:", error)
-      toast.error("Error al guardar compra")
+      toast.error(mensajeError(error, "Error al guardar compra"))
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -346,30 +273,15 @@ export function ComprasManager() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm("¿Eliminar esta compra? También se eliminará el egreso asociado y se revertirá el stock.")) return
-
-    const supabase = createClient()
+    if (!confirm("¿Eliminar esta compra? Se revertirá el stock y se quitará el egreso asociado.")) return
 
     try {
-      const compra = compras.find((c) => c.id === id)
-
-      // Revertir el stock sumado (al producto o materia prima)
-      if (compra) {
-        await ajustarStock(supabase, compra, -1)
-      }
-
-      const { error } = await supabase.from("compras").delete().eq("id", id)
-      if (error) throw error
-
-      if (compra?.egreso_id) {
-        await supabase.from("egresos").delete().eq("id", compra.egreso_id)
-      }
-
-      toast.success("Compra y egreso eliminados")
+      await eliminarCompra(id)
+      toast.success("Compra eliminada y stock revertido")
       cargarDatos()
     } catch (error) {
       console.error("Error al eliminar compra:", error)
-      toast.error("Error al eliminar compra")
+      toast.error(mensajeError(error, "Error al eliminar compra"))
     }
   }
 
@@ -668,7 +580,9 @@ export function ComprasManager() {
                     >
                       Cancelar
                     </Button>
-                    <Button type="submit">{editingCompra ? "Actualizar" : "Registrar Compra"}</Button>
+                    <Button type="submit" disabled={isSaving}>
+                      {isSaving ? "Guardando..." : editingCompra ? "Actualizar" : "Registrar Compra"}
+                    </Button>
                   </div>
                 </form>
               </DialogContent>

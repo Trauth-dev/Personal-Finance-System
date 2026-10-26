@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { PerfilSelector } from "@/components/perfil-selector"
 import { usePerfil } from "@/lib/contexts/perfil-context"
+import { EmpresarialSubnav } from "@/components/empresarial/empresarial-subnav"
 
 export function DashboardHeader({ title, description }: { title: string; description?: string }) {
   const { sistemaActivo } = usePerfil()
@@ -31,6 +32,7 @@ export function DashboardHeader({ title, description }: { title: string; descrip
           </Button>
         </div>
       </div>
+      <EmpresarialSubnav />
     </div>
   )
 }
