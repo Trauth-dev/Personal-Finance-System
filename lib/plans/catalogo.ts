@@ -1,6 +1,8 @@
 // Catálogo de planes Prospera+. Montos EN GUARANÍES (PagoPar liquida en PYG).
 // Es la fuente de verdad compartida por la UI, el checkout y el webhook.
 
+import { COBROS_PAUSADOS, tieneAccesoLibre } from "@/lib/plans/acceso-libre"
+
 export type PlanId = "personal" | "total"
 
 export interface PlanProspera {
@@ -34,12 +36,27 @@ export function esPlanId(valor: unknown): valor is PlanId {
 }
 
 /**
- * Traduce profiles.plan_tier al plan vigente. Solo "personal" restringe el
- * acceso; cualquier otro valor con suscripción vigente (incluidas las
- * suscripciones únicas anteriores de Gs 100.000) conserva el acceso Total.
+ * Traduce profiles.plan_tier al plan vigente con suscripción paga.
+ * Solo "completo" habilita Total (Personal + Empresarial + CRM); cualquier
+ * otro valor ("basico", "personal") queda únicamente con el perfil Personal.
  */
 export function planDesdeTier(tier: string | null | undefined): PlanId {
-  return tier === "personal" ? "personal" : "total"
+  return tier === "completo" ? "total" : "personal"
+}
+
+/**
+ * Fuente única para decidir el plan de un usuario en todo el sistema.
+ * Devuelve null si no tiene acceso (sin pago y con cobros activos).
+ */
+export function resolverPlan(datos: {
+  email: string | null | undefined
+  tier: string | null | undefined
+  vence: string | null | undefined
+}): PlanId | null {
+  if (tieneAccesoLibre(datos.email)) return "total"
+  const pagoVigente = datos.vence ? new Date(datos.vence).getTime() > Date.now() : false
+  if (pagoVigente) return planDesdeTier(datos.tier)
+  return COBROS_PAUSADOS ? planSinCobro(datos.tier) : null
 }
 
 /**
