@@ -39,7 +39,9 @@ import {
   Smartphone,
   Pencil,
   AlertTriangle,
+  ArrowLeftRight,
 } from "lucide-react"
+import { TransferirCajaDialog } from "@/components/personal/transferir-caja-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { formatGuaranies } from "@/lib/utils"
 import { NuevaCajaAhorroDialog, iconosDisponibles, tiposCuenta, coloresDisponibles } from "@/components/personal/nueva-caja-ahorro-dialog"
@@ -78,6 +80,8 @@ export function CajasAhorroManager() {
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false)
   const [cajaAEliminar, setCajaAEliminar] = useState<CajaAhorro | null>(null)
   const [cajaSeleccionada, setCajaSeleccionada] = useState<CajaAhorro | null>(null)
+  const [isTransferOpen, setIsTransferOpen] = useState(false)
+  const [transferOrigenId, setTransferOrigenId] = useState<string | null>(null)
   const [editData, setEditData] = useState({
     nombre: "",
     descripcion: "",
@@ -287,16 +291,38 @@ export function CajasAhorroManager() {
     <div className="space-y-6">
       <Card className="glass-effect border-border/50 bg-gradient-to-br from-primary/5 to-primary/10">
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <CardTitle className="text-2xl">Resumen de Ahorros</CardTitle>
               <CardDescription>Distribución de tu dinero en diferentes objetivos</CardDescription>
             </div>
-            <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
-              <Plus className="w-4 h-4" />
-              Nueva Caja
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                className="gap-2 bg-transparent"
+                onClick={() => {
+                  setTransferOrigenId(null)
+                  setIsTransferOpen(true)
+                }}
+                disabled={cajas.length < 2}
+                title={cajas.length < 2 ? "Necesitás al menos dos cajas para transferir" : undefined}
+              >
+                <ArrowLeftRight className="w-4 h-4" aria-hidden="true" />
+                Transferir
+              </Button>
+              <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
+                <Plus className="w-4 h-4" />
+                Nueva Caja
+              </Button>
+            </div>
             <NuevaCajaAhorroDialog open={isDialogOpen} onOpenChange={setIsDialogOpen} onCreated={() => loadCajas()} />
+            <TransferirCajaDialog
+              open={isTransferOpen}
+              onOpenChange={setIsTransferOpen}
+              cajas={cajas}
+              origenInicialId={transferOrigenId}
+              onTransferred={() => loadCajas()}
+            />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -471,6 +497,21 @@ export function CajasAhorroManager() {
                       Retirar
                     </Button>
                   </div>
+                  {cajas.length > 1 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full gap-1 bg-transparent"
+                      onClick={() => {
+                        setTransferOrigenId(caja.id)
+                        setIsTransferOpen(true)
+                      }}
+                      disabled={caja.monto_actual <= 0}
+                    >
+                      <ArrowLeftRight className="w-4 h-4" aria-hidden="true" />
+                      Transferir
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )
