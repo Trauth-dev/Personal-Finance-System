@@ -43,6 +43,7 @@ import {
 } from "lucide-react"
 import { TransferirCajaDialog } from "@/components/personal/transferir-caja-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { notificarCambioFinanciero } from "@/lib/finanzas/operaciones"
 import { formatGuaranies } from "@/lib/utils"
 import { NuevaCajaAhorroDialog, iconosDisponibles, tiposCuenta, coloresDisponibles } from "@/components/personal/nueva-caja-ahorro-dialog"
 
@@ -143,35 +144,23 @@ export function CajasAhorroManager() {
     e.preventDefault()
     if (!cajaSeleccionada) return
 
-    const supabase = createClient()
     const monto = Number.parseFloat(movimientoData.monto)
-
-    const { data: movData, error: movimientoError } = await supabase.from("movimientos_caja").insert({
-      caja_id: cajaSeleccionada.id,
-      tipo: movimientoData.tipo,
-      monto: monto,
-      concepto: movimientoData.descripcion || null,
-      fecha: new Date().toISOString().split("T")[0],
-    }).select()
-
-    if (movimientoError) {
-      toast({
-        title: "Error",
-        description: "No se pudo registrar el movimiento",
-        variant: "destructive",
-      })
+    if (!Number.isFinite(monto) || monto <= 0) {
+      toast({ title: "Monto inválido", description: "El monto debe ser mayor a cero.", variant: "destructive" })
       return
     }
 
-    const nuevoMonto =
-      movimientoData.tipo === "deposito" ? cajaSeleccionada.monto_actual + monto : cajaSeleccionada.monto_actual - monto
-
-    const { error: updateError } = await supabase
-      .from("cajas_ahorro")
-      .update({ monto_actual: nuevoMonto })
-      .eq("id", cajaSeleccionada.id)
+    const supabase = createClient()
+    // Saldo y movimiento se aplican en una sola transacción (valida saldo suficiente en retiros).
+    const { error: updateError } = await supabase.rpc("fin_movimiento_caja", {
+      p_caja: cajaSeleccionada.id,
+      p_tipo: movimientoData.tipo,
+      p_monto: monto,
+      p_concepto: movimientoData.descripcion || null,
+    })
 
     if (!updateError) {
+      notificarCambioFinanciero()
       toast({
         title: "Movimiento registrado",
         description: `${movimientoData.tipo === "deposito" ? "Depósito" : "Retiro"} realizado exitosamente`,
@@ -186,8 +175,11 @@ export function CajasAhorroManager() {
       loadCajas()
     } else {
       toast({
-        title: "Error",
-        description: "No se pudo actualizar la caja",
+        title: "No se pudo registrar el movimiento",
+        description:
+          updateError.code === "P0001" || updateError.code === "42501"
+            ? updateError.message
+            : "Revisá tu conexión e intentá de nuevo.",
         variant: "destructive",
       })
     }
