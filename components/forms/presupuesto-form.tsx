@@ -192,6 +192,17 @@ function borrarBorrador(perfilId: string, anio: string, mes: string) {
   }
 }
 
+// Primer día (YYYY-MM-01, hora local) del mes en que la deuda fue registrada.
+function mesDeRegistro(deuda: { created_at?: string | null; fecha_inicio?: string | null }): string | null {
+  if (deuda.created_at) {
+    const d = new Date(deuda.created_at)
+    if (!Number.isNaN(d.getTime())) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`
+    }
+  }
+  return deuda.fecha_inicio ? `${String(deuda.fecha_inicio).slice(0, 7)}-01` : null
+}
+
 export function PresupuestoForm() {
   const { perfilActual } = usePerfil()
   const todayStr = getTodayDate()
@@ -244,7 +255,7 @@ export function PresupuestoForm() {
         // 5. Deudas del usuario (para vincular la categoría "Deudas" del presupuesto)
         supabase
           .from("deudas")
-          .select("id, nombre, tipo_deuda, estado, monto_total, monto_pagado, cuotas_totales, cuotas_pagadas, monto_cuota, montos_cuotas, fecha_inicio")
+          .select("id, nombre, tipo_deuda, estado, monto_total, monto_pagado, cuotas_totales, cuotas_pagadas, monto_cuota, montos_cuotas, fecha_inicio, created_at")
           .eq("perfil_id", perfilActual.id),
       ])
 
@@ -342,7 +353,7 @@ export function PresupuestoForm() {
 
           // 3) Si sigue sin existir, crearla vinculada a la deuda
           if (!cat && authUserId) {
-            const mesDesde = deuda.fecha_inicio ? `${String(deuda.fecha_inicio).slice(0, 7)}-01` : null
+            const mesDesde = mesDeRegistro(deuda)
             const { data: nuevaCat } = await supabase
               .from("categorias_egreso")
               .insert({
@@ -447,20 +458,22 @@ export function PresupuestoForm() {
           const esPrestamo = deuda.tipo_deuda === "prestamo"
           const saldada = estaSaldada(deuda)
 
-          // Visibilidad
+          // Visibilidad: préstamos y tarjetas aparecen solo desde el mes en que
+          // se registraron en adelante. Si ya fueron presupuestados en un mes,
+          // se respetan siempre (historial intacto).
+          const registro = mesDeRegistro(deuda)
+          const desdeRegistro = !registro || registro <= primerDiaMes
           let mostrar: boolean
-          if (esPrestamo) {
-            if (!saldada) {
-              mostrar = true // pendiente: siempre visible
-            } else {
-              mostrar = presupuestadosEsteMes.has(deuda.nombre) // saldado: solo historial
-            }
+          if (presupuestadosEsteMes.has(deuda.nombre)) {
+            mostrar = true
+          } else if (!desdeRegistro) {
+            mostrar = false
+          } else if (esPrestamo) {
+            mostrar = !saldada
           } else {
-            // Tarjeta: siempre, salvo que el usuario la haya quitado de este mes
-            const cat = catEgresoPorId.get(catId)
-            const hasta = cat?.mes_hasta as string | null
-            const desde = cat?.mes_desde as string | null
-            mostrar = (!desde || desde <= primerDiaMes) && (!hasta || hasta >= primerDiaMes)
+            // Tarjeta: el usuario puede quitarla de un mes en adelante (mes_hasta)
+            const hasta = catEgresoPorId.get(catId)?.mes_hasta as string | null
+            mostrar = !hasta || hasta >= primerDiaMes
           }
           if (!mostrar) continue
 
