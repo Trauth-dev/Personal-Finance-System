@@ -142,6 +142,63 @@ export async function extenderSuscripcion(usuarioId: string, dias: number, nota:
   }
 }
 
+export async function registrarCreditosIA(montoUsd: number, fechaISO: string, nota: string): Promise<ResultadoAccion> {
+  try {
+    const { usuario: adminSesion } = await obtenerAdmin()
+    if (!adminSesion) return { ok: false, error: "No autorizado" }
+    if (!Number.isFinite(montoUsd) || montoUsd <= 0 || montoUsd > 100000)
+      return { ok: false, error: "Ingresá un monto en USD válido" }
+    const fecha = new Date(fechaISO)
+    if (Number.isNaN(fecha.getTime()) || fecha.getTime() > Date.now() + 86_400_000)
+      return { ok: false, error: "Fecha inválida" }
+
+    const admin = createAdminClient()
+    const { error } = await admin.from("ia_creditos").insert({
+      monto_usd: Math.round(montoUsd * 100) / 100,
+      fecha: fecha.toISOString(),
+      nota: nota.trim().slice(0, 200) || null,
+      admin_email: adminSesion.email,
+    })
+    if (error) return { ok: false, error: `No se pudo guardar: ${error.message}` }
+
+    await admin.from("admin_auditoria").insert({
+      admin_id: adminSesion.id,
+      admin_email: adminSesion.email,
+      usuario_id: null,
+      usuario_email: null,
+      accion: "ia_creditos_cargados",
+      detalle: { monto_usd: montoUsd, fecha: fecha.toISOString() },
+    })
+    revalidatePath("/admin")
+    return { ok: true, mensaje: `Se registraron USD ${montoUsd.toFixed(2)}` }
+  } catch (e) {
+    return mensajeError(e)
+  }
+}
+
+export async function eliminarCargaCreditosIA(id: number): Promise<ResultadoAccion> {
+  try {
+    const { usuario: adminSesion } = await obtenerAdmin()
+    if (!adminSesion) return { ok: false, error: "No autorizado" }
+    if (!Number.isInteger(id) || id <= 0) return { ok: false, error: "Carga inválida" }
+    const admin = createAdminClient()
+    const { error } = await admin.from("ia_creditos").delete().eq("id", id)
+    if (error) return { ok: false, error: `No se pudo eliminar: ${error.message}` }
+    await admin.from("admin_auditoria").insert({
+      admin_id: adminSesion.id,
+      admin_email: adminSesion.email,
+      usuario_id: null,
+      usuario_email: null,
+      accion: "ia_creditos_eliminados",
+      detalle: { id },
+    })
+    revalidatePath("/admin")
+    return { ok: true, mensaje: "Carga eliminada" }
+  } catch (e) {
+    return mensajeError(e)
+  }
+}
+
 export async function anularSuscripcion(usuarioId: string): Promise<ResultadoAccion> {
   try {
     const { admin, adminSesion, email } = await contexto(usuarioId)

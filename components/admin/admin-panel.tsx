@@ -11,9 +11,11 @@ import { ResumenKpis } from "@/components/admin/resumen-kpis"
 import { TablaUsuarios } from "@/components/admin/tabla-usuarios"
 import { DetalleUsuario } from "@/components/admin/detalle-usuario"
 import { Analisis } from "@/components/admin/analisis"
+import { CreditosIA } from "@/components/admin/creditos-ia"
+import type { ResumenIA } from "@/lib/admin/ia"
 import { ACCION_LABEL, fmtFecha } from "@/components/admin/formato"
 
-export function AdminPanel({ datos, adminEmail }: { datos: DatosAdmin; adminEmail: string }) {
+export function AdminPanel({ datos, ia, adminEmail }: { datos: DatosAdmin; ia: ResumenIA; adminEmail: string }) {
   const router = useRouter()
   const [seleccionado, setSeleccionado] = useState<string | null>(null)
   const usuario = datos.usuarios.find((u) => u.id === seleccionado) ?? null
@@ -51,6 +53,8 @@ export function AdminPanel({ datos, adminEmail }: { datos: DatosAdmin; adminEmai
       )}
 
       <ResumenKpis resumen={datos.resumen} />
+
+      <CreditosIA ia={ia} />
 
       <Tabs defaultValue="usuarios" className="flex flex-col gap-4">
         <TabsList className="self-start">

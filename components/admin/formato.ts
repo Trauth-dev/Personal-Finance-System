@@ -76,4 +76,9 @@ export const ACCION_LABEL: Record<string, string> = {
   observaciones: "Editó observaciones",
   suscripcion_extendida: "Extendió la suscripción",
   suscripcion_anulada: "Anuló la suscripción",
+  ia_creditos_cargados: "Registró créditos de OpenAI",
+  ia_creditos_eliminados: "Eliminó una carga de créditos de OpenAI",
 }
+
+const usd = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 })
+export const fmtUsd = (n: number) => usd.format(n)
