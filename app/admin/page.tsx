@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { obtenerAdmin } from "@/lib/admin/auth"
 import { getDatosAdmin } from "@/lib/admin/datos"
+import { getResumenIA } from "@/lib/admin/ia"
 import { AdminPanel } from "@/components/admin/admin-panel"
 
 export const dynamic = "force-dynamic"
@@ -16,11 +17,11 @@ export default async function AdminPage() {
   if (!autenticado) redirect("/auth/login?next=/admin")
   if (!usuario) redirect("/dashboard")
 
-  const datos = await getDatosAdmin()
+  const [datos, ia] = await Promise.all([getDatosAdmin(), getResumenIA()])
 
   return (
     <main className="min-h-screen bg-background">
-      <AdminPanel datos={datos} adminEmail={usuario.email} />
+      <AdminPanel datos={datos} ia={ia} adminEmail={usuario.email} />
     </main>
   )
 }

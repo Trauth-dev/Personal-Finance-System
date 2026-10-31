@@ -437,7 +437,7 @@ export function VoiceEntryClient({
       if (!contentType || !contentType.includes("application/json")) {
         const textResponse = await response.text()
         console.error("[v0] Respuesta no-JSON:", textResponse)
-        throw new Error("Error del servidor. Verifica que la API Key de OpenAI este configurada correctamente en Settings > Environment Variables.")
+        throw new Error("El servidor no respondió correctamente. Intentá de nuevo en unos segundos.")
       }
       
       const result = await response.json()
