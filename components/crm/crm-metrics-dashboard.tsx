@@ -80,6 +80,19 @@ interface Metricas {
   }
 }
 
+// Las clases dinámicas (`bg-${color}-100`) no las genera Tailwind; por eso se listan completas.
+const COLORES_ICONO: Record<string, string> = {
+  cyan: "bg-sky-400/15 text-sky-300",
+  blue: "bg-sky-400/15 text-sky-300",
+  green: "bg-emerald-400/15 text-emerald-300",
+  emerald: "bg-emerald-400/15 text-emerald-300",
+  amber: "bg-amber-400/15 text-amber-300",
+  yellow: "bg-amber-400/15 text-amber-300",
+  red: "bg-rose-400/15 text-rose-300",
+  purple: "bg-primary/15 text-primary",
+  violet: "bg-primary/15 text-primary",
+}
+
 const COLORES_CANALES: Record<string, string> = {
   ventas: "#3b82f6",
   referido: "#10b981",
@@ -398,8 +411,8 @@ export function CRMMetricsDashboard({ perfilId }: CRMMetricsDashboardProps) {
               </div>
             )}
           </div>
-          <div className={`p-3 rounded-full bg-${color}-100 dark:bg-${color}-900/30`}>
-            <Icon className={`h-5 w-5 text-${color}-600 dark:text-${color}-400`} />
+          <div className={`p-3 rounded-full ${COLORES_ICONO[color] ?? COLORES_ICONO.cyan}`}>
+            <Icon className="h-5 w-5" />
           </div>
         </div>
       </CardContent>
@@ -457,12 +470,12 @@ export function CRMMetricsDashboard({ perfilId }: CRMMetricsDashboardProps) {
 
       {/* Alertas y Pendientes */}
       {(metricas.seguimientosVencidos > 0 || metricas.revisitasPendientes > 0) && (
-        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+        <Card className="border-amber-400/40 bg-amber-400/10">
           <CardContent className="pt-6">
             <div className="flex items-start gap-4">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <AlertTriangle className="h-5 w-5 text-amber-300" />
               <div className="space-y-2">
-                <p className="font-medium text-amber-800 dark:text-amber-200">Atencion Requerida</p>
+                <p className="font-medium text-foreground">Atención requerida</p>
                 <div className="flex flex-wrap gap-3 text-sm">
                   {metricas.seguimientosVencidos > 0 && (
                     <Badge variant="outline" className="border-amber-400 text-amber-700">
@@ -557,27 +570,27 @@ export function CRMMetricsDashboard({ perfilId }: CRMMetricsDashboardProps) {
 
           {/* Resumen de Oportunidades */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card className="bg-gray-50 dark:bg-gray-900">
+            <Card className="bg-secondary/60">
               <CardContent className="pt-4 text-center">
                 <p className="text-2xl font-bold">{metricas.totalOportunidades}</p>
                 <p className="text-xs text-muted-foreground">Total Oportunidades</p>
               </CardContent>
             </Card>
-            <Card className="bg-blue-50 dark:bg-blue-900/20">
+            <Card className="border-sky-400/30 bg-sky-400/10">
               <CardContent className="pt-4 text-center">
-                <p className="text-2xl font-bold text-blue-600">{metricas.oportunidadesAbiertas}</p>
+                <p className="text-2xl font-bold text-sky-300">{metricas.oportunidadesAbiertas}</p>
                 <p className="text-xs text-muted-foreground">En Proceso</p>
               </CardContent>
             </Card>
-            <Card className="bg-green-50 dark:bg-green-900/20">
+            <Card className="border-emerald-400/30 bg-emerald-400/10">
               <CardContent className="pt-4 text-center">
-                <p className="text-2xl font-bold text-green-600">{metricas.oportunidadesGanadas}</p>
+                <p className="text-2xl font-bold text-emerald-300">{metricas.oportunidadesGanadas}</p>
                 <p className="text-xs text-muted-foreground">Ganadas</p>
               </CardContent>
             </Card>
-            <Card className="bg-red-50 dark:bg-red-900/20">
+            <Card className="border-rose-400/30 bg-rose-400/10">
               <CardContent className="pt-4 text-center">
-                <p className="text-2xl font-bold text-red-600">{metricas.oportunidadesPerdidas}</p>
+                <p className="text-2xl font-bold text-rose-300">{metricas.oportunidadesPerdidas}</p>
                 <p className="text-xs text-muted-foreground">Perdidas</p>
               </CardContent>
             </Card>
@@ -696,15 +709,15 @@ export function CRMMetricsDashboard({ perfilId }: CRMMetricsDashboardProps) {
                 <CardDescription>Totales acumulados</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20">
+                <div className="p-4 rounded-lg bg-emerald-400/10">
                   <p className="text-sm text-muted-foreground">Total Ganado</p>
-                  <p className="text-2xl font-bold text-green-600">
+                  <p className="text-2xl font-bold text-emerald-300">
                     {formatMoney(metricas.valorOportunidadesGanadas)}
                   </p>
                 </div>
-                <div className="p-4 rounded-lg bg-cyan-50 dark:bg-cyan-900/20">
+                <div className="p-4 rounded-lg bg-sky-400/10">
                   <p className="text-sm text-muted-foreground">Pipeline Activo</p>
-                  <p className="text-2xl font-bold text-cyan-600">
+                  <p className="text-2xl font-bold text-sky-300">
                     {formatMoney(metricas.valorPipelineTotal)}
                   </p>
                 </div>

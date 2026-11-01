@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Loader2, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -32,6 +32,18 @@ export function CreditosIA({ ia }: { ia: ResumenIA }) {
   const [fecha, setFecha] = useState(hoyLocal)
   const [nota, setNota] = useState("")
   const [mensaje, setMensaje] = useState<{ ok: boolean; texto: string } | null>(null)
+
+  useEffect(() => {
+    const refrescar = () => {
+      if (document.visibilityState === "visible") router.refresh()
+    }
+    const intervalo = window.setInterval(refrescar, 60_000)
+    document.addEventListener("visibilitychange", refrescar)
+    return () => {
+      window.clearInterval(intervalo)
+      document.removeEventListener("visibilitychange", refrescar)
+    }
+  }, [router])
 
   const sinCarga = ia.saldoEstimadoUsd === null
   const saldoBajo = !sinCarga && ia.cargadoUsd > 0 && (ia.saldoEstimadoUsd ?? 0) / ia.cargadoUsd < 0.15
@@ -66,8 +78,13 @@ export function CreditosIA({ ia }: { ia: ResumenIA }) {
         <h2 id="creditos-ia-titulo" className="text-base font-semibold text-foreground">
           Créditos de OpenAI · Carga con IA
         </h2>
-        <span className="text-xs text-muted-foreground">
-          {ia.gastadoMesRealUsd !== null ? "Gasto real sincronizado con OpenAI" : "Gasto estimado a partir de cada solicitud"}
+        <span className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="relative flex size-2" aria-hidden="true">
+            <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+            <span className="relative inline-flex size-2 rounded-full bg-emerald-400" />
+          </span>
+          En vivo · se actualiza cada minuto ·{" "}
+          {ia.gastadoMesRealUsd !== null ? "gasto real sincronizado con OpenAI" : "gasto estimado por solicitud"}
         </span>
       </div>
 

@@ -1,626 +1,488 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { formatMoney } from "@/lib/currency"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { 
-  Calendar,
+import {
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Clock,
-  User,
-  Phone,
   DollarSign,
+  Phone,
+  RefreshCw,
   Wrench,
-  CalendarDays,
-  CalendarRange,
-  AlertCircle,
-  CheckCircle2,
-  MapPin,
-  Video,
-  ClipboardList
+  type LucideIcon,
 } from "lucide-react"
-import { formatDateGMT3, formatTimeGMT3 } from "@/lib/utils/timezone"
 
 interface CalendarioUnificadoCRMProps {
   perfilId: string
 }
 
+type TipoEvento = "seguimiento" | "agendamiento" | "revisita" | "cobranza"
+
 interface EventoCalendario {
   id: string
-  tipo: "seguimiento" | "agendamiento" | "revisita" | "cobranza"
+  tipo: TipoEvento
   titulo: string
-  descripcion?: string
   fecha: string
   hora?: string
   cliente_nombre?: string
   cliente_telefono?: string
-  estado?: string
-  prioridad?: string
   monto?: number
-  lugar?: string
-  tipo_visita?: string
 }
 
-const DIAS_SEMANA = ["Dom", "Lun", "Mar", "Mie", "Jue", "Vie", "Sab"]
-const DIAS_SEMANA_COMPLETO = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
-const MESES = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+const TIPOS: Record<
+  TipoEvento,
+  {
+    plural: string
+    ayuda: string
+    href: string
+    icono: LucideIcon
+    punto: string
+    texto: string
+    suave: string
+    activo: string
+  }
+> = {
+  seguimiento: {
+    plural: "Seguimientos",
+    ayuda: "Llamar o escribir a un cliente",
+    href: "/dashboard/crm/seguimientos",
+    icono: Clock,
+    punto: "bg-amber-400",
+    texto: "text-amber-300",
+    suave: "border-amber-400/30 bg-amber-400/10 hover:bg-amber-400/20",
+    activo: "border-amber-400 bg-amber-400 text-slate-950",
+  },
+  agendamiento: {
+    plural: "Citas",
+    ayuda: "Reuniones agendadas con clientes",
+    href: "/dashboard/crm/agendamientos",
+    icono: CalendarDays,
+    punto: "bg-sky-400",
+    texto: "text-sky-300",
+    suave: "border-sky-400/30 bg-sky-400/10 hover:bg-sky-400/20",
+    activo: "border-sky-400 bg-sky-400 text-slate-950",
+  },
+  revisita: {
+    plural: "Re-visitas",
+    ayuda: "Volver a visitar a un cliente",
+    href: "/dashboard/crm/revisitas",
+    icono: Wrench,
+    punto: "bg-emerald-400",
+    texto: "text-emerald-300",
+    suave: "border-emerald-400/30 bg-emerald-400/10 hover:bg-emerald-400/20",
+    activo: "border-emerald-400 bg-emerald-400 text-slate-950",
+  },
+  cobranza: {
+    plural: "Cobranzas",
+    ayuda: "Cuotas que vencen y hay que cobrar",
+    href: "/dashboard/crm/cobranzas",
+    icono: DollarSign,
+    punto: "bg-rose-400",
+    texto: "text-rose-300",
+    suave: "border-rose-400/30 bg-rose-400/10 hover:bg-rose-400/20",
+    activo: "border-rose-400 bg-rose-400 text-slate-950",
+  },
+}
+
+const ORDEN_TIPOS: TipoEvento[] = ["seguimiento", "agendamiento", "revisita", "cobranza"]
+const DIAS_CORTO = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"]
+const DIAS_LARGO = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"]
+const MESES_CORTO = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
+
+/** Clave YYYY-MM-DD en hora local (toISOString usa UTC y corre el día después de las 21 h en Paraguay). */
+function claveLocal(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
+function horaLocal(d: Date): string {
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+}
+
+function inicioSemana(fecha: Date): Date {
+  const d = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate())
+  const dia = d.getDay()
+  d.setDate(d.getDate() - (dia === 0 ? 6 : dia - 1))
+  return d
+}
+
+function nombreCliente(c: any, alternativo = "Sin cliente"): string {
+  return c ? `${c.nombre ?? ""} ${c.apellido ?? ""}`.trim() || alternativo : alternativo
+}
+
+function rangoTexto(inicio: Date, fin: Date): string {
+  const mismoMes = inicio.getMonth() === fin.getMonth()
+  const desde = mismoMes ? `${inicio.getDate()}` : `${inicio.getDate()} ${MESES_CORTO[inicio.getMonth()]}`
+  return `${desde} – ${fin.getDate()} ${MESES_CORTO[fin.getMonth()]} ${fin.getFullYear()}`
+}
 
 export function CalendarioUnificadoCRM({ perfilId }: CalendarioUnificadoCRMProps) {
+  const supabase = useMemo(() => createClient(), [])
   const [eventos, setEventos] = useState<EventoCalendario[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [vistaActual, setVistaActual] = useState<"semana" | "quincena">("semana")
-  const [fechaInicio, setFechaInicio] = useState<Date>(getInicioSemana(new Date()))
-  const [filtroTipo, setFiltroTipo] = useState<string>("todos")
-  const supabase = createClient()
+  const [cargando, setCargando] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [vista, setVista] = useState<"semana" | "quincena">("semana")
+  const [fechaInicio, setFechaInicio] = useState<Date>(() => inicioSemana(new Date()))
+  const [filtro, setFiltro] = useState<TipoEvento | "todos">("todos")
+  const [recarga, setRecarga] = useState(0)
 
-  // Obtener inicio de semana (lunes)
-  function getInicioSemana(fecha: Date): Date {
-    const d = new Date(fecha)
-    const day = d.getDay()
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1)
-    return new Date(d.setDate(diff))
-  }
+  const cantidadDias = vista === "semana" ? 7 : 14
+  const dias = useMemo(
+    () =>
+      Array.from({ length: cantidadDias }, (_, i) => {
+        const d = new Date(fechaInicio)
+        d.setDate(d.getDate() + i)
+        return d
+      }),
+    [fechaInicio, cantidadDias],
+  )
+  const fin = dias[dias.length - 1]
+  const hoyClave = claveLocal(new Date())
+  const enSemanaActual = dias.some((d) => claveLocal(d) === hoyClave)
 
-  // Obtener rango de fechas según vista
-  function getRangoFechas(): { inicio: Date; fin: Date; dias: Date[] } {
-    const inicio = new Date(fechaInicio)
-    const cantidadDias = vistaActual === "semana" ? 7 : 14
-    const fin = new Date(inicio)
-    fin.setDate(fin.getDate() + cantidadDias - 1)
-    
-    const dias: Date[] = []
-    for (let i = 0; i < cantidadDias; i++) {
-      const dia = new Date(inicio)
-      dia.setDate(dia.getDate() + i)
-      dias.push(dia)
-    }
-    
-    return { inicio, fin, dias }
-  }
+  const cargarEventos = useCallback(
+    async (inicio: Date, ultimo: Date) => {
+      const inicioStr = claveLocal(inicio)
+      const finStr = claveLocal(ultimo)
+      const desdeIso = new Date(inicio.getFullYear(), inicio.getMonth(), inicio.getDate()).toISOString()
+      const hastaIso = new Date(ultimo.getFullYear(), ultimo.getMonth(), ultimo.getDate(), 23, 59, 59, 999).toISOString()
 
-  // Navegar semanas/quincenas
-  const navegarAnterior = () => {
-    const nuevaFecha = new Date(fechaInicio)
-    nuevaFecha.setDate(nuevaFecha.getDate() - (vistaActual === "semana" ? 7 : 14))
-    setFechaInicio(nuevaFecha)
-  }
+      const [seg, agen, rev, cob] = await Promise.all([
+        supabase
+          .from("crm_seguimientos")
+          .select("id, recordatorio_fecha, tipo_seguimiento, clientes(nombre, apellido, telefono)")
+          .eq("perfil_id", perfilId)
+          .gte("recordatorio_fecha", inicioStr)
+          .lte("recordatorio_fecha", finStr)
+          .eq("recordatorio_completado", false),
+        supabase
+          .from("crm_agendamientos")
+          .select("id, titulo, fecha_hora, prospecto_nombre, prospecto_telefono, clientes(nombre, apellido, telefono)")
+          .eq("perfil_id", perfilId)
+          .gte("fecha_hora", desdeIso)
+          .lte("fecha_hora", hastaIso)
+          .neq("estado", "cancelada"),
+        supabase
+          .from("crm_revisitas")
+          .select("id, motivo, fecha_programada, clientes(nombre, apellido, telefono)")
+          .eq("perfil_id", perfilId)
+          .gte("fecha_programada", desdeIso)
+          .lte("fecha_programada", hastaIso)
+          .in("estado", ["programada", "confirmada", "sugerida"]),
+        supabase
+          .from("crm_pagos_cuotas")
+          .select("id, numero_cuota, fecha_vencimiento, crm_ventas!inner(perfil_id, monto_cuota, clientes(nombre, apellido, telefono))")
+          .eq("crm_ventas.perfil_id", perfilId)
+          .gte("fecha_vencimiento", inicioStr)
+          .lte("fecha_vencimiento", finStr)
+          .eq("estado", "pendiente"),
+      ])
 
-  const navegarSiguiente = () => {
-    const nuevaFecha = new Date(fechaInicio)
-    nuevaFecha.setDate(nuevaFecha.getDate() + (vistaActual === "semana" ? 7 : 14))
-    setFechaInicio(nuevaFecha)
-  }
+      const fallo = [seg, agen, rev, cob].find((r) => r.error)
+      if (fallo?.error) throw new Error(fallo.error.message)
 
-  const irAHoy = () => {
-    setFechaInicio(getInicioSemana(new Date()))
-  }
+      const lista: EventoCalendario[] = []
+      for (const s of (seg.data ?? []) as any[]) {
+        lista.push({
+          id: `s-${s.id}`,
+          tipo: "seguimiento",
+          titulo:
+            s.tipo_seguimiento === "mantenimiento"
+              ? "Mantenimiento"
+              : s.tipo_seguimiento === "posventa"
+                ? "Posventa"
+                : "Seguimiento",
+          fecha: String(s.recordatorio_fecha).slice(0, 10),
+          cliente_nombre: nombreCliente(s.clientes),
+          cliente_telefono: s.clientes?.telefono,
+        })
+      }
+      for (const a of (agen.data ?? []) as any[]) {
+        const f = new Date(a.fecha_hora)
+        lista.push({
+          id: `a-${a.id}`,
+          tipo: "agendamiento",
+          titulo: a.titulo || "Cita",
+          fecha: claveLocal(f),
+          hora: horaLocal(f),
+          cliente_nombre: a.clientes ? nombreCliente(a.clientes) : a.prospecto_nombre || "Prospecto",
+          cliente_telefono: a.clientes?.telefono || a.prospecto_telefono,
+        })
+      }
+      for (const r of (rev.data ?? []) as any[]) {
+        const f = new Date(r.fecha_programada)
+        lista.push({
+          id: `r-${r.id}`,
+          tipo: "revisita",
+          titulo: r.motivo || "Re-visita",
+          fecha: claveLocal(f),
+          hora: horaLocal(f),
+          cliente_nombre: nombreCliente(r.clientes),
+          cliente_telefono: r.clientes?.telefono,
+        })
+      }
+      for (const c of (cob.data ?? []) as any[]) {
+        const venta = Array.isArray(c.crm_ventas) ? c.crm_ventas[0] : c.crm_ventas
+        if (!venta) continue
+        lista.push({
+          id: `c-${c.id}`,
+          tipo: "cobranza",
+          titulo: `Cuota ${c.numero_cuota}`,
+          fecha: String(c.fecha_vencimiento).slice(0, 10),
+          cliente_nombre: nombreCliente(venta.clientes),
+          cliente_telefono: venta.clientes?.telefono,
+          monto: venta.monto_cuota,
+        })
+      }
 
-  // Cargar eventos
+      return lista.sort((x, y) => (x.hora ?? "99").localeCompare(y.hora ?? "99"))
+    },
+    [supabase, perfilId],
+  )
+
   useEffect(() => {
-    loadEventos()
-  }, [perfilId, fechaInicio, vistaActual])
-
-  const loadEventos = async () => {
-    setIsLoading(true)
-    const { inicio, fin } = getRangoFechas()
-    const inicioStr = inicio.toISOString().split("T")[0]
-    const finStr = fin.toISOString().split("T")[0]
-
-    try {
-      const eventosTemp: EventoCalendario[] = []
-
-      // 1. Cargar Seguimientos
-      const { data: seguimientos } = await supabase
-        .from("crm_seguimientos")
-        .select(`
-          id,
-          nota,
-          recordatorio_fecha,
-          recordatorio_completado,
-          tipo_seguimiento,
-          cliente_id,
-          clientes(nombre, apellido, telefono)
-        `)
-        .eq("perfil_id", perfilId)
-        .gte("recordatorio_fecha", inicioStr)
-        .lte("recordatorio_fecha", finStr)
-        .eq("recordatorio_completado", false)
-
-      if (seguimientos) {
-        seguimientos.forEach((s: any) => {
-          eventosTemp.push({
-            id: s.id,
-            tipo: "seguimiento",
-            titulo: s.tipo_seguimiento === "mantenimiento" ? "Mantenimiento" : 
-                   s.tipo_seguimiento === "posventa" ? "Seguimiento Posventa" : "Seguimiento",
-            descripcion: s.nota,
-            fecha: s.recordatorio_fecha,
-            cliente_nombre: s.clientes ? `${s.clientes.nombre} ${s.clientes.apellido || ""}`.trim() : "Sin cliente",
-            cliente_telefono: s.clientes?.telefono,
-            estado: s.recordatorio_completado ? "completado" : "pendiente"
-          })
-        })
-      }
-
-      // 2. Cargar Agendamientos
-      const { data: agendamientos } = await supabase
-        .from("crm_agendamientos")
-        .select(`
-          id,
-          titulo,
-          tipo,
-          fecha_hora,
-          lugar,
-          estado,
-          estrellas,
-          cliente_id,
-          prospecto_nombre,
-          prospecto_telefono,
-          clientes(nombre, apellido, telefono)
-        `)
-        .eq("perfil_id", perfilId)
-        .gte("fecha_hora", `${inicioStr}T00:00:00`)
-        .lte("fecha_hora", `${finStr}T23:59:59`)
-        .neq("estado", "cancelada")
-
-      if (agendamientos) {
-        agendamientos.forEach((a: any) => {
-          const fechaHora = new Date(a.fecha_hora)
-          const nombreCliente = a.clientes 
-            ? `${a.clientes.nombre} ${a.clientes.apellido || ""}`.trim()
-            : a.prospecto_nombre || "Prospecto"
-          const telefono = a.clientes?.telefono || a.prospecto_telefono
-          
-          eventosTemp.push({
-            id: a.id,
-            tipo: "agendamiento",
-            titulo: a.titulo || "Cita",
-            descripcion: a.tipo,
-            fecha: fechaHora.toISOString().split("T")[0],
-            hora: fechaHora.toTimeString().slice(0, 5),
-            cliente_nombre: nombreCliente,
-            cliente_telefono: telefono,
-            estado: a.estado,
-            lugar: a.lugar,
-            tipo_visita: a.tipo,
-            prioridad: a.estrellas >= 4 ? "alta" : a.estrellas >= 2 ? "media" : "baja"
-          })
-        })
-      }
-
-      // 3. Cargar Re-visitas
-      const { data: revisitas } = await supabase
-        .from("crm_revisitas")
-        .select(`
-          id,
-          motivo,
-          tipo,
-          fecha_programada,
-          lugar,
-          estado,
-          cliente_id,
-          clientes(nombre, apellido, telefono)
-        `)
-        .eq("perfil_id", perfilId)
-        .gte("fecha_programada", `${inicioStr}T00:00:00`)
-        .lte("fecha_programada", `${finStr}T23:59:59`)
-        .in("estado", ["programada", "confirmada", "sugerida"])
-
-      if (revisitas) {
-        revisitas.forEach((r: any) => {
-          const fechaHora = new Date(r.fecha_programada)
-          eventosTemp.push({
-            id: r.id,
-            tipo: "revisita",
-            titulo: `Re-visita: ${r.motivo || "General"}`,
-            descripcion: r.tipo,
-            fecha: fechaHora.toISOString().split("T")[0],
-            hora: fechaHora.toTimeString().slice(0, 5),
-            cliente_nombre: r.clientes ? `${r.clientes.nombre} ${r.clientes.apellido || ""}`.trim() : "Sin cliente",
-            cliente_telefono: r.clientes?.telefono,
-            estado: r.estado,
-            lugar: r.lugar,
-            tipo_visita: r.tipo
-          })
-        })
-      }
-
-      // 4. Cargar Cobranzas pendientes
-      const { data: cobranzas } = await supabase
-        .from("crm_pagos_cuotas")
-        .select(`
-          id,
-          numero_cuota,
-          fecha_vencimiento,
-          monto_pagado,
-          estado,
-          venta_id,
-          crm_ventas(
-            id,
-            monto_cuota,
-            cliente_id,
-            clientes(nombre, apellido, telefono)
-          )
-        `)
-        .gte("fecha_vencimiento", inicioStr)
-        .lte("fecha_vencimiento", finStr)
-        .eq("estado", "pendiente")
-
-      if (cobranzas) {
-        cobranzas.forEach((c: any) => {
-          if (c.crm_ventas) {
-            const cliente = c.crm_ventas.clientes
-            eventosTemp.push({
-              id: c.id,
-              tipo: "cobranza",
-              titulo: `Cuota ${c.numero_cuota}`,
-              descripcion: `Vencimiento de cuota`,
-              fecha: c.fecha_vencimiento,
-              cliente_nombre: cliente ? `${cliente.nombre} ${cliente.apellido || ""}`.trim() : "Sin cliente",
-              cliente_telefono: cliente?.telefono,
-              estado: c.estado,
-              monto: c.crm_ventas.monto_cuota
-            })
-          }
-        })
-      }
-
-      setEventos(eventosTemp)
-    } catch (error) {
-      console.error("Error cargando eventos:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Filtrar eventos por tipo
-  const eventosFiltrados = filtroTipo === "todos" 
-    ? eventos 
-    : eventos.filter(e => e.tipo === filtroTipo)
-
-  // Agrupar eventos por fecha
-  const eventosPorFecha = (fecha: Date): EventoCalendario[] => {
-    const fechaStr = fecha.toISOString().split("T")[0]
-    return eventosFiltrados.filter(e => e.fecha === fechaStr)
-      .sort((a, b) => {
-        if (a.hora && b.hora) return a.hora.localeCompare(b.hora)
-        if (a.hora) return -1
-        if (b.hora) return 1
-        return 0
+    let vigente = true
+    setCargando(true)
+    setError(null)
+    cargarEventos(fechaInicio, fin)
+      .then((lista) => vigente && setEventos(lista))
+      .catch((e: Error) => {
+        console.error("Error cargando agenda CRM:", e)
+        if (vigente) setError("No pudimos cargar tu agenda.")
       })
-  }
-
-  // Verificar si es hoy
-  const esHoy = (fecha: Date): boolean => {
-    const hoy = new Date()
-    return fecha.toDateString() === hoy.toDateString()
-  }
-
-  // Obtener color por tipo
-  const getColorTipo = (tipo: string) => {
-    switch (tipo) {
-      case "seguimiento": return "bg-amber-500"
-      case "agendamiento": return "bg-purple-500"
-      case "revisita": return "bg-cyan-500"
-      case "cobranza": return "bg-red-500"
-      default: return "bg-slate-500"
+      .finally(() => vigente && setCargando(false))
+    return () => {
+      vigente = false
     }
+  }, [cargarEventos, fechaInicio, fin, recarga])
+
+  const mover = (sentido: 1 | -1) => {
+    const d = new Date(fechaInicio)
+    d.setDate(d.getDate() + sentido * cantidadDias)
+    setFechaInicio(d)
   }
 
-  // Obtener icono por tipo
-  const getIconoTipo = (tipo: string) => {
-    switch (tipo) {
-      case "seguimiento": return <Clock className="h-3 w-3" />
-      case "agendamiento": return <CalendarDays className="h-3 w-3" />
-      case "revisita": return <Wrench className="h-3 w-3" />
-      case "cobranza": return <DollarSign className="h-3 w-3" />
-      default: return <Calendar className="h-3 w-3" />
-    }
-  }
-
-  // Obtener icono de tipo de visita
-  const getIconoVisita = (tipo?: string) => {
-    switch (tipo) {
-      case "presencial": return <MapPin className="h-3 w-3" />
-      case "virtual": return <Video className="h-3 w-3" />
-      case "telefonica": return <Phone className="h-3 w-3" />
-      default: return null
-    }
-  }
-
-  const { dias } = getRangoFechas()
+  const conteo = (tipo: TipoEvento) => eventos.filter((e) => e.tipo === tipo).length
+  const visibles = filtro === "todos" ? eventos : eventos.filter((e) => e.tipo === filtro)
+  const eventosHoy = visibles.filter((e) => e.fecha === hoyClave)
   const hoy = new Date()
 
-  // Contar eventos por tipo para estadísticas
-  const contarPorTipo = (tipo: string) => eventos.filter(e => e.tipo === tipo).length
-  const eventosHoy = eventos.filter(e => e.fecha === hoy.toISOString().split("T")[0])
-
   return (
-    <Card className="border-2 border-cyan-200 dark:border-cyan-800 bg-gradient-to-br from-white to-cyan-50/30 dark:from-slate-800 dark:to-cyan-950/20">
-      <CardHeader className="pb-3">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-cyan-100 dark:bg-cyan-900/50">
-              <Calendar className="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-            </div>
-            <div>
-              <CardTitle className="text-lg font-semibold text-slate-800 dark:text-white">
-                Mi Agenda CRM
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">
-                {MESES[fechaInicio.getMonth()]} {fechaInicio.getFullYear()}
-              </p>
-            </div>
+    <section
+      aria-labelledby="agenda-crm-titulo"
+      className="flex flex-col gap-5 rounded-xl border border-border bg-card p-4 text-card-foreground md:p-6"
+    >
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex size-11 items-center justify-center rounded-lg bg-primary/15 text-primary">
+            <CalendarDays className="size-5" aria-hidden="true" />
           </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Resumen del día */}
-            {eventosHoy.length > 0 && (
-              <Badge variant="outline" className="bg-cyan-50 dark:bg-cyan-900/30 border-cyan-300 dark:border-cyan-700">
-                <AlertCircle className="h-3 w-3 mr-1 text-cyan-600" />
-                {eventosHoy.length} hoy
-              </Badge>
-            )}
-
-            {/* Vista selector */}
-            <Tabs value={vistaActual} onValueChange={(v) => setVistaActual(v as "semana" | "quincena")}>
-              <TabsList className="h-8">
-                <TabsTrigger value="semana" className="text-xs px-3 h-7">
-                  <CalendarDays className="h-3 w-3 mr-1" />
-                  Semana
-                </TabsTrigger>
-                <TabsTrigger value="quincena" className="text-xs px-3 h-7">
-                  <CalendarRange className="h-3 w-3 mr-1" />
-                  Quincena
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            {/* Navegación */}
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" onClick={navegarAnterior} className="h-8 w-8 p-0">
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              <Button variant="outline" size="sm" onClick={irAHoy} className="h-8 text-xs px-2">
-                Hoy
-              </Button>
-              <Button variant="outline" size="sm" onClick={navegarSiguiente} className="h-8 w-8 p-0">
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+          <div className="flex flex-col">
+            <h2 id="agenda-crm-titulo" className="text-lg font-semibold text-foreground">
+              Mi agenda
+            </h2>
+            <p className="text-sm text-muted-foreground">{rangoTexto(fechaInicio, fin)}</p>
           </div>
         </div>
 
-        {/* Filtros por tipo */}
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
-          <span className="text-xs text-muted-foreground">Filtrar:</span>
-          <div className="flex gap-1 flex-wrap">
-            <Button 
-              variant={filtroTipo === "todos" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => setFiltroTipo("todos")}
-              className="h-7 text-xs"
-            >
-              Todos ({eventos.length})
-            </Button>
-            <Button 
-              variant={filtroTipo === "seguimiento" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => setFiltroTipo("seguimiento")}
-              className={`h-7 text-xs ${filtroTipo === "seguimiento" ? "bg-amber-500 hover:bg-amber-600" : ""}`}
-            >
-              <Clock className="h-3 w-3 mr-1" />
-              Seguimientos ({contarPorTipo("seguimiento")})
-            </Button>
-            <Button 
-              variant={filtroTipo === "agendamiento" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => setFiltroTipo("agendamiento")}
-              className={`h-7 text-xs ${filtroTipo === "agendamiento" ? "bg-purple-500 hover:bg-purple-600" : ""}`}
-            >
-              <CalendarDays className="h-3 w-3 mr-1" />
-              Citas ({contarPorTipo("agendamiento")})
-            </Button>
-            <Button 
-              variant={filtroTipo === "revisita" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => setFiltroTipo("revisita")}
-              className={`h-7 text-xs ${filtroTipo === "revisita" ? "bg-cyan-500 hover:bg-cyan-600" : ""}`}
-            >
-              <Wrench className="h-3 w-3 mr-1" />
-              Re-visitas ({contarPorTipo("revisita")})
-            </Button>
-            <Button 
-              variant={filtroTipo === "cobranza" ? "default" : "outline"} 
-              size="sm" 
-              onClick={() => setFiltroTipo("cobranza")}
-              className={`h-7 text-xs ${filtroTipo === "cobranza" ? "bg-red-500 hover:bg-red-600" : ""}`}
-            >
-              <DollarSign className="h-3 w-3 mr-1" />
-              Cobranzas ({contarPorTipo("cobranza")})
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-
-      <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-600"></div>
-          </div>
-        ) : (
-          <div className={`grid gap-2 ${vistaActual === "semana" ? "grid-cols-7" : "grid-cols-7"}`}>
-            {/* Headers de días */}
-            {dias.slice(0, 7).map((dia, idx) => (
-              <div key={`header-${idx}`} className="text-center text-xs font-medium text-muted-foreground py-1">
-                {DIAS_SEMANA[dia.getDay()]}
-              </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div role="group" aria-label="Cantidad de días" className="flex rounded-lg bg-secondary p-1">
+            {(["semana", "quincena"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={vista === v}
+                onClick={() => setVista(v)}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                  vista === v ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {v === "semana" ? "7 días" : "14 días"}
+              </button>
             ))}
+          </div>
+          <div className="flex items-center gap-1">
+            <Button variant="secondary" size="icon" onClick={() => mover(-1)} aria-label="Semana anterior">
+              <ChevronLeft className="size-4" />
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => setFechaInicio(inicioSemana(new Date()))}
+              disabled={enSemanaActual && vista === "semana"}
+            >
+              Hoy
+            </Button>
+            <Button variant="secondary" size="icon" onClick={() => mover(1)} aria-label="Semana siguiente">
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        </div>
+      </header>
 
-            {/* Días del calendario */}
-            {dias.map((dia, idx) => {
-              const eventosDelDia = eventosPorFecha(dia)
-              const esHoyDia = esHoy(dia)
-              const esPasado = dia < new Date(hoy.toDateString())
+      <div role="group" aria-label="Mostrar en la agenda" className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          aria-pressed={filtro === "todos"}
+          onClick={() => setFiltro("todos")}
+          className={cn(
+            "flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+            filtro === "todos"
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-secondary text-foreground hover:bg-muted",
+          )}
+        >
+          Todo
+          <span className="tabular-nums opacity-80">{eventos.length}</span>
+        </button>
+        {ORDEN_TIPOS.map((tipo) => {
+          const t = TIPOS[tipo]
+          const activo = filtro === tipo
+          return (
+            <button
+              key={tipo}
+              type="button"
+              aria-pressed={activo}
+              title={t.ayuda}
+              onClick={() => setFiltro(activo ? "todos" : tipo)}
+              className={cn(
+                "flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+                activo ? t.activo : cn(t.suave, "text-foreground"),
+              )}
+            >
+              <t.icono className={cn("size-4", !activo && t.texto)} aria-hidden="true" />
+              {t.plural}
+              <span className="tabular-nums opacity-80">{conteo(tipo)}</span>
+            </button>
+          )
+        })}
+      </div>
 
-              return (
-                <div 
-                  key={idx}
-                  className={`
-                    min-h-[120px] p-1.5 rounded-lg border transition-all
-                    ${esHoyDia 
-                      ? "bg-cyan-100 dark:bg-cyan-900/40 border-cyan-400 dark:border-cyan-600 ring-2 ring-cyan-400/50" 
-                      : esPasado
-                        ? "bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-60"
-                        : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-cyan-300 dark:hover:border-cyan-700"
-                    }
-                  `}
-                >
-                  {/* Número del día */}
-                  <div className={`
-                    text-sm font-semibold mb-1 flex items-center justify-between
-                    ${esHoyDia ? "text-cyan-700 dark:text-cyan-300" : "text-slate-700 dark:text-slate-300"}
-                  `}>
-                    <span className={`
-                      ${esHoyDia ? "bg-cyan-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs" : ""}
-                    `}>
-                      {dia.getDate()}
+      {error ? (
+        <div role="alert" className="flex flex-col items-center gap-3 rounded-lg border border-border bg-secondary p-8 text-center">
+          <p className="text-sm text-foreground">{error}</p>
+          <Button variant="outline" onClick={() => setRecarga((n) => n + 1)}>
+            <RefreshCw className="size-4" />
+            Reintentar
+          </Button>
+        </div>
+      ) : (
+        <ol className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7" aria-busy={cargando}>
+          {dias.map((dia) => {
+            const clave = claveLocal(dia)
+            const esHoy = clave === hoyClave
+            const esPasado = clave < hoyClave
+            const delDia = visibles.filter((e) => e.fecha === clave)
+
+            return (
+              <li
+                key={clave}
+                aria-label={`${DIAS_LARGO[dia.getDay()]} ${dia.getDate()} de ${MESES[dia.getMonth()]}${esHoy ? ", hoy" : ""}`}
+                className={cn(
+                  "flex min-h-36 flex-col gap-2 rounded-lg border p-2",
+                  esHoy ? "border-primary bg-primary/10 ring-1 ring-primary" : "border-border bg-background/60",
+                  esPasado && "opacity-55",
+                )}
+              >
+                <div className="flex items-center justify-between gap-1 px-1">
+                  <span className="flex items-baseline gap-1.5">
+                    <span className={cn("text-xs font-semibold uppercase", esHoy ? "text-primary" : "text-muted-foreground")}>
+                      {DIAS_CORTO[dia.getDay()]}
                     </span>
-                    {eventosDelDia.length > 0 && (
-                      <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                        {eventosDelDia.length}
-                      </Badge>
-                    )}
-                  </div>
+                    <span className="text-lg font-semibold tabular-nums text-foreground">{dia.getDate()}</span>
+                  </span>
+                  {esHoy && (
+                    <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">Hoy</span>
+                  )}
+                </div>
 
-                  {/* Eventos del día */}
-                  <ScrollArea className="h-[85px]">
-                    <div className="space-y-1">
-                      {eventosDelDia.map((evento) => (
-                        <div 
-                          key={evento.id}
-                          className={`
-                            p-1.5 rounded text-[10px] cursor-pointer transition-all hover:scale-[1.02]
-                            ${evento.tipo === "seguimiento" ? "bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200" : ""}
-                            ${evento.tipo === "agendamiento" ? "bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-200" : ""}
-                            ${evento.tipo === "revisita" ? "bg-cyan-100 dark:bg-cyan-900/40 text-cyan-800 dark:text-cyan-200" : ""}
-                            ${evento.tipo === "cobranza" ? "bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200" : ""}
-                          `}
+                {cargando ? (
+                  <div className="h-10 animate-pulse rounded-md bg-muted" />
+                ) : delDia.length === 0 ? (
+                  <p className="px-1 text-xs text-muted-foreground">{esPasado ? "" : "Libre"}</p>
+                ) : (
+                  <ul className="flex flex-col gap-1.5">
+                    {delDia.slice(0, 4).map((ev) => {
+                      const t = TIPOS[ev.tipo]
+                      return (
+                        <li key={ev.id}>
+                          <Link
+                            href={t.href}
+                            title={`${t.plural}: ${ev.titulo} · ${ev.cliente_nombre ?? ""}`}
+                            className={cn(
+                              "flex flex-col gap-0.5 rounded-md border px-2 py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              t.suave,
+                            )}
+                          >
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                              <t.icono className={cn("size-3.5 shrink-0", t.texto)} aria-hidden="true" />
+                              {ev.hora && <span className="tabular-nums">{ev.hora}</span>}
+                              <span className="truncate">{ev.titulo}</span>
+                            </span>
+                            <span className="truncate text-xs text-muted-foreground">
+                              {ev.cliente_nombre}
+                              {ev.monto ? ` · ${formatMoney(ev.monto)}` : ""}
+                            </span>
+                          </Link>
+                        </li>
+                      )
+                    })}
+                    {delDia.length > 4 && (
+                      <li className="px-1 text-xs font-medium text-muted-foreground">+{delDia.length - 4} más</li>
+                    )}
+                  </ul>
+                )}
+              </li>
+            )
+          })}
+        </ol>
+      )}
+
+      {!cargando && !error && enSemanaActual && (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/60 p-4">
+          <h3 className="text-sm font-semibold text-foreground">
+            Para hoy · {DIAS_LARGO[hoy.getDay()]} {hoy.getDate()} de {MESES[hoy.getMonth()]}
+          </h3>
+          {eventosHoy.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No tenés pendientes para hoy.</p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
+              {eventosHoy.map((ev) => {
+                const t = TIPOS[ev.tipo]
+                return (
+                  <li key={ev.id} className="flex items-start gap-3 rounded-md border border-border bg-card p-3">
+                    <span className={cn("mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full", t.punto)}>
+                      <t.icono className="size-4 text-slate-950" aria-hidden="true" />
+                    </span>
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate text-sm font-semibold text-foreground">
+                        {ev.hora ? `${ev.hora} · ` : ""}
+                        {ev.titulo}
+                      </span>
+                      <span className="truncate text-sm text-muted-foreground">{ev.cliente_nombre}</span>
+                      {ev.cliente_telefono && (
+                        <a
+                          href={`tel:${ev.cliente_telefono}`}
+                          className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
                         >
-                          <div className="flex items-center gap-1 font-medium truncate">
-                            {getIconoTipo(evento.tipo)}
-                            <span className="truncate">{evento.titulo}</span>
-                          </div>
-                          {evento.hora && (
-                            <div className="flex items-center gap-1 text-[9px] opacity-80">
-                              <Clock className="h-2 w-2" />
-                              {evento.hora}
-                              {evento.tipo_visita && getIconoVisita(evento.tipo_visita)}
-                            </div>
-                          )}
-                          <div className="flex items-center gap-1 text-[9px] opacity-80 truncate">
-                            <User className="h-2 w-2" />
-                            <span className="truncate">{evento.cliente_nombre}</span>
-                          </div>
-                          {evento.monto && (
-                            <div className="flex items-center gap-1 text-[9px] font-medium">
-                              <DollarSign className="h-2 w-2" />
-                              {formatMoney(evento.monto)}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      {eventosDelDia.length === 0 && !esPasado && (
-                        <div className="text-[10px] text-muted-foreground text-center py-2 opacity-50">
-                          Sin eventos
-                        </div>
+                          <Phone className="size-3.5" aria-hidden="true" />
+                          {ev.cliente_telefono}
+                        </a>
                       )}
                     </div>
-                  </ScrollArea>
-                </div>
-              )
-            })}
-          </div>
-        )}
-
-        {/* Resumen de eventos de hoy */}
-        {eventosHoy.length > 0 && (
-          <div className="mt-4 p-3 rounded-lg bg-gradient-to-r from-cyan-50 to-purple-50 dark:from-cyan-900/20 dark:to-purple-900/20 border border-cyan-200 dark:border-cyan-800">
-            <h4 className="text-sm font-semibold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-cyan-600" />
-              Hoy - {DIAS_SEMANA_COMPLETO[hoy.getDay()]} {hoy.getDate()} de {MESES[hoy.getMonth()]}
-            </h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {eventosHoy.slice(0, 6).map((evento) => (
-                <div 
-                  key={evento.id}
-                  className={`
-                    p-2 rounded-lg border text-xs
-                    ${evento.tipo === "seguimiento" ? "bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800" : ""}
-                    ${evento.tipo === "agendamiento" ? "bg-purple-50 dark:bg-purple-900/30 border-purple-200 dark:border-purple-800" : ""}
-                    ${evento.tipo === "revisita" ? "bg-cyan-50 dark:bg-cyan-900/30 border-cyan-200 dark:border-cyan-800" : ""}
-                    ${evento.tipo === "cobranza" ? "bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800" : ""}
-                  `}
-                >
-                  <div className="flex items-center gap-2 justify-between">
-                    <div className="flex items-center gap-1.5 font-medium">
-                      <span className={`w-2 h-2 rounded-full ${getColorTipo(evento.tipo)}`}></span>
-                      {evento.titulo}
-                    </div>
-                    {evento.hora && (
-                      <Badge variant="outline" className="text-[10px] h-5">
-                        {evento.hora}
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1 mt-1 text-muted-foreground">
-                    <User className="h-3 w-3" />
-                    {evento.cliente_nombre}
-                    {evento.cliente_telefono && (
-                      <>
-                        <span className="mx-1">-</span>
-                        <Phone className="h-3 w-3" />
-                        {evento.cliente_telefono}
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {eventosHoy.length > 6 && (
-                <div className="flex items-center justify-center text-xs text-muted-foreground">
-                  +{eventosHoy.length - 6} más
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Leyenda */}
-        <div className="mt-4 flex items-center gap-4 justify-center flex-wrap text-xs text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-amber-500"></span>
-            Seguimientos
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-purple-500"></span>
-            Citas
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-cyan-500"></span>
-            Re-visitas
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded bg-red-500"></span>
-            Cobranzas
-          </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
-      </CardContent>
-    </Card>
+      )}
+    </section>
   )
 }
