@@ -1,10 +1,19 @@
 import { DashboardHeader } from "@/components/dashboard-header"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import Link from "next/link"
+import { Card, CardContent } from "@/components/ui/card"
 import { UserPlus, CalendarClock, ShoppingCart, Clock, Kanban } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { CRMMetricsDashboard } from "@/components/crm/crm-metrics-dashboard"
 import { CalendarioUnificadoCRM } from "@/components/crm/calendario-unificado-crm"
+
+const ACCIONES = [
+  { href: "/dashboard/crm/clientes", titulo: "Nuevo cliente", ayuda: "Anotá a una persona nueva", icono: UserPlus, color: "bg-primary" },
+  { href: "/dashboard/crm/agendamientos", titulo: "Agendar cita", ayuda: "Reservá un día y hora", icono: CalendarClock, color: "bg-sky-400" },
+  { href: "/dashboard/crm/seguimientos", titulo: "Seguimientos", ayuda: "A quién llamar o escribir", icono: Clock, color: "bg-amber-400" },
+  { href: "/dashboard/crm/ventas", titulo: "Nueva venta", ayuda: "Registrá lo que vendiste", icono: ShoppingCart, color: "bg-emerald-400" },
+  { href: "/dashboard/crm/pipeline", titulo: "Pipeline", ayuda: "Ver tus negocios en curso", icono: Kanban, color: "bg-slate-300" },
+]
 
 export default async function DashboardCRMPage() {
   const supabase = await createClient()
@@ -27,12 +36,12 @@ export default async function DashboardCRMPage() {
 
   if (!perfilCRM) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
+      <div className="min-h-screen bg-background">
         <DashboardHeader title="Dashboard CRM" description="Gestion de clientes y seguimiento de ventas" />
         <div className="p-6">
-          <Card className="border-2 border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+          <Card className="border-amber-400/40 bg-amber-400/10">
             <CardContent className="p-6">
-              <p className="text-amber-800 dark:text-amber-200">
+              <p className="text-foreground">
                 No se encontro un perfil CRM. Por favor, crea un perfil de tipo CRM para acceder a este dashboard.
               </p>
             </CardContent>
@@ -43,58 +52,37 @@ export default async function DashboardCRMPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-white to-teal-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900">
-      <DashboardHeader title="Dashboard CRM" description="Metricas y KPIs de tu gestion comercial" />
+    <div className="min-h-screen bg-background">
+      <DashboardHeader title="Dashboard CRM" description="Tu agenda, tus clientes y tus ventas en un solo lugar" />
 
-      <div className="p-4 md:p-6 space-y-6">
+      <div className="flex flex-col gap-6 p-4 md:p-6">
         {/* Calendario Unificado CRM - Vista principal de la agenda */}
         <CalendarioUnificadoCRM perfilId={perfilCRM.id} />
 
-        {/* Accesos rapidos */}
-        <Card className="border-2 border-slate-200 dark:border-slate-700">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold">Acciones Rapidas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              <a 
-                href="/dashboard/crm/pipeline" 
-                className="flex flex-col items-center p-4 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors border-2 border-slate-200 dark:border-slate-600"
-              >
-                <Kanban className="w-7 h-7 text-slate-600 dark:text-slate-300 mb-2" />
-                <span className="text-xs font-medium text-slate-800 dark:text-slate-200 text-center">Pipeline</span>
-              </a>
-              <a 
-                href="/dashboard/crm/clientes" 
-                className="flex flex-col items-center p-4 rounded-xl bg-cyan-50 hover:bg-cyan-100 dark:bg-cyan-900/30 dark:hover:bg-cyan-900/50 transition-colors border-2 border-cyan-200 dark:border-cyan-700"
-              >
-                <UserPlus className="w-7 h-7 text-cyan-600 dark:text-cyan-400 mb-2" />
-                <span className="text-xs font-medium text-cyan-800 dark:text-cyan-200 text-center">Nuevo Cliente</span>
-              </a>
-              <a 
-                href="/dashboard/crm/agendamientos" 
-                className="flex flex-col items-center p-4 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/30 dark:hover:bg-purple-900/50 transition-colors border-2 border-purple-200 dark:border-purple-700"
-              >
-                <CalendarClock className="w-7 h-7 text-purple-600 dark:text-purple-400 mb-2" />
-                <span className="text-xs font-medium text-purple-800 dark:text-purple-200 text-center">Agendar Cita</span>
-              </a>
-              <a 
-                href="/dashboard/crm/ventas" 
-                className="flex flex-col items-center p-4 rounded-xl bg-green-50 hover:bg-green-100 dark:bg-green-900/30 dark:hover:bg-green-900/50 transition-colors border-2 border-green-200 dark:border-green-700"
-              >
-                <ShoppingCart className="w-7 h-7 text-green-600 dark:text-green-400 mb-2" />
-                <span className="text-xs font-medium text-green-800 dark:text-green-200 text-center">Nueva Venta</span>
-              </a>
-              <a 
-                href="/dashboard/crm/seguimientos" 
-                className="flex flex-col items-center p-4 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/30 dark:hover:bg-amber-900/50 transition-colors border-2 border-amber-200 dark:border-amber-700"
-              >
-                <Clock className="w-7 h-7 text-amber-600 dark:text-amber-400 mb-2" />
-                <span className="text-xs font-medium text-amber-800 dark:text-amber-200 text-center">Seguimientos</span>
-              </a>
-            </div>
-          </CardContent>
-        </Card>
+        <section aria-labelledby="acciones-crm" className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 md:p-6">
+          <div className="flex flex-col gap-1">
+            <h2 id="acciones-crm" className="text-lg font-semibold text-foreground">¿Qué querés hacer?</h2>
+            <p className="text-sm text-muted-foreground">Elegí una acción para empezar.</p>
+          </div>
+          <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {ACCIONES.map((a) => (
+              <li key={a.href}>
+                <Link
+                  href={a.href}
+                  className="group flex h-full items-center gap-3 rounded-lg border border-border bg-secondary/60 p-4 transition-colors hover:border-primary hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:flex-col lg:items-start"
+                >
+                  <span className={`flex size-11 shrink-0 items-center justify-center rounded-full ${a.color}`}>
+                    <a.icono className="size-5 text-slate-950" aria-hidden="true" />
+                  </span>
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-semibold text-foreground">{a.titulo}</span>
+                    <span className="text-sm leading-snug text-muted-foreground">{a.ayuda}</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
 
         {/* Dashboard de Metricas Completo */}
         <CRMMetricsDashboard perfilId={perfilCRM.id} />
