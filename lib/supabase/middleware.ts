@@ -15,7 +15,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  const isPublicRoute = request.nextUrl.pathname === "/" || request.nextUrl.pathname.startsWith("/auth")
+  // Los webhooks de pago llegan sin sesión: deben quedar públicos (validan firma propia).
+  const isPublicRoute =
+    request.nextUrl.pathname === "/" ||
+    request.nextUrl.pathname.startsWith("/auth") ||
+    request.nextUrl.pathname === "/api/bancard/confirmacion" ||
+    request.nextUrl.pathname === "/api/pagopar/webhook"
 
   if (isPublicRoute) {
     return supabaseResponse
