@@ -4,7 +4,8 @@ import { Check, CreditCard, Loader2, ShieldCheck, User, Layers, ArrowUpRight } f
 import { Button } from "@/components/ui/button"
 import { cn, formatMoney } from "@/lib/utils"
 import { PLANES, type PlanId } from "@/lib/plans/catalogo"
-import { useCheckoutPagopar } from "@/hooks/use-checkout-pagopar"
+import { useCheckoutBancard } from "@/hooks/use-checkout-bancard"
+import { BancardCheckoutDialog } from "@/components/planes/bancard-checkout-dialog"
 
 const BENEFICIOS_PERSONAL = [
   { nombre: "Dashboard Principal", desc: "Resumen visual de tus finanzas" },
@@ -42,10 +43,18 @@ export function PlanCards({
   accesoIncluido = false,
   pagosProximamente = false,
 }: PlanCardsProps) {
-  const { iniciarPago, procesando, error, noConfigurado } = useCheckoutPagopar()
+  const { iniciarPago, procesando, error, noConfigurado, sesion, cerrarSesion, habilitado, modoPrueba } =
+    useCheckoutBancard()
+  // En staging, las cuentas autorizadas pueden probar el pago aunque los cobros estén pausados.
+  const bloqueoPorPausa = pagosProximamente && !habilitado
 
   return (
     <div className="flex flex-col gap-5">
+      {modoPrueba && !accesoIncluido && (
+        <p className="mx-auto w-full max-w-xl rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-xs text-amber-300">
+          Modo de prueba de Bancard activo para tu cuenta: los pagos no son reales.
+        </p>
+      )}
       <div
         className={cn(
           "mx-auto grid w-full gap-5",
@@ -59,7 +68,7 @@ export function PlanCards({
             beneficios={BENEFICIOS_PERSONAL}
             planActual={planActual}
             accesoIncluido={accesoIncluido}
-            pagosProximamente={pagosProximamente}
+            pagosProximamente={bloqueoPorPausa}
             procesando={procesando}
             onPagar={iniciarPago}
           />
@@ -72,12 +81,14 @@ export function PlanCards({
             beneficios={BENEFICIOS_TOTAL}
             planActual={planActual}
             accesoIncluido={accesoIncluido}
-            pagosProximamente={pagosProximamente}
+            pagosProximamente={bloqueoPorPausa}
             procesando={procesando}
             onPagar={iniciarPago}
           />
         )}
       </div>
+
+      <BancardCheckoutDialog sesion={sesion} modoPrueba={modoPrueba} onClose={cerrarSesion} />
 
       {noConfigurado && (
         <div className="mx-auto w-full max-w-xl rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
@@ -100,7 +111,7 @@ export function PlanCards({
 
       <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
         <ShieldCheck className="h-3.5 w-3.5" />
-        {pagosProximamente
+        {bloqueoPorPausa
           ? "Los pagos con Bancard se habilitan en diciembre. Hasta entonces, usás tu plan sin costo."
           : "Pago mensual seguro con Bancard Paraguay — tarjetas, QR y transferencias"}
       </p>
@@ -207,7 +218,7 @@ function PlanCard({
         {cargando ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Redirigiendo a Bancard...
+            Preparando pago...
           </>
         ) : (
           <>
