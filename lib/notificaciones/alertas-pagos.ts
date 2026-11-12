@@ -1,4 +1,3 @@
-import "server-only"
 import { Resend } from "resend"
 import { PLANES, esPlanId } from "@/lib/plans/catalogo"
 
