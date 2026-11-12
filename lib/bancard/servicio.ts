@@ -1,4 +1,6 @@
+import { after } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { enviarAlertaPago, type TipoAlertaPago } from "@/lib/notificaciones/alertas-pagos"
 import { esAdmin } from "@/lib/admin/config"
 import {
   BANCARD_HOSTS,
@@ -196,5 +198,36 @@ export async function aplicarConfirmacion(cfg: ConfigBancard, conf: Confirmacion
   })
 
   if (error) throw new Error(`No se pudo aplicar la confirmación: ${error.message}`)
-  return data as { resultado: string }
+  const res = data as { resultado: string; vence_nuevo?: string }
+
+  const tipo = TIPO_ALERTA[res.resultado]
+  if (tipo) {
+    after(async () => {
+      const { data: p } = await admin
+        .from("pagos")
+        .select("user_id, plan_id, monto, entorno")
+        .eq("shop_process_id", conf.shopProcessId)
+        .eq("proveedor", "bancard")
+        .maybeSingle()
+      const usuario = p ? (await admin.auth.admin.getUserById(p.user_id)).data.user?.email : null
+      await enviarAlertaPago({
+        tipo,
+        entorno: p?.entorno ?? cfg.entorno,
+        shopProcessId: conf.shopProcessId,
+        planId: p?.plan_id,
+        monto: p?.monto ?? conf.monto,
+        usuarioEmail: usuario,
+        venceNuevo: res.vence_nuevo ?? null,
+        detalle: [conf.responseCode, conf.responseDescription].filter(Boolean).join(" - ") || null,
+      })
+    })
+  }
+  return res
+}
+
+const TIPO_ALERTA: Record<string, TipoAlertaPago | undefined> = {
+  activado: "aprobado",
+  rechazado: "rechazado",
+  bloqueado: "bloqueado",
+  inconsistente: "inconsistente",
 }
