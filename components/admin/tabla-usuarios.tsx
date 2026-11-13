@@ -1,7 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Search, ChevronRight } from "lucide-react"
+import { Search, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -27,7 +28,7 @@ type Filtro =
   | "en_riesgo"
   | "inactivo"
   | "sin_activar"
-type Orden = "ingreso" | "alta" | "actividad" | "nombre"
+type Orden = "ingreso" | "alta" | "actividad" | "nombre" | "plan" | "pago" | "cuenta" | "avisos"
 
 const FILTROS: { valor: Filtro; label: string }[] = [
   { valor: "todos", label: "Todos" },
@@ -66,6 +67,35 @@ export function TablaUsuarios({
   const [busqueda, setBusqueda] = useState("")
   const [filtro, setFiltro] = useState<Filtro>("todos")
   const [orden, setOrden] = useState<Orden>("ingreso")
+  const [ascendente, setAscendente] = useState(false)
+
+  function ordenarPor(o: Orden) {
+    if (o === orden) setAscendente((a) => !a)
+    else {
+      setOrden(o)
+      setAscendente(o === "nombre" || o === "plan" || o === "pago")
+    }
+  }
+
+  function Encabezado({ o, children, className }: { o: Orden; children: React.ReactNode; className?: string }) {
+    const activo = orden === o
+    const Icono = !activo ? ArrowUpDown : ascendente ? ArrowUp : ArrowDown
+    return (
+      <TableHead className={className} aria-sort={activo ? (ascendente ? "ascending" : "descending") : "none"}>
+        <button
+          type="button"
+          onClick={() => ordenarPor(o)}
+          className={cn(
+            "inline-flex items-center gap-1 rounded hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            activo && "text-foreground",
+          )}
+        >
+          {children}
+          <Icono className="size-3.5" aria-hidden="true" />
+        </button>
+      </TableHead>
+    )
+  }
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
@@ -79,15 +109,20 @@ export function TablaUsuarios({
       alta: (u) => u.creado,
       actividad: (u) => u.actividad.total,
       nombre: (u) => u.nombre.toLowerCase(),
+      plan: (u) => u.planActual,
+      pago: (u) => ESTADO_PAGO_INFO[u.pago.estado].label,
+      cuenta: (u) => u.estado,
+      avisos: (u) => u.avisos.length,
     }
     const k = clave[orden]
+    const dir = ascendente ? 1 : -1
     return [...lista].sort((a, b) => {
       const x = k(a)
       const y = k(b)
-      if (orden === "nombre") return String(x).localeCompare(String(y))
-      return x < y ? 1 : x > y ? -1 : 0
+      if (typeof x === "string" && typeof y === "string") return x.localeCompare(y, "es") * dir
+      return (x < y ? -1 : x > y ? 1 : 0) * dir
     })
-  }, [usuarios, busqueda, filtro, orden])
+  }, [usuarios, busqueda, filtro, orden, ascendente])
 
   return (
     <section aria-label="Usuarios" className="flex flex-col gap-3">
@@ -115,16 +150,30 @@ export function TablaUsuarios({
           </SelectContent>
         </Select>
         <Select value={orden} onValueChange={(v) => setOrden(v as Orden)}>
-          <SelectTrigger className="md:w-52" aria-label="Ordenar">
+          <SelectTrigger className="md:w-48" aria-label="Ordenar por">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ingreso">Último ingreso</SelectItem>
             <SelectItem value="alta">Fecha de alta</SelectItem>
-            <SelectItem value="actividad">Más datos cargados</SelectItem>
-            <SelectItem value="nombre">Nombre (A-Z)</SelectItem>
+            <SelectItem value="actividad">Datos cargados</SelectItem>
+            <SelectItem value="nombre">Nombre</SelectItem>
+            <SelectItem value="plan">Plan</SelectItem>
+            <SelectItem value="pago">Estado de pago</SelectItem>
+            <SelectItem value="cuenta">Estado de cuenta</SelectItem>
+            <SelectItem value="avisos">Avisos</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setAscendente((a) => !a)}
+          aria-label={ascendente ? "Orden de menor a mayor" : "Orden de mayor a menor"}
+          className="gap-2"
+        >
+          {ascendente ? <ArrowUp className="size-4" aria-hidden="true" /> : <ArrowDown className="size-4" aria-hidden="true" />}
+          {ascendente ? "Menor a mayor" : "Mayor a menor"}
+        </Button>
       </div>
 
       <p className="text-xs text-muted-foreground">
@@ -135,15 +184,15 @@ export function TablaUsuarios({
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead>Usuario</TableHead>
-              <TableHead>Cuenta</TableHead>
-              <TableHead>Plan</TableHead>
-              <TableHead>Pago</TableHead>
+              <Encabezado o="nombre">Usuario</Encabezado>
+              <Encabezado o="cuenta">Cuenta</Encabezado>
+              <Encabezado o="plan">Plan</Encabezado>
+              <Encabezado o="pago">Pago</Encabezado>
               <TableHead>Uso</TableHead>
-              <TableHead>Alta</TableHead>
-              <TableHead>Último ingreso</TableHead>
-              <TableHead className="text-right">Datos</TableHead>
-              <TableHead>Avisos</TableHead>
+              <Encabezado o="alta">Alta</Encabezado>
+              <Encabezado o="ingreso">Último ingreso</Encabezado>
+              <Encabezado o="actividad" className="text-right">Datos</Encabezado>
+              <Encabezado o="avisos">Avisos</Encabezado>
               <TableHead>
                 <span className="sr-only">Ver ficha</span>
               </TableHead>

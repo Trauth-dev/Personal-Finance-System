@@ -199,6 +199,80 @@ export async function eliminarCargaCreditosIA(id: number): Promise<ResultadoAcci
   }
 }
 
+const TIERS_ADMIN = ["personal", "completo"] as const
+export type TierAdmin = (typeof TIERS_ADMIN)[number]
+
+export async function cambiarPlan(usuarioId: string, tier: TierAdmin): Promise<ResultadoAccion> {
+  try {
+    if (!TIERS_ADMIN.includes(tier)) return { ok: false, error: "Plan inválido" }
+    const { admin, adminSesion, email } = await contexto(usuarioId)
+    const { data: perfil } = await admin.from("profiles").select("plan_tier").eq("id", usuarioId).maybeSingle()
+
+    const { error } = await admin.from("profiles").upsert({ id: usuarioId, email, plan_tier: tier }, { onConflict: "id" })
+    if (error) return { ok: false, error: `No se pudo guardar: ${error.message}` }
+
+    await auditar(admin, adminSesion, usuarioId, email, "plan_cambiado", {
+      anterior: perfil?.plan_tier ?? null,
+      nuevo: tier,
+    })
+    revalidatePath("/admin")
+    return { ok: true, mensaje: tier === "completo" ? "Plan cambiado a Total" : "Plan cambiado a Personal" }
+  } catch (e) {
+    return mensajeError(e)
+  }
+}
+
+export async function extenderPrueba(usuarioId: string, dias: number): Promise<ResultadoAccion> {
+  try {
+    if (!Number.isInteger(dias) || dias < 1 || dias > 90) return { ok: false, error: "Cantidad de días inválida" }
+    const { admin, adminSesion, email } = await contexto(usuarioId)
+    const { data: perfil } = await admin.from("profiles").select("prueba_vence").eq("id", usuarioId).maybeSingle()
+    const actual = perfil?.prueba_vence ? new Date(perfil.prueba_vence).getTime() : 0
+    const nuevo = new Date(Math.max(Date.now(), actual) + dias * 86_400_000).toISOString()
+
+    const { error } = await admin.from("profiles").upsert({ id: usuarioId, email, prueba_vence: nuevo }, { onConflict: "id" })
+    if (error) return { ok: false, error: `No se pudo guardar: ${error.message}` }
+
+    await auditar(admin, adminSesion, usuarioId, email, "prueba_extendida", {
+      dias,
+      anterior: perfil?.prueba_vence ?? null,
+      nuevo,
+    })
+    revalidatePath("/admin")
+    return { ok: true, mensaje: `Prueba gratis extendida ${dias} días` }
+  } catch (e) {
+    return mensajeError(e)
+  }
+}
+
+/**
+ * Elimina la cuenta y todos sus datos. Los pagos se conservan (user_id queda en null)
+ * y el correo sigue registrado en pruebas_usadas, así no obtiene otra prueba gratis.
+ */
+export async function eliminarCuenta(usuarioId: string, confirmacionEmail: string): Promise<ResultadoAccion> {
+  try {
+    const { admin, adminSesion, email } = await contexto(usuarioId)
+    if (usuarioId === adminSesion.id || esAdmin(email))
+      return { ok: false, error: "No podés eliminar una cuenta administradora" }
+    if (confirmacionEmail.trim().toLowerCase() !== email)
+      return { ok: false, error: "El correo de confirmación no coincide" }
+
+    if (email) {
+      await admin.from("pruebas_usadas").upsert({ email }, { onConflict: "email", ignoreDuplicates: true })
+    }
+
+    await auditar(admin, adminSesion, usuarioId, email, "cuenta_eliminada", {})
+
+    const { error } = await admin.auth.admin.deleteUser(usuarioId)
+    if (error) return { ok: false, error: `No se pudo eliminar: ${error.message}` }
+
+    revalidatePath("/admin")
+    return { ok: true, mensaje: "Cuenta eliminada" }
+  } catch (e) {
+    return mensajeError(e)
+  }
+}
+
 export async function anularSuscripcion(usuarioId: string): Promise<ResultadoAccion> {
   try {
     const { admin, adminSesion, email } = await contexto(usuarioId)

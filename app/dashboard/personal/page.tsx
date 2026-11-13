@@ -17,6 +17,7 @@ import { ReportesClasico } from "@/components/personal/dashboard-clasico/reporte
 import { AlertasFlotantes } from "@/components/personal/dashboard-clasico/alertas-flotantes"
 import { LogrosFinancieros } from "@/components/personal/logros-financieros"
 import { DashboardPersonalClient } from "./page-client"
+import { GuiaPrimerosPasos } from "@/components/personal/guia-primeros-pasos"
 
 export const dynamic = "force-dynamic"
 
@@ -55,13 +56,36 @@ export default async function DashboardPersonalPage({
     )
   }
 
-  const data = await getPersonalDashboardData({
-    supabase,
-    userId: user.id,
-    perfilId: perfilPersonal.id,
-    mesSolicitado: month,
-    cajaSolicitada: caja,
-  })
+  const contar = (tabla: string) =>
+    supabase
+      .from(tabla)
+      .select("id", { count: "exact", head: true })
+      .eq("perfil_id", perfilPersonal.id)
+      .then(({ count }) => (count ?? 0) > 0)
+
+  const [data, tieneCaja, tieneIngreso, tieneEgreso, tieneDeuda, tienePresupuesto, tienePresupuestoMensual] =
+    await Promise.all([
+      getPersonalDashboardData({
+        supabase,
+        userId: user.id,
+        perfilId: perfilPersonal.id,
+        mesSolicitado: month,
+        cajaSolicitada: caja,
+      }),
+      contar("cajas_ahorro"),
+      contar("ingresos"),
+      contar("egresos"),
+      contar("deudas"),
+      contar("presupuesto_categorias"),
+      contar("presupuesto_mensual"),
+    ])
+
+  const progresoGuia = {
+    caja: tieneCaja,
+    movimiento: tieneIngreso || tieneEgreso,
+    deuda: tieneDeuda,
+    presupuesto: tienePresupuesto || tienePresupuestoMensual,
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -69,6 +93,7 @@ export default async function DashboardPersonalPage({
 
       <DashboardPersonalClient mes={data.claveMes} cajaId={data.cajaId} cuentas={data.cuentas.ok ? data.cuentas.data : []}>
         <div className="flex flex-col gap-4 p-4 md:gap-6 md:p-6">
+          <GuiaPrimerosPasos progreso={progresoGuia} />
           {data.cajaNombre && (
             <div className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2">
               <PiggyBank className="h-4 w-4 text-cyan-500" aria-hidden="true" />

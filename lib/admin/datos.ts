@@ -5,7 +5,7 @@ import { PRECIO_PLAN_COMPLETO, PRECIO_PLAN_PERSONAL, esAdmin, type EstadoCuenta 
 
 const DIA = 86_400_000
 
-export type EstadoPago = "exento" | "activa" | "libre_temporal" | "vencida" | "sin_pago"
+export type EstadoPago = "exento" | "activa" | "prueba" | "prueba_vencida" | "libre_temporal" | "vencida" | "sin_pago"
 export type Segmento = "nuevo" | "activo" | "en_riesgo" | "inactivo" | "sin_activar"
 export type NivelAviso = "alto" | "medio" | "info"
 
@@ -28,6 +28,10 @@ export type UsuarioAdmin = {
   estadoActualizado: string | null
   observaciones: string | null
   suscripcionVence: string | null
+  /** Fin de la prueba gratuita (null en cuentas anteriores al sistema de prueba). */
+  pruebaVence: string | null
+  /** Valor guardado en profiles.plan_tier. */
+  planTier: string | null
   pago: {
     estado: EstadoPago
     totalPagado: number
@@ -151,7 +155,7 @@ export async function getDatosAdmin(): Promise<DatosAdmin> {
     admin
       .from("profiles")
       .select(
-        "id, email, nombre_completo, telefono, codigo_telefono, pais, plan_tier, suscripcion_vence, estado_cuenta, estado_motivo, estado_actualizado_at, observaciones",
+        "id, email, nombre_completo, telefono, codigo_telefono, pais, plan_tier, suscripcion_vence, prueba_vence, estado_cuenta, estado_motivo, estado_actualizado_at, observaciones",
       ),
     admin.from("pagos").select("user_id, monto, estado, fecha_pago, created_at"),
     admin.rpc("admin_resumen_actividad"),
@@ -193,10 +197,14 @@ export async function getDatosAdmin(): Promise<DatosAdmin> {
     const estado = ((perfil?.estado_cuenta as EstadoCuenta) ?? "activo") as EstadoCuenta
     const vence = (perfil?.suscripcion_vence as string | null) ?? null
     const venceMs = vence ? new Date(vence).getTime() : null
+    const prueba = (perfil?.prueba_vence as string | null) ?? null
+    const pruebaMs = prueba ? new Date(prueba).getTime() : null
 
     let estadoPago: EstadoPago
     if (EMAILS_ACCESO_LIBRE.has(email)) estadoPago = "exento"
     else if (venceMs && venceMs > ahora) estadoPago = "activa"
+    else if (pruebaMs && pruebaMs > ahora) estadoPago = "prueba"
+    else if (pruebaMs) estadoPago = "prueba_vencida"
     else if (COBROS_PAUSADOS) estadoPago = "libre_temporal"
     else if (pagos.aprobados > 0) estadoPago = "vencida"
     else estadoPago = "sin_pago"
@@ -244,6 +252,9 @@ export async function getDatosAdmin(): Promise<DatosAdmin> {
     if (venceMs && venceMs > ahora && venceMs - ahora < 7 * DIA)
       avisos.push({ nivel: "medio", texto: `Suscripción vence en ${Math.ceil((venceMs - ahora) / DIA)} días` })
     if (estadoPago === "vencida") avisos.push({ nivel: "alto", texto: "Suscripción vencida" })
+    if (estadoPago === "prueba_vencida") avisos.push({ nivel: "alto", texto: "Terminó la prueba gratis y no pagó" })
+    if (estadoPago === "prueba" && pruebaMs && pruebaMs - ahora < 5 * DIA)
+      avisos.push({ nivel: "medio", texto: `La prueba gratis termina en ${Math.ceil((pruebaMs - ahora) / DIA)} días` })
     if (pagos.pendientes > 0) avisos.push({ nivel: "info", texto: `${pagos.pendientes} pago(s) iniciado(s) sin confirmar` })
     if (planSugerido === "completo")
       avisos.push({ nivel: "info", texto: "Usa Empresarial/CRM: con los nuevos planes correspondería el de 120.000 Gs" })
@@ -269,6 +280,8 @@ export async function getDatosAdmin(): Promise<DatosAdmin> {
       estadoActualizado: (perfil?.estado_actualizado_at as string | null) ?? null,
       observaciones: (perfil?.observaciones as string | null) ?? null,
       suscripcionVence: vence,
+      pruebaVence: prueba,
+      planTier: (perfil?.plan_tier as string | null) ?? null,
       pago: {
         estado: estadoPago,
         totalPagado: pagos.total,

@@ -75,6 +75,7 @@ export async function enviarAlertaPago(alerta: AlertaPago) {
       {
         from: `Prospera+ Pagos <pagos@${dominio}>`,
         to: [destinatario],
+        replyTo: destinatario,
         subject: titulo,
         html,
         text,

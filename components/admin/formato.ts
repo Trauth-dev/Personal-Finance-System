@@ -50,6 +50,8 @@ export const ESTADO_CUENTA_INFO: Record<EstadoCuenta, { label: string; clase: st
 export const ESTADO_PAGO_INFO: Record<EstadoPago, { label: string; clase: string }> = {
   exento: { label: "Exento", clase: "text-primary" },
   activa: { label: "Al día", clase: "text-[hsl(var(--chart-4))]" },
+  prueba: { label: "Prueba gratis", clase: "text-accent" },
+  prueba_vencida: { label: "Prueba terminada", clase: "text-destructive" },
   libre_temporal: { label: "Sin cobro (hasta dic.)", clase: "text-muted-foreground" },
   vencida: { label: "Vencida", clase: "text-destructive" },
   sin_pago: { label: "Sin pago", clase: "text-destructive" },
@@ -76,6 +78,9 @@ export const ACCION_LABEL: Record<string, string> = {
   observaciones: "Editó observaciones",
   suscripcion_extendida: "Extendió la suscripción",
   suscripcion_anulada: "Anuló la suscripción",
+  plan_cambiado: "Cambió el plan",
+  prueba_extendida: "Extendió la prueba gratis",
+  cuenta_eliminada: "Eliminó la cuenta",
   ia_creditos_cargados: "Registró créditos de OpenAI",
   ia_creditos_eliminados: "Eliminó una carga de créditos de OpenAI",
 }
