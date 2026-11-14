@@ -13,6 +13,9 @@ import type { EstadoCuenta } from "@/lib/admin/config"
 import {
   anularSuscripcion,
   cambiarEstadoCuenta,
+  cambiarPlan,
+  eliminarCuenta,
+  extenderPrueba,
   extenderSuscripcion,
   guardarObservaciones,
   type ResultadoAccion,
@@ -62,12 +65,16 @@ export function DetalleUsuario({
   const [motivo, setMotivo] = useState("")
   const [observaciones, setObservaciones] = useState("")
   const [confirmar, setConfirmar] = useState<EstadoCuenta | null>(null)
+  const [eliminando, setEliminando] = useState(false)
+  const [emailConfirmacion, setEmailConfirmacion] = useState("")
 
   useEffect(() => {
     setObservaciones(usuario?.observaciones ?? "")
     setMotivo("")
     setResultado(null)
     setConfirmar(null)
+    setEliminando(false)
+    setEmailConfirmacion("")
   }, [usuario?.id, usuario?.observaciones])
 
   function ejecutar(accion: () => Promise<ResultadoAccion>) {
@@ -167,6 +174,7 @@ export function DetalleUsuario({
                     valor={usuario.planActual === "total" ? "Prospera+ Total · 120.000 Gs" : "Prospera+ Personal · 80.000 Gs"}
                   />
                   <Dato label="Suscripción vence" valor={fmtFecha(usuario.suscripcionVence)} />
+                  <Dato label="Prueba gratis hasta" valor={usuario.pruebaVence ? fmtFecha(usuario.pruebaVence) : "Sin prueba (cuenta anterior)"} />
                   <Dato label="Total pagado" valor={fmtGs(usuario.pago.totalPagado)} />
                   <Dato label="Pagos confirmados" valor={`${usuario.pago.pagosAprobados} (último: ${fmtFecha(usuario.pago.ultimoPago)})`} />
                   <Dato
@@ -193,7 +201,38 @@ export function DetalleUsuario({
                       Anular suscripción
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={pendiente}
+                    onClick={() => ejecutar(() => extenderPrueba(usuario.id, 7))}
+                  >
+                    Extender prueba (+7 días)
+                  </Button>
                 </div>
+                {!usuario.esAdmin && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-xs text-muted-foreground">Cambiar plan</span>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant={usuario.planTier === "completo" ? "outline" : "secondary"}
+                        disabled={pendiente || usuario.planTier !== "completo"}
+                        onClick={() => ejecutar(() => cambiarPlan(usuario.id, "personal"))}
+                      >
+                        Personal
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={usuario.planTier === "completo" ? "secondary" : "outline"}
+                        disabled={pendiente || usuario.planTier === "completo"}
+                        onClick={() => ejecutar(() => cambiarPlan(usuario.id, "completo"))}
+                      >
+                        Total
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </Bloque>
 
               <Bloque titulo="Uso de la app">
@@ -305,6 +344,60 @@ export function DetalleUsuario({
                   </Button>
                 </div>
               </Bloque>
+
+              {!usuario.esAdmin && (
+                <Bloque titulo="Eliminar cuenta">
+                  {!eliminando ? (
+                    <div className="flex flex-col gap-2">
+                      <p className="text-sm leading-relaxed text-muted-foreground">
+                        Borra la cuenta y todos sus datos. Los pagos quedan registrados y el correo no podrá volver a usar la prueba gratis.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        className="self-start"
+                        disabled={pendiente}
+                        onClick={() => setEliminando(true)}
+                      >
+                        Eliminar cuenta
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 rounded-lg border border-destructive/40 p-3">
+                      <Label htmlFor="confirmar-eliminar" className="text-sm leading-relaxed">
+                        Esta acción no se puede deshacer. Escribí <span className="font-medium break-all">{usuario.email}</span> para confirmar.
+                      </Label>
+                      <input
+                        id="confirmar-eliminar"
+                        value={emailConfirmacion}
+                        onChange={(e) => setEmailConfirmacion(e.target.value)}
+                        autoComplete="off"
+                        className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          disabled={pendiente || emailConfirmacion.trim().toLowerCase() !== usuario.email.toLowerCase()}
+                          onClick={() =>
+                            ejecutar(async () => {
+                              const r = await eliminarCuenta(usuario.id, emailConfirmacion)
+                              if (r.ok) onCerrar()
+                              return r
+                            })
+                          }
+                        >
+                          {pendiente && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+                          Eliminar definitivamente
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={pendiente} onClick={() => setEliminando(false)}>
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </Bloque>
+              )}
 
               <Bloque titulo="Historial administrativo">
                 {historial.length === 0 ? (

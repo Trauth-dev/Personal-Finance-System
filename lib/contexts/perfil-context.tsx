@@ -70,12 +70,17 @@ export function PerfilProvider({ children }: { children: ReactNode }) {
       try {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("moneda, pais, zona_horaria, plan_tier, suscripcion_vence")
+          .select("moneda, pais, zona_horaria, plan_tier, suscripcion_vence, prueba_vence")
           .eq("id", user.id)
           .maybeSingle()
 
         accesoTotal =
-          resolverPlan({ email: user.email, tier: profile?.plan_tier, vence: profile?.suscripcion_vence }) === "total"
+          resolverPlan({
+            email: user.email,
+            tier: profile?.plan_tier,
+            vence: profile?.suscripcion_vence,
+            prueba: profile?.prueba_vence,
+          }) === "total"
 
         const monedaUsuario = profile?.moneda || DEFAULT_CURRENCY
         setCurrentCurrency(monedaUsuario)

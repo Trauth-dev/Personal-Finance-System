@@ -18,7 +18,7 @@ interface PlanAccessGuardProps {
  * - Plan Personal intentando usar Empresarial o CRM: ofrece mejorar a Total.
  */
 export function PlanAccessGuard({ children }: PlanAccessGuardProps) {
-  const { activa, plan, accesoTotal, isLoading } = useSuscripcion()
+  const { activa, plan, accesoTotal, isLoading, pruebaTerminada } = useSuscripcion()
   const { perfilActual, perfiles, cambiarPerfil } = usePerfil()
   const pathname = usePathname()
 
@@ -68,12 +68,18 @@ export function PlanAccessGuard({ children }: PlanAccessGuardProps) {
               {esMejora ? "Disponible en Prospera+ Total" : "Planes Prospera+"}
             </span>
             <h1 className="mt-4 text-balance text-2xl font-extrabold tracking-tight text-white sm:text-3xl">
-              {esMejora ? "Mejorá a Total para usar este perfil" : "Activá tu suscripción para continuar"}
+              {esMejora
+                ? "Mejorá a Total para usar este perfil"
+                : pruebaTerminada
+                  ? "Tu mes de prueba gratis terminó"
+                  : "Activá tu suscripción para continuar"}
             </h1>
             <p className="mt-3 text-pretty text-sm leading-relaxed text-slate-400">
               {esMejora
                 ? "Tu plan Personal incluye el perfil Personal completo. Los perfiles Empresarial y CRM forman parte de Prospera+ Total."
-                : "Elegí el plan que mejor se adapta a vos. Podés mejorar a Total en cualquier momento."}
+                : pruebaTerminada
+                  ? "Tus datos están guardados y a salvo. Elegí un plan para seguir usando Prospera+ donde lo dejaste."
+                  : "Elegí el plan que mejor se adapta a vos. Podés mejorar a Total en cualquier momento."}
             </p>
           </div>
 

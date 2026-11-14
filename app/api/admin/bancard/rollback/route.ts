@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
+import { enviarAlertaPago } from "@/lib/notificaciones/alertas-pagos"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { obtenerAdmin } from "@/lib/admin/auth"
 import { getConfigBancard, revertirEnBancard } from "@/lib/bancard/servicio"
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
   const { data: pago } = await admin
     .from("pagos")
-    .select("id, user_id, entorno, estado")
+    .select("id, user_id, entorno, estado, plan_id, monto")
     .eq("shop_process_id", spid)
     .eq("proveedor", "bancard")
     .maybeSingle()
@@ -48,6 +49,20 @@ export async function POST(request: Request) {
     accion: "bancard_rollback",
     detalle: { shop_process_id: spid, estado_anterior: pago.estado },
   })
+
+  if ((res as { resultado?: string } | null)?.resultado === "revertido") {
+    after(() =>
+      enviarAlertaPago({
+        tipo: "revertido",
+        entorno: pago.entorno,
+        shopProcessId: spid,
+        planId: pago.plan_id,
+        monto: pago.monto,
+        usuarioEmail: u.user?.email ?? null,
+        detalle: `Revertido por ${adminSesion.email}`,
+      }),
+    )
+  }
 
   return NextResponse.json({ ok: true, resultado: res })
 }
