@@ -524,44 +524,36 @@ export function AgendamientosManager({ perfilId }: AgendamientosManagerProps) {
         toast({ title: "Prospecto convertido a cliente" })
       }
 
-      // Registrar la venta
+      // Registrar la venta (el trigger de crm_ventas descuenta el stock)
+      const esContado = ventaData.metodo_pago === "contado"
+      const numCuotas = esContado ? 1 : Math.max(1, Number(ventaData.cuotas) || 1)
+      const hoy = new Date()
+      const fechaHoy = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-${String(hoy.getDate()).padStart(2, "0")}`
       const { data: venta, error: ventaError } = await supabase
         .from("crm_ventas")
         .insert({
           user_id: userId,
           perfil_id: perfilId,
           cliente_id: clienteId,
-          oportunidad_id: null,
+          descripcion: productoSeleccionado.nombre,
+          producto_id: ventaData.producto_id,
+          cantidad: ventaData.cantidad,
+          precio_unitario: productoSeleccionado.precio_venta,
+          tipo_pago: esContado ? "contado" : "cuotas",
           monto_total: ventaData.precio_total,
+          num_cuotas: numCuotas,
+          monto_cuota: esContado ? null : ventaData.precio_total / numCuotas,
+          fecha_inicio_cuotas: esContado ? null : fechaHoy,
+          frecuencia_dias: esContado ? null : 30,
           moneda: "PYG",
-          metodo_pago: ventaData.metodo_pago,
-          estado: ventaData.metodo_pago === "contado" ? "pagado" : "pendiente",
+          estado: esContado ? "completada" : "activa",
           notas: ventaData.notas || null,
-          fecha_venta: new Date().toISOString(),
+          fecha_venta: fechaHoy,
         })
         .select()
         .single()
 
       if (ventaError) throw ventaError
-
-      // Registrar items de la venta
-      await supabase
-        .from("crm_venta_items")
-        .insert({
-          venta_id: venta.id,
-          producto_id: ventaData.producto_id,
-          cantidad: ventaData.cantidad,
-          precio_unitario: productoSeleccionado.precio_venta,
-          subtotal: ventaData.precio_total,
-        })
-
-      // Actualizar stock del producto
-      await supabase
-        .from("inventario")
-        .update({ 
-          stock_actual: productoSeleccionado.stock_actual - ventaData.cantidad 
-        })
-        .eq("id", ventaData.producto_id)
 
       // Obtener configuracion de seguimiento del usuario
       const { data: configSeguimiento } = await supabase

@@ -8,7 +8,6 @@
 export const EMAILS_ACCESO_LIBRE = new Set<string>([
   "matiastrauth64@gmail.com", // Matías Trauth
   "matiastrauth64lol@gmail.com", // Matías Trauth
-  "matiastrauth@gmail.com", // Matías Trauth (admin)
   "luccianaramos007@gmail.com", // Luciana Ramos
   "davidblancobazan@gmail.com", // David Blanco
   "info@logrosconsultora.com", // Sebastián García

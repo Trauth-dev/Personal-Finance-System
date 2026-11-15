@@ -2,6 +2,16 @@ import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
+function rutaInternaSegura(next: string | null, origin: string): string | null {
+  if (!next || !next.startsWith("/") || next.startsWith("//") || /[\\\u0000-\u001f]/.test(next)) return null
+  try {
+    const url = new URL(next, origin)
+    return url.origin === origin ? `${url.pathname}${url.search}${url.hash}` : null
+  } catch {
+    return null
+  }
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get("code")
@@ -9,22 +19,12 @@ export async function GET(request: Request) {
   const type = requestUrl.searchParams.get("type")
   // Destino opcional tras el login (ej. login con Google -> /dashboard).
   // Solo se aceptan rutas internas para evitar redirecciones abiertas.
-  const nextParam = requestUrl.searchParams.get("next")
-  const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : null
+  const safeNext = rutaInternaSegura(requestUrl.searchParams.get("next"), requestUrl.origin)
   const error = requestUrl.searchParams.get("error")
   const error_description = requestUrl.searchParams.get("error_description")
 
-  console.log("[v0] Auth callback recibido", {
-    hasCode: !!code,
-    hasTokenHash: !!token_hash,
-    type,
-    error,
-    error_description,
-    fullUrl: requestUrl.toString(),
-  })
-
   if (error) {
-    console.error("[v0] Error en callback de Supabase:", error, error_description)
+    console.error("Error en callback de Supabase:", error)
     return NextResponse.redirect(
       new URL(`/auth/recuperar-contrasena?error=${encodeURIComponent(error_description || error)}`, requestUrl.origin),
     )
@@ -54,38 +54,35 @@ export async function GET(request: Request) {
   )
 
   if (code) {
-    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
     if (exchangeError) {
-      console.error("[v0] Error al intercambiar código:", exchangeError)
+      console.error("Error al intercambiar código:", exchangeError.message)
       return NextResponse.redirect(
         new URL(`/auth/recuperar-contrasena?error=${encodeURIComponent(exchangeError.message)}`, requestUrl.origin),
       )
     }
 
-    console.log("[v0] Sesión establecida correctamente para usuario:", data.user?.email)
     // Si viene un destino (login con Google), vamos ahí; si no, es recuperación de contraseña.
     return NextResponse.redirect(new URL(safeNext ?? "/auth/actualizar-contrasena", requestUrl.origin))
   }
 
   if (token_hash && type) {
-    const { data, error: verifyError } = await supabase.auth.verifyOtp({
+    const { error: verifyError } = await supabase.auth.verifyOtp({
       token_hash,
       type: type as "recovery" | "email" | "magiclink",
     })
 
     if (verifyError) {
-      console.error("[v0] Error al verificar OTP:", verifyError)
+      console.error("Error al verificar OTP:", verifyError.message)
       return NextResponse.redirect(
         new URL(`/auth/recuperar-contrasena?error=${encodeURIComponent(verifyError.message)}`, requestUrl.origin),
       )
     }
 
-    console.log("[v0] OTP verificado correctamente para usuario:", data.user?.email)
     return NextResponse.redirect(new URL("/auth/actualizar-contrasena", requestUrl.origin))
   }
 
-  console.log("[v0] No se encontró código ni token_hash en el callback")
   return NextResponse.redirect(
     new URL("/auth/recuperar-contrasena?error=No se recibió código de autenticación", requestUrl.origin),
   )

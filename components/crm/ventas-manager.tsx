@@ -366,7 +366,17 @@ export function VentasManager({ perfilId }: { perfilId: string }) {
             }
           })
 
-          await supabase.from("crm_pagos_cuotas").insert(pagosData)
+          const { error: cuotasError } = await supabase.from("crm_pagos_cuotas").insert(pagosData)
+          if (cuotasError) {
+            // Sin cuotas la venta queda incompleta: se revierte (el trigger restaura el stock).
+            await supabase.from("crm_ventas").delete().eq("id", nuevaVenta.id)
+            toast({
+              title: "Error",
+              description: "No se pudieron crear las cuotas. La venta no se guardó, intentá de nuevo.",
+              variant: "destructive",
+            })
+            return
+          }
         }
 
         toast({ title: "Venta registrada correctamente" })
@@ -390,40 +400,31 @@ export function VentasManager({ perfilId }: { perfilId: string }) {
   }
 
   const handleRegistrarPago = async (pagoId: string) => {
-    const { error } = await supabase
-      .from("crm_pagos_cuotas")
-      .update({
-        estado: "pagada",
-        fecha_pago: format(new Date(), "yyyy-MM-dd"),
-        monto_pagado: selectedVenta?.monto_cuota,
-      })
-      .eq("id", pagoId)
+    const pago = pagos.find((p) => p.id === pagoId)
+    if (!pago || !selectedVenta) return
 
-    if (!error) {
-      handleVerPagos(selectedVenta!)
-      
-      const { data: pagosRestantes } = await supabase
-        .from("crm_pagos_cuotas")
-        .select("id")
-        .eq("venta_id", selectedVenta!.id)
-        .eq("estado", "pendiente")
+    const { data: estado, error } = await supabase.rpc("crm_registrar_pago_cuota", {
+      p_venta_id: selectedVenta.id,
+      p_numero_cuota: pago.numero_cuota,
+      p_monto: selectedVenta.monto_cuota,
+      p_fecha_pago: format(new Date(), "yyyy-MM-dd"),
+      p_fecha_vencimiento: pago.fecha_vencimiento,
+      p_notas: `Cuota ${pago.numero_cuota}`,
+      p_perfil_ingreso_id: null,
+    })
 
-      if (pagosRestantes?.length === 0) {
-        await supabase
-          .from("crm_ventas")
-          .update({ estado: "completada" })
-          .eq("id", selectedVenta!.id)
-        fetchData()
-      }
-
-      toast({ title: "Pago registrado" })
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" })
+      return
     }
+
+    handleVerPagos(selectedVenta)
+    if (estado === "completada") fetchData()
+    toast({ title: "Pago registrado" })
   }
 
   const handleDelete = async (id: string) => {
     if (!confirm("¿Estas seguro de eliminar esta venta? El stock se restaurara automaticamente.")) return
-    
-    await supabase.from("crm_pagos_cuotas").delete().eq("venta_id", id)
     
     const { error } = await supabase
       .from("crm_ventas")

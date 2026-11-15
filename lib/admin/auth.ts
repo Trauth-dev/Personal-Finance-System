@@ -11,6 +11,6 @@ export async function obtenerAdmin(): Promise<{ usuario: AdminSesion | null; aut
   } = await supabase.auth.getUser()
 
   if (!user) return { usuario: null, autenticado: false }
-  if (!esAdmin(user.email)) return { usuario: null, autenticado: true }
+  if (!user.email_confirmed_at || !esAdmin(user.email)) return { usuario: null, autenticado: true }
   return { usuario: { id: user.id, email: user.email!.toLowerCase() }, autenticado: true }
 }

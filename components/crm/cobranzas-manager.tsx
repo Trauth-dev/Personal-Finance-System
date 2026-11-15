@@ -458,68 +458,18 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
 
     try {
       const monto = parseFloat(formPago.monto)
-      const esCuotaTemporal = cuotaSeleccionada.id.startsWith("temp-")
-      
-      if (esCuotaTemporal) {
-        // Crear nueva cuota en la DB
-        const { error: cuotaError } = await supabase
-          .from("crm_pagos_cuotas")
-          .insert({
-            user_id: userId,
-            venta_id: cuotaSeleccionada.venta_id,
-            numero_cuota: cuotaSeleccionada.numero_cuota,
-            monto_pagado: monto,
-            fecha_pago: format(new Date(), "yyyy-MM-dd"),
-            fecha_vencimiento: cuotaSeleccionada.fecha_vencimiento,
-            estado: "pagada",
-            notas: formPago.descripcion
-          })
-        
-        if (cuotaError) throw cuotaError
-      } else {
-        // Actualizar cuota existente
-        const { error: cuotaError } = await supabase
-          .from("crm_pagos_cuotas")
-          .update({
-            monto_pagado: monto,
-            fecha_pago: format(new Date(), "yyyy-MM-dd"),
-            estado: "pagada",
-            notas: formPago.descripcion
-          })
-          .eq("id", cuotaSeleccionada.id)
+      if (!Number.isFinite(monto) || monto <= 0) throw new Error("Ingresá un monto mayor a cero")
 
-        if (cuotaError) throw cuotaError
-      }
-
-      // Registrar ingreso en empresarial
-      if (perfilEmpresarialId) {
-        await supabase.from("ingresos").insert({
-          user_id: userId,
-          perfil_id: perfilEmpresarialId,
-          monto: monto,
-          tipo_ingreso: `Cobranza CRM: ${formPago.descripcion}`,
-          fecha: format(new Date(), "yyyy-MM-dd")
-        })
-      }
-
-      // Verificar si todas las cuotas estan pagadas
-      const cobranza = clienteSeleccionado?.cobranzas.find(c => 
-        clienteSeleccionado.cuotas.some(q => q.venta_id === c.id && q.id === cuotaSeleccionada.id)
-      )
-      
-      if (cobranza) {
-        const cuotasCobranza = cuotas.filter(c => c.venta_id === cobranza.id)
-        const todasPagadas = cuotasCobranza.every(c => 
-          c.id === cuotaSeleccionada.id || c.estado === "pagada"
-        )
-        
-        if (todasPagadas) {
-          await supabase
-            .from("crm_ventas")
-            .update({ estado: "completada" })
-            .eq("id", cobranza.id)
-        }
-      }
+      const { error: pagoError } = await supabase.rpc("crm_registrar_pago_cuota", {
+        p_venta_id: cuotaSeleccionada.venta_id,
+        p_numero_cuota: cuotaSeleccionada.numero_cuota,
+        p_monto: monto,
+        p_fecha_pago: format(new Date(), "yyyy-MM-dd"),
+        p_fecha_vencimiento: cuotaSeleccionada.fecha_vencimiento,
+        p_notas: formPago.descripcion || null,
+        p_perfil_ingreso_id: perfilEmpresarialId || null,
+      })
+      if (pagoError) throw pagoError
 
       toast({
         title: "Pago registrado",
@@ -699,7 +649,12 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
           fechaBase = new Date(fechaBase.getTime() + frecuencia * 24 * 60 * 60 * 1000)
         }
 
-        await supabase.from("crm_pagos_cuotas").insert(cuotasData)
+        const { error: cuotasError } = await supabase.from("crm_pagos_cuotas").insert(cuotasData)
+        if (cuotasError) {
+          // Sin cuotas la venta queda incompleta: se revierte (el trigger restaura el stock).
+          await supabase.from("crm_ventas").delete().eq("id", nuevaCobranza.id)
+          throw new Error("No se pudieron crear las cuotas. La cobranza no se guardó, intentá de nuevo.")
+        }
       }
 
       // Registrar ingreso si es contado
@@ -711,15 +666,6 @@ const handleAbrirRegistrarPago = (cuota: Cuota) => {
           tipo_ingreso: `Venta CRM: ${formCobranza.descripcion || "Contado"}`,
           fecha: formCobranza.fecha_venta
         })
-      }
-
-      // Descontar inventario
-      if (formCobranza.producto_id && selectedProducto) {
-        const cantidad = parseInt(formCobranza.cantidad) || 1
-        await supabase
-          .from("inventario")
-          .update({ stock_actual: selectedProducto.stock_actual - cantidad })
-          .eq("id", formCobranza.producto_id)
       }
 
       toast({
