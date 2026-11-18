@@ -48,23 +48,22 @@ export async function registrarUso(r: RegistroUso): Promise<void> {
   if (error) console.error("No se pudo registrar el uso de IA:", error.message)
 }
 
-/** Devuelve un mensaje si el usuario superó el límite, o null si puede continuar. */
+/**
+ * Reserva un uso de IA de forma atómica (bloqueo por usuario en la base) antes de llamar a OpenAI.
+ * Devuelve un mensaje si el usuario superó el límite, o null si puede continuar.
+ * Si la reserva falla, se bloquea el pedido para no generar gasto sin control.
+ */
 export async function verificarLimite(userId: string): Promise<string | null> {
-  const admin = createAdminClient()
-  const ahora = Date.now()
-  const [minuto, dia] = await Promise.all([
-    admin
-      .from("ia_uso")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .gte("created_at", new Date(ahora - 60_000).toISOString()),
-    admin
-      .from("ia_uso")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .gte("created_at", new Date(ahora - 86_400_000).toISOString()),
-  ])
-  if ((minuto.count ?? 0) >= LIMITE_POR_MINUTO) return "Hiciste muchas cargas seguidas. Esperá un minuto e intentá de nuevo."
-  if ((dia.count ?? 0) >= LIMITE_POR_DIA) return "Alcanzaste el límite diario de cargas con IA. Podés seguir cargando de forma manual."
+  const { data, error } = await createAdminClient().rpc("ia_reservar_uso", {
+    p_user_id: userId,
+    p_max_minuto: LIMITE_POR_MINUTO,
+    p_max_dia: LIMITE_POR_DIA,
+  })
+  if (error) {
+    console.error("No se pudo reservar el uso de IA:", error.message)
+    return "La carga con IA no está disponible en este momento. Intentá de nuevo en unos minutos."
+  }
+  if (data === "minuto") return "Hiciste muchas cargas seguidas. Esperá un minuto e intentá de nuevo."
+  if (data === "dia") return "Alcanzaste el límite diario de cargas con IA. Podés seguir cargando de forma manual."
   return null
 }

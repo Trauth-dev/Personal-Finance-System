@@ -1121,8 +1121,8 @@ export function PresupuestoForm() {
   }
 
   return (
-    <Card className="max-w-6xl mx-auto glass-effect border-border/50">
-      <CardHeader>
+    <Card className="max-w-6xl mx-auto glass-effect border-border/50 min-w-0 overflow-hidden">
+      <CardHeader className="px-4 sm:px-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="min-w-0 flex-1">
             <CardTitle className="text-xl sm:text-2xl">Establecer Presupuesto Mensual</CardTitle>
@@ -1141,20 +1141,21 @@ export function PresupuestoForm() {
           </Link>
         </div>
       </CardHeader>
-      <CardContent className="pt-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <CardContent className="pt-6 px-3 pb-24 sm:px-6 sm:pb-6">
+        <form onSubmit={handleSubmit} className="space-y-6 min-w-0">
           {/* Sección INGRESOS */}
           <div className="space-y-4">
             <button
               type="button"
               onClick={() => setShowIngresos(!showIngresos)}
-              className="flex items-center justify-between w-full"
+              aria-expanded={showIngresos}
+              className="flex items-center justify-between gap-2 w-full min-w-0"
             >
-              <Label className="flex items-center gap-2 text-base sm:text-lg font-semibold cursor-pointer">
-                <TrendingUp className="w-5 h-5 text-green-500" />
+              <Label className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-base sm:text-lg font-semibold cursor-pointer min-w-0">
+                <TrendingUp className="w-5 h-5 text-green-500 flex-shrink-0" />
                 INGRESOS
                 {totalIngresos > 0 && (
-                  <span className="text-green-500 font-bold ml-2">
+                  <span className="text-green-500 font-bold tabular-nums">
                     {formatGuaranies(totalIngresos)}
                   </span>
                 )}
@@ -1163,7 +1164,7 @@ export function PresupuestoForm() {
             </button>
             
             {showIngresos && (
-              <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-4 space-y-3">
+              <div className="bg-green-500/5 border border-green-500/20 rounded-lg p-3 sm:p-4 space-y-3">
                 {isLoadingData ? (
                   <div className="space-y-2" aria-hidden="true">
                     {Array.from({ length: 3 }).map((_, i) => (
@@ -1172,21 +1173,18 @@ export function PresupuestoForm() {
                   </div>
                 ) : ingresosCategoria.length > 0 ? (
                   ingresosCategoria.map((ingreso) => (
-                    <div key={ingreso.id} className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                      <span className="flex-1 text-sm font-medium">{ingreso.nombre}</span>
-                      <div className="w-32 sm:w-40">
+                    <div key={ingreso.id} className="flex items-center gap-2 sm:gap-3 min-w-0">
+                      <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" aria-hidden="true"></div>
+                      <span className="flex-1 min-w-0 truncate text-sm font-medium">{ingreso.nombre}</span>
+                      <div className="w-28 sm:w-40 flex-shrink-0">
                         <Input
                           type="text"
                           inputMode="numeric"
-                          pattern="[0-9]*"
                           placeholder="0"
-                          value={ingreso.montoPresupuestado || ""}
-                          onChange={(e) => {
-                            const value = e.target.value.replace(/[^0-9]/g, "")
-                            handleIngresoMontoChange(ingreso.id, value)
-                          }}
-                          className="h-8 text-right bg-background/50 text-sm"
+                          aria-label={`Monto presupuestado para ${ingreso.nombre}`}
+                          value={ingreso.montoPresupuestado > 0 ? ingreso.montoPresupuestado.toLocaleString("es-PY") : ""}
+                          onChange={(e) => handleIngresoMontoChange(ingreso.id, e.target.value)}
+                          className="h-9 sm:h-8 text-right bg-background/50 text-sm tabular-nums"
                         />
                       </div>
                     </div>
@@ -1260,48 +1258,51 @@ export function PresupuestoForm() {
                 Cargando categorias...
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {CATEGORIAS_CONFIG.map((categoria) => {
                   const Icon = categoria.icon
                   const catData = categoriasData[categoria.key] || { subcategorias: [], total: 0 }
                   const porcentajeCategoria = presupuestoNum > 0 ? (catData.total / presupuestoNum) * 100 : 0
                   
                   return (
-                    <Card key={categoria.key} className={`${categoria.bgColor} ${categoria.borderColor} border`}>
-                      <CardHeader className="pb-2 pt-3 px-4">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <Card key={categoria.key} className={`${categoria.bgColor} ${categoria.borderColor} border min-w-0 overflow-hidden`}>
+                      <CardHeader className="pb-2 pt-3 px-3 sm:px-4">
+                        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+                          <div className="flex items-center gap-2 min-w-0">
                             <Icon className={`w-4 h-4 flex-shrink-0 ${categoria.color}`} />
                             <span className={`font-semibold truncate ${categoria.color}`}>{categoria.label}</span>
                           </div>
-                          <span className="text-xs sm:text-sm font-medium text-foreground whitespace-nowrap flex-shrink-0">
+                          <span className="text-xs sm:text-sm font-medium text-foreground whitespace-nowrap tabular-nums">
                             {formatGuaranies(catData.total)} ({porcentajeCategoria.toFixed(1)}%)
                           </span>
                         </div>
                       </CardHeader>
-                      <CardContent className="px-4 pb-3 space-y-2">
+                      <CardContent className="px-3 sm:px-4 pb-3 space-y-2">
                         {/* Lista de subcategorías */}
                         {(categoria.key === "pct_pago_deudas"
                           ? ordenarDeudas(catData.subcategorias)
                           : catData.subcategorias
                         ).map((sub) => (
-                          <div key={sub.id} className="flex items-center justify-between gap-2 py-1">
-                            <span className="text-sm text-foreground truncate flex-1 min-w-0">{sub.nombre}</span>
+                          <div key={sub.id} className="flex items-center justify-between gap-2 py-1 min-w-0">
+                            <span className="text-sm text-foreground truncate flex-1 min-w-0" title={sub.nombre}>{sub.nombre}</span>
                             <div className="flex items-center gap-1 flex-shrink-0">
                               <Input
                                 type="text"
                                 inputMode="numeric"
+                                aria-label={`Monto para ${sub.nombre}`}
                                 value={sub.monto > 0 ? sub.monto.toLocaleString('es-PY') : ""}
                                 onChange={(e) => handleMontoChange(categoria.key, sub.id, e.target.value)}
                                 placeholder="0"
-                                className="w-24 sm:w-28 h-7 text-right text-sm bg-background/50"
+                                className="w-28 h-9 sm:h-7 text-right text-sm bg-background/50 tabular-nums"
                               />
                               {/* Los préstamos vinculados no se pueden quitar desde el
                                   presupuesto (se gestionan en la sección Deudas). */}
-                              {!sub.bloqueada && (
+                              {sub.bloqueada ? (
+                                <span className="w-8 sm:w-7 flex-shrink-0" aria-hidden="true" />
+                              ) : (
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                                    <Button variant="ghost" size="icon" className="h-9 w-8 sm:h-7 sm:w-7" aria-label={`Opciones de ${sub.nombre}`}>
                                       <MoreVertical className="h-4 w-4" />
                                     </Button>
                                   </DropdownMenuTrigger>

@@ -19,8 +19,7 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     request.nextUrl.pathname === "/" ||
     request.nextUrl.pathname.startsWith("/auth") ||
-    request.nextUrl.pathname === "/api/bancard/confirmacion" ||
-    request.nextUrl.pathname === "/api/pagopar/webhook"
+    request.nextUrl.pathname === "/api/bancard/confirmacion"
 
   if (isPublicRoute) {
     return supabaseResponse
