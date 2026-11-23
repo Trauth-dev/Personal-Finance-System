@@ -1,6 +1,6 @@
 "use client"
 
-import { Check, CreditCard, Loader2, ShieldCheck, User, Layers, ArrowUpRight } from "lucide-react"
+import { Check, CreditCard, Loader2, ShieldCheck, User, Layers, ArrowLeftRight, CalendarPlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn, formatMoney } from "@/lib/utils"
 import { PLANES, type PlanId } from "@/lib/plans/catalogo"
@@ -26,27 +26,36 @@ const BENEFICIOS_TOTAL = [
   { nombre: "Cambio libre entre perfiles", desc: "Personal, Empresarial y CRM en una cuenta" },
 ]
 
+function fechaCorta(iso: string): string {
+  return new Date(iso).toLocaleDateString("es-PY", { day: "2-digit", month: "long" })
+}
+
 interface PlanCardsProps {
-  /** Plan vigente del usuario (null si no tiene suscripción activa). */
+  /** Plan vigente hoy (null si no tiene acceso). */
   planActual: PlanId | null
   /** Muestra únicamente estos planes (por defecto, ambos). */
   planes?: PlanId[]
   /** Cuenta con acceso Total habilitado sin pago: se muestran los planes sin permitir pagar. */
   accesoIncluido?: boolean
-  /** Período sin cobro: se muestra el plan actual y los pagos quedan deshabilitados hasta Bancard. */
-  pagosProximamente?: boolean
+  /** Fecha en que empezaría un período nuevo (fin del pago o prueba vigente). Null = empieza hoy. */
+  inicioProximo?: string | null
+  /** Cambio de plan ya pagado que todavía no empezó. */
+  cambio?: { plan: PlanId; desde: string } | null
+  /** true si ya tiene un período pago vigente. */
+  pagoVigente?: boolean
 }
 
 export function PlanCards({
   planActual,
   planes = ["personal", "total"],
   accesoIncluido = false,
-  pagosProximamente = false,
+  inicioProximo = null,
+  cambio = null,
+  pagoVigente = false,
 }: PlanCardsProps) {
   const { iniciarPago, procesando, error, noConfigurado, sesion, cerrarSesion, habilitado, modoPrueba } =
     useCheckoutBancard()
-  // En staging, las cuentas autorizadas pueden probar el pago aunque los cobros estén pausados.
-  const bloqueoPorPausa = pagosProximamente && !habilitado
+  const pagosNoDisponibles = !accesoIncluido && !habilitado
 
   return (
     <div className="flex flex-col gap-5">
@@ -61,31 +70,23 @@ export function PlanCards({
           planes.length > 1 ? "max-w-4xl md:grid-cols-2" : "max-w-md",
         )}
       >
-        {planes.includes("personal") && (
+        {planes.map((planId) => (
           <PlanCard
-            planId="personal"
-            icono={<User className="h-5 w-5" />}
-            beneficios={BENEFICIOS_PERSONAL}
+            key={planId}
+            planId={planId}
+            destacado={planId === "total"}
+            icono={planId === "total" ? <Layers className="h-5 w-5" /> : <User className="h-5 w-5" />}
+            beneficios={planId === "total" ? BENEFICIOS_TOTAL : BENEFICIOS_PERSONAL}
             planActual={planActual}
             accesoIncluido={accesoIncluido}
-            pagosProximamente={bloqueoPorPausa}
+            pagosNoDisponibles={pagosNoDisponibles}
+            inicioProximo={inicioProximo}
+            cambio={cambio}
+            pagoVigente={pagoVigente}
             procesando={procesando}
             onPagar={iniciarPago}
           />
-        )}
-        {planes.includes("total") && (
-          <PlanCard
-            planId="total"
-            destacado
-            icono={<Layers className="h-5 w-5" />}
-            beneficios={BENEFICIOS_TOTAL}
-            planActual={planActual}
-            accesoIncluido={accesoIncluido}
-            pagosProximamente={bloqueoPorPausa}
-            procesando={procesando}
-            onPagar={iniciarPago}
-          />
-        )}
+        ))}
       </div>
 
       <BancardCheckoutDialog sesion={sesion} modoPrueba={modoPrueba} onClose={cerrarSesion} />
@@ -111,9 +112,9 @@ export function PlanCards({
 
       <p className="flex items-center justify-center gap-1.5 text-center text-xs text-slate-500">
         <ShieldCheck className="h-3.5 w-3.5" />
-        {bloqueoPorPausa
-          ? "Los pagos con Bancard se habilitan en diciembre. Hasta entonces, usás tu plan sin costo."
-          : "Pago mensual seguro con Bancard Paraguay — tarjetas, QR y transferencias"}
+        {pagosNoDisponibles
+          ? "Los pagos con Bancard todavía no están disponibles para tu cuenta."
+          : "Pago mensual seguro con Bancard Paraguay — tarjetas, QR y transferencias. Sin renovación automática."}
       </p>
     </div>
   )
@@ -127,8 +128,11 @@ interface PlanCardProps {
   procesando: PlanId | null
   onPagar: (planId: PlanId) => void
   destacado?: boolean
-  accesoIncluido?: boolean
-  pagosProximamente?: boolean
+  accesoIncluido: boolean
+  pagosNoDisponibles: boolean
+  inicioProximo: string | null
+  cambio: { plan: PlanId; desde: string } | null
+  pagoVigente: boolean
 }
 
 function PlanCard({
@@ -140,29 +144,57 @@ function PlanCard({
   onPagar,
   destacado,
   accesoIncluido,
-  pagosProximamente,
+  pagosNoDisponibles,
+  inicioProximo,
+  cambio,
+  pagoVigente,
 }: PlanCardProps) {
   const plan = PLANES[planId]
+  const nombreCorto = plan.nombre.replace("Prospera+ ", "")
   const esActual = planActual === planId
-  // Bajar de Total a Personal a mitad de ciclo haría perder el acceso Total ya pagado.
-  const bajaBloqueada = planId === "personal" && planActual === "total"
+  const esCambioProgramado = cambio?.plan === planId
+  // Solo puede haber un cambio programado; el otro plan se habilita cuando empiece.
+  const bloqueadoPorCambio = Boolean(cambio) && !esCambioProgramado
   const cargando = procesando === planId
-  const sinPago = accesoIncluido || pagosProximamente
-  const ofreceMejora = !sinPago && planId === "total" && planActual === "personal"
+  const deshabilitado = accesoIncluido || pagosNoDisponibles || bloqueadoPorCambio || procesando !== null
+  // Plan que regirá al terminar el período actual (el cambio programado o el actual).
+  const planAlFinal = cambio?.plan ?? planActual
+  const esCambio = !accesoIncluido && planAlFinal !== null && planAlFinal !== planId
 
-  const etiquetaBoton = accesoIncluido
-    ? esActual
-      ? "Incluido en tu cuenta"
-      : "Ya incluido en tu acceso Total"
-    : pagosProximamente
-      ? esActual
-        ? "Tu plan actual"
-        : "Disponible desde diciembre"
-    : esActual
-      ? "Renovar 30 días"
-      : planId === "total" && planActual === "personal"
-        ? "Mejorar a Total"
-        : `Elegir ${plan.nombre.replace("Prospera+ ", "")}`
+  let etiqueta: string
+  let Icono = CreditCard
+  let nota: string | null = null
+
+  if (accesoIncluido) {
+    etiqueta = esActual ? "Incluido en tu cuenta" : "Ya incluido en tu acceso Total"
+    Icono = Check
+  } else if (bloqueadoPorCambio) {
+    etiqueta = esActual ? "Tu plan actual" : nombreCorto
+    Icono = Check
+    nota = `Ya programaste el cambio a ${PLANES[cambio!.plan].nombre.replace("Prospera+ ", "")}.`
+  } else if (esCambioProgramado) {
+    etiqueta = `Sumar 30 días a ${nombreCorto}`
+    Icono = CalendarPlus
+    nota = `Tu plan ${nombreCorto} empieza el ${fechaCorta(cambio!.desde)}.`
+  } else if (esCambio) {
+    etiqueta = `Cambiar a ${nombreCorto}`
+    Icono = ArrowLeftRight
+    nota = inicioProximo
+      ? `El cambio se aplica el ${fechaCorta(inicioProximo)}, cuando termina tu período actual.`
+      : "Se activa al instante por 30 días."
+  } else if (esActual || planAlFinal === planId) {
+    etiqueta = pagoVigente ? "Renovar 30 días" : `Pagar ${nombreCorto} · 30 días`
+    Icono = CalendarPlus
+    nota = inicioProximo ? `Los 30 días se suman desde el ${fechaCorta(inicioProximo)}.` : null
+  } else {
+    etiqueta = `Elegir ${nombreCorto}`
+  }
+
+  if (pagosNoDisponibles && !accesoIncluido) {
+    Icono = Check
+    etiqueta = esActual ? "Tu plan actual" : nombreCorto
+    nota = null
+  }
 
   return (
     <article
@@ -174,15 +206,20 @@ function PlanCard({
           : "border-slate-700/80",
       )}
     >
-      {destacado && !esActual && (
-        <span className="absolute -top-3 left-6 rounded-full bg-[#D4AF37] px-3 py-1 text-xs font-bold text-slate-950">
-          Más completo
-        </span>
-      )}
-      {esActual && (
+      {esActual ? (
         <span className="absolute -top-3 left-6 rounded-full bg-emerald-500 px-3 py-1 text-xs font-bold text-slate-950">
           Tu plan actual
         </span>
+      ) : esCambioProgramado ? (
+        <span className="absolute -top-3 left-6 rounded-full bg-sky-400 px-3 py-1 text-xs font-bold text-slate-950">
+          Desde el {fechaCorta(cambio!.desde)}
+        </span>
+      ) : (
+        destacado && (
+          <span className="absolute -top-3 left-6 rounded-full bg-[#D4AF37] px-3 py-1 text-xs font-bold text-slate-950">
+            Más completo
+          </span>
+        )
       )}
 
       <div className="flex items-center gap-3">
@@ -207,7 +244,7 @@ function PlanCard({
 
       <Button
         onClick={() => onPagar(planId)}
-        disabled={sinPago || procesando !== null || bajaBloqueada}
+        disabled={deshabilitado}
         className={cn(
           "mt-6 w-full font-semibold",
           destacado
@@ -222,27 +259,12 @@ function PlanCard({
           </>
         ) : (
           <>
-            {sinPago ? (
-              <Check className="mr-2 h-4 w-4" />
-            ) : ofreceMejora ? (
-              <ArrowUpRight className="mr-2 h-4 w-4" />
-            ) : (
-              <CreditCard className="mr-2 h-4 w-4" />
-            )}
-            {etiquetaBoton}
+            <Icono className="mr-2 h-4 w-4" />
+            {etiqueta}
           </>
         )}
       </Button>
-      {bajaBloqueada && !sinPago && (
-        <p className="mt-2 text-center text-xs leading-relaxed text-slate-500">
-          Disponible cuando venza tu plan Total vigente.
-        </p>
-      )}
-      {ofreceMejora && (
-        <p className="mt-2 text-center text-xs leading-relaxed text-slate-500">
-          El acceso Total se activa al instante y suma 30 días a tu vencimiento.
-        </p>
-      )}
+      {nota && <p className="mt-2 text-center text-xs leading-relaxed text-slate-500">{nota}</p>}
 
       <div className="mt-6 border-t border-slate-800 pt-5">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Qué incluye</p>

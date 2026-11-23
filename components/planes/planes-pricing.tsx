@@ -1,17 +1,19 @@
 "use client"
 
-import { Sparkles, ShieldCheck, CreditCard, Headphones, CalendarClock } from "lucide-react"
+import { Sparkles, ShieldCheck, CreditCard, Headphones } from "lucide-react"
 import { useSuscripcion } from "@/hooks/use-suscripcion"
-import { PLANES } from "@/lib/plans/catalogo"
 import { PlanCards } from "@/components/planes/plan-cards"
-
-function formatFecha(iso: string | null): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("es-PY", { day: "2-digit", month: "long", year: "numeric" })
-}
+import { EstadoSuscripcion } from "@/components/planes/estado-suscripcion"
 
 export function PlanesPricing() {
-  const { activa, exento, sinCobro, plan, vence, diasRestantes, isLoading } = useSuscripcion()
+  const s = useSuscripcion()
+  // Un pago nuevo empieza cuando termina lo que ya tiene cubierto (pago vigente o prueba).
+  const coberturas = [s.pagoVigente ? s.vence : null, s.prueba ? s.pruebaVence : null].filter(
+    (f): f is string => Boolean(f),
+  )
+  const inicioProximo = coberturas.length
+    ? coberturas.reduce((a, b) => (new Date(a) > new Date(b) ? a : b))
+    : null
 
   return (
     <div className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-950 p-5 sm:p-8 lg:p-12">
@@ -39,44 +41,18 @@ export function PlanesPricing() {
           </p>
         </div>
 
-        {!isLoading && (
+        {!s.isLoading && (
           <div className="mx-auto w-full max-w-md">
-            {activa ? (
-              <div className="flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
-                  <CalendarClock className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 text-left">
-                  <p className="text-sm font-semibold text-emerald-400">
-                    {exento ? "Acceso Total habilitado" : `${PLANES[plan ?? "total"].nombre} activo`}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {exento
-                      ? "Tu cuenta tiene acceso completo sin vencimiento."
-                      : sinCobro
-                        ? "Sin costo hasta que habilitemos los pagos con Bancard en diciembre."
-                        : `Vence el ${formatFecha(vence)} · ${diasRestantes} día${diasRestantes === 1 ? "" : "s"} restante${diasRestantes === 1 ? "" : "s"}`}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
-                  <CalendarClock className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 text-left">
-                  <p className="text-sm font-semibold text-amber-400">Sin suscripción activa</p>
-                  <p className="text-xs text-slate-400">Elegí un plan para desbloquear las herramientas.</p>
-                </div>
-              </div>
-            )}
+            <EstadoSuscripcion s={s} />
           </div>
         )}
 
         <PlanCards
-          planActual={isLoading ? null : exento ? "total" : plan}
-          accesoIncluido={exento}
-          pagosProximamente={sinCobro}
+          planActual={s.isLoading ? null : s.plan}
+          accesoIncluido={s.exento}
+          inicioProximo={inicioProximo}
+          cambio={s.cambio}
+          pagoVigente={s.pagoVigente}
         />
 
         <div className="mx-auto grid w-full max-w-3xl grid-cols-1 gap-4 sm:grid-cols-3">
