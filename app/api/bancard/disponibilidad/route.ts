@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { COBROS_PAUSADOS } from "@/lib/plans/acceso-libre"
 import { getConfigBancard, puedeUsarEntorno } from "@/lib/bancard/servicio"
 
 export const dynamic = "force-dynamic"
@@ -15,7 +14,8 @@ export async function GET() {
 
   const autorizado = Boolean(user) && puedeUsarEntorno(cfg.entorno, user?.email)
   const modoPrueba = cfg.entorno === "staging"
-  const habilitado = cfg.configurado && autorizado && (modoPrueba || !COBROS_PAUSADOS)
+  // La compra está habilitada aunque el acceso sin pago (COBROS_PAUSADOS) siga vigente.
+  const habilitado = cfg.configurado && autorizado
 
   return NextResponse.json({ habilitado, modoPrueba: habilitado && modoPrueba })
 }

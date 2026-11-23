@@ -1,8 +1,8 @@
 "use client"
 
-import { Bell, Search } from "lucide-react"
+import { Search } from "lucide-react"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
+import { NotificacionesPlan } from "@/components/notificaciones-plan"
 import { PerfilSelector } from "@/components/perfil-selector"
 import { usePerfil } from "@/lib/contexts/perfil-context"
 import { EmpresarialSubnav } from "@/components/empresarial/empresarial-subnav"
@@ -26,10 +26,7 @@ export function DashboardHeader({ title, description }: { title: string; descrip
             <Input placeholder="Buscar..." className="pl-10 w-48 lg:w-64 bg-background/50 h-9" />
           </div>
 
-          <Button variant="ghost" size="icon" className="relative h-8 w-8 sm:h-9 sm:w-9">
-            <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-primary rounded-full" />
-          </Button>
+          <NotificacionesPlan />
         </div>
       </div>
       <EmpresarialSubnav />

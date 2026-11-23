@@ -54,13 +54,36 @@ export function resolverPlan(datos: {
   vence: string | null | undefined
   /** profiles.prueba_vence: fin de la prueba gratuita (null en cuentas anteriores a la prueba). */
   prueba?: string | null
+  /** profiles.plan_proximo / plan_proximo_desde: cambio de plan ya pagado que empieza al terminar el período actual. */
+  proximo?: string | null
+  proximoDesde?: string | null
 }): PlanId | null {
   if (tieneAccesoLibre(datos.email)) return "total"
+  const tier = tierVigente(datos.tier, datos.proximo, datos.proximoDesde)
   const pagoVigente = datos.vence ? new Date(datos.vence).getTime() > Date.now() : false
-  if (pagoVigente) return planDesdeTier(datos.tier)
+  if (pagoVigente) return planDesdeTier(tier)
   // Cuentas nuevas: plan Personal gratis hasta el fin de la prueba; después, pago obligatorio.
-  if (datos.prueba) return enPrueba(datos.prueba) ? planSinCobro(datos.tier) : null
-  return COBROS_PAUSADOS ? planSinCobro(datos.tier) : null
+  if (datos.prueba) return enPrueba(datos.prueba) ? planSinCobro(tier) : null
+  return COBROS_PAUSADOS ? planSinCobro(tier) : null
+}
+
+/** Aplica el cambio programado cuando su fecha de inicio ya llegó. */
+export function tierVigente(
+  tier: string | null | undefined,
+  proximo: string | null | undefined,
+  desde: string | null | undefined,
+): string | null | undefined {
+  if (proximo && desde && new Date(desde).getTime() <= Date.now()) return proximo
+  return tier
+}
+
+/** Cambio de plan pendiente (aún no iniciado), o null. */
+export function cambioPendiente(
+  proximo: string | null | undefined,
+  desde: string | null | undefined,
+): { plan: PlanId; desde: string } | null {
+  if (!proximo || !desde || new Date(desde).getTime() <= Date.now()) return null
+  return { plan: planDesdeTier(proximo), desde }
 }
 
 export const DIAS_PRUEBA = 30

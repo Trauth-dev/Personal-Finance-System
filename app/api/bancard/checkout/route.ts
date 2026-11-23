@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { PLANES, esPlanId } from "@/lib/plans/catalogo"
+import { PLANES, cambioPendiente, esPlanId } from "@/lib/plans/catalogo"
 import { getConfigBancard, iniciarSingleBuy, puedeUsarEntorno, registrarEvento } from "@/lib/bancard/servicio"
 
 export const dynamic = "force-dynamic"
@@ -39,14 +39,18 @@ export async function POST(request: Request) {
   const admin = createAdminClient()
   const { data: perfil } = await admin
     .from("profiles")
-    .select("plan_tier, suscripcion_vence")
+    .select("plan_proximo, plan_proximo_desde")
     .eq("id", user.id)
     .maybeSingle()
-  const totalVigente =
-    perfil?.plan_tier === "completo" && perfil.suscripcion_vence && new Date(perfil.suscripcion_vence).getTime() > Date.now()
-  if (plan.id === "personal" && totalVigente) {
+  // Solo puede haber un cambio programado: se puede extender ese mismo plan, no pedir otro distinto.
+  const cambio = cambioPendiente(perfil?.plan_proximo, perfil?.plan_proximo_desde)
+  if (cambio && cambio.plan !== plan.id) {
+    const fecha = new Date(cambio.desde).toLocaleDateString("es-PY", { day: "2-digit", month: "long" })
     return NextResponse.json(
-      { error: "plan_superior_vigente", message: "Ya tenés el Plan Total vigente; incluye todo lo del Plan Personal." },
+      {
+        error: "cambio_programado",
+        message: `Ya tenés programado el cambio a ${PLANES[cambio.plan].nombre} desde el ${fecha}. Podés sumar más días a ese plan.`,
+      },
       { status: 409 },
     )
   }
